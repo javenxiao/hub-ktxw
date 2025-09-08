@@ -1,0 +1,148 @@
+对作业1部署的服务，使用ab测试 1/5/10 并发下总耗时分别为 3.978、2.563、2.426 秒
+
+
+压测详细信息如下：
+
+(py312) PS D:\workspace\nlp20> cd .\week04-task\test\
+(py312) PS D:\workspace\nlp20\week04-task\test> ab -n 100 -c 1 -l -p data.json -T 'application/json' -H 'accept: application/json' 'http://127.0.0.1:8000/v1/text-cls/bert'
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 (be patient).....done
+
+
+Server Software:        uvicorn
+Server Hostname:        127.0.0.1
+Server Port:            8000
+
+Document Path:          /v1/text-cls/bert
+Document Length:        Variable
+
+Concurrency Level:      1
+Time taken for tests:   3.978 seconds
+Complete requests:      100
+Failed requests:        0
+Total transferred:      26497 bytes
+Total body sent:        24400
+HTML transferred:       13897 bytes
+Requests per second:    25.14 [#/sec] (mean)
+Time per request:       39.775 [ms] (mean)
+Time per request:       39.775 [ms] (mean, across all concurrent requests)
+Transfer rate:          6.51 [Kbytes/sec] received
+                        5.99 kb/s sent
+                        12.50 kb/s total
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.4      0       1
+Processing:    32   39  10.7     38     142
+Waiting:       32   39  10.7     38     142
+Total:         32   40  10.8     39     143
+
+Percentage of the requests served within a certain time (ms)
+  50%     39
+  66%     40
+  75%     40
+  80%     41
+  90%     42
+  95%     44
+  98%     46
+  99%    143
+ 100%    143 (longest request)
+
+
+(py312) PS D:\workspace\nlp20\week04-task\test> ab -n 100 -c 5 -l -p data.json -T 'application/json' -H 'accept: application/json' 'http://127.0.0.1:8000/v1/text-cls/bert'
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 (be patient).....done
+
+
+Server Software:        uvicorn
+Server Hostname:        127.0.0.1
+Server Port:            8000
+
+Document Path:          /v1/text-cls/bert
+Document Length:        Variable
+
+Concurrency Level:      5
+Time taken for tests:   2.563 seconds
+Complete requests:      100
+Failed requests:        0
+Total transferred:      26492 bytes
+Total body sent:        24400
+HTML transferred:       13892 bytes
+Requests per second:    39.02 [#/sec] (mean)
+Time per request:       128.156 [ms] (mean)
+Time per request:       25.631 [ms] (mean, across all concurrent requests)
+Transfer rate:          10.09 [Kbytes/sec] received
+                        9.30 kb/s sent
+                        19.39 kb/s total
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.5      0       2
+Processing:    40  125  27.7    139     166
+Waiting:       38  124  27.6    138     165
+Total:         40  125  27.7    140     166
+
+Percentage of the requests served within a certain time (ms)
+  50%    140
+  66%    142
+  75%    145
+  80%    146
+  90%    151
+  95%    157
+  98%    159
+  99%    166
+ 100%    166 (longest request)
+
+
+(py312) PS D:\workspace\nlp20\week04-task\test> ab -n 100 -c 10 -l -p data.json -T 'application/json' -H 'accept: application/json' 'http://127.0.0.1:8000/v1/text-cls/bert'
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 (be patient).....done
+
+
+Server Software:        uvicorn
+Server Hostname:        127.0.0.1
+Server Port:            8000
+
+Document Path:          /v1/text-cls/bert
+Document Length:        Variable
+
+Concurrency Level:      10
+Time taken for tests:   2.426 seconds
+Complete requests:      100
+Failed requests:        0
+Total transferred:      26493 bytes
+Total body sent:        24400
+HTML transferred:       13893 bytes
+Requests per second:    41.23 [#/sec] (mean)
+Time per request:       242.567 [ms] (mean)
+Time per request:       24.257 [ms] (mean, across all concurrent requests)
+Transfer rate:          10.67 [Kbytes/sec] received
+                        9.82 kb/s sent
+                        20.49 kb/s total
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.5      0       1
+Processing:    43  233  27.4    239     271
+Waiting:       41  231  27.0    236     266
+Total:         43  234  27.4    240     271
+
+Percentage of the requests served within a certain time (ms)
+  50%    240
+  66%    244
+  75%    247
+  80%    248
+  90%    253
+  95%    265
+  98%    268
+  99%    271
+ 100%    271 (longest request)

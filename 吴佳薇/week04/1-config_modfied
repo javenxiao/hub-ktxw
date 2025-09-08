@@ -1,0 +1,7 @@
+#更新标签组和路径
+CATEGORY_NAME = [0,1]
+
+BERT_MODEL_PKL_PATH = "weights/bert.pt"
+BERT_MODEL_PERTRAINED_PATH = "model/bert-base-chinese"
+print(BERT_MODEL_PKL_PATH )
+print(BERT_MODEL_PERTRAINED_PATH)

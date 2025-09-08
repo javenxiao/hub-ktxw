@@ -1,0 +1,1266 @@
+2025-07-06 09:04:06,758 - uvicorn.error - INFO - Started server process [6751]
+2025-07-06 09:04:06,759 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 09:04:06,759 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 09:05:00,131 - uvicorn.error - INFO - Shutting down
+2025-07-06 09:05:00,236 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 09:05:00,241 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 09:05:00,242 - uvicorn.error - INFO - Finished server process [6751]
+2025-07-06 09:05:01,638 - uvicorn.error - INFO - Started server process [6833]
+2025-07-06 09:05:01,639 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 09:05:01,639 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 09:05:12,676 - uvicorn.error - INFO - Shutting down
+2025-07-06 09:05:12,779 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 09:05:12,780 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 09:05:12,781 - uvicorn.error - INFO - Finished server process [6833]
+2025-07-06 09:05:13,922 - uvicorn.error - INFO - Started server process [6854]
+2025-07-06 09:05:13,922 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 09:05:13,923 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 14:56:46,297 - uvicorn.error - INFO - Shutting down
+2025-07-06 14:56:46,426 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 14:56:46,448 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 14:56:46,454 - uvicorn.error - INFO - Finished server process [6854]
+2025-07-06 14:56:53,428 - uvicorn.error - INFO - Started server process [31631]
+2025-07-06 14:56:53,429 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 14:56:53,429 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 14:56:57,674 - uvicorn.error - INFO - Shutting down
+2025-07-06 14:56:57,775 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 14:56:57,778 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 14:56:57,778 - uvicorn.error - INFO - Finished server process [31631]
+2025-07-06 14:56:59,698 - uvicorn.error - INFO - Started server process [31665]
+2025-07-06 14:56:59,700 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 14:56:59,700 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 14:57:02,629 - uvicorn.error - INFO - Shutting down
+2025-07-06 14:57:02,732 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 14:57:02,733 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 14:57:02,733 - uvicorn.error - INFO - Finished server process [31665]
+2025-07-06 14:57:04,508 - uvicorn.error - INFO - Started server process [31683]
+2025-07-06 14:57:04,510 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 14:57:04,511 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 14:57:08,762 - uvicorn.error - INFO - Shutting down
+2025-07-06 14:57:08,864 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 14:57:08,865 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 14:57:08,865 - uvicorn.error - INFO - Finished server process [31683]
+2025-07-06 14:57:10,249 - uvicorn.error - INFO - Started server process [31709]
+2025-07-06 14:57:10,250 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 14:57:10,250 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 14:57:14,192 - uvicorn.error - INFO - Shutting down
+2025-07-06 14:57:14,294 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 14:57:14,294 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 14:57:14,295 - uvicorn.error - INFO - Finished server process [31709]
+2025-07-06 14:57:15,559 - uvicorn.error - INFO - Started server process [31714]
+2025-07-06 14:57:15,560 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 14:57:15,560 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 14:58:01,547 - uvicorn.error - INFO - Shutting down
+2025-07-06 14:58:01,651 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 14:58:01,652 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 14:58:01,652 - uvicorn.error - INFO - Finished server process [31714]
+2025-07-06 14:58:03,498 - uvicorn.error - INFO - Started server process [31809]
+2025-07-06 14:58:03,498 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 14:58:03,499 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:04:55,285 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:04:55,387 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:04:55,389 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:04:55,389 - uvicorn.error - INFO - Finished server process [31809]
+2025-07-06 15:04:57,158 - uvicorn.error - INFO - Started server process [32279]
+2025-07-06 15:04:57,159 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:04:57,160 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:05:45,859 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:05:45,964 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:05:45,965 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:05:45,965 - uvicorn.error - INFO - Finished server process [32279]
+2025-07-06 15:05:48,139 - uvicorn.error - INFO - Started server process [32355]
+2025-07-06 15:05:48,140 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:05:48,140 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:05:53,392 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:05:53,494 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:05:53,495 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:05:53,495 - uvicorn.error - INFO - Finished server process [32355]
+2025-07-06 15:05:55,261 - uvicorn.error - INFO - Started server process [32368]
+2025-07-06 15:05:55,262 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:05:55,263 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:06:48,119 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:06:48,240 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:06:48,243 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:06:48,245 - uvicorn.error - INFO - Finished server process [32368]
+2025-07-06 15:06:50,417 - uvicorn.error - INFO - Started server process [32431]
+2025-07-06 15:06:50,418 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:06:50,419 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:09:02,673 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:09:02,777 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:09:02,778 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:09:02,778 - uvicorn.error - INFO - Finished server process [32431]
+2025-07-06 15:09:05,243 - uvicorn.error - INFO - Started server process [32599]
+2025-07-06 15:09:05,245 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:09:05,246 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:09:22,223 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:09:22,327 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:09:22,328 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:09:22,329 - uvicorn.error - INFO - Finished server process [32599]
+2025-07-06 15:09:23,891 - uvicorn.error - INFO - Started server process [32631]
+2025-07-06 15:09:23,892 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:09:23,892 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:10:03,325 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:10:03,429 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:10:03,430 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:10:03,430 - uvicorn.error - INFO - Finished server process [32631]
+2025-07-06 15:10:05,029 - uvicorn.error - INFO - Started server process [32679]
+2025-07-06 15:10:05,030 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:10:05,030 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:10:06,141 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:10:06,243 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:10:06,244 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:10:06,244 - uvicorn.error - INFO - Finished server process [32679]
+2025-07-06 15:10:07,595 - uvicorn.error - INFO - Started server process [32690]
+2025-07-06 15:10:07,596 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:10:07,597 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:10:13,254 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:10:13,356 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:10:13,357 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:10:13,357 - uvicorn.error - INFO - Finished server process [32690]
+2025-07-06 15:10:14,857 - uvicorn.error - INFO - Started server process [32701]
+2025-07-06 15:10:14,858 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:10:14,858 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:10:26,580 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:10:26,688 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:10:26,695 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:10:26,698 - uvicorn.error - INFO - Finished server process [32701]
+2025-07-06 15:10:28,808 - uvicorn.error - INFO - Started server process [32727]
+2025-07-06 15:10:28,809 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:10:28,809 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:10:30,125 - uvicorn.error - INFO - Started server process [32730]
+2025-07-06 15:10:30,127 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:10:30,127 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:10:50,997 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:10:51,103 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:10:51,104 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:10:51,105 - uvicorn.error - INFO - Finished server process [32730]
+2025-07-06 15:10:53,309 - uvicorn.error - INFO - Started server process [32750]
+2025-07-06 15:10:53,311 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:10:53,311 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:11:05,953 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:11:06,054 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:11:06,054 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:11:06,055 - uvicorn.error - INFO - Finished server process [32750]
+2025-07-06 15:11:07,742 - uvicorn.error - INFO - Started server process [32766]
+2025-07-06 15:11:07,744 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:11:07,745 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:11:41,092 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:11:41,200 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:11:41,201 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:11:41,202 - uvicorn.error - INFO - Finished server process [32766]
+2025-07-06 15:11:42,842 - uvicorn.error - INFO - Started server process [32818]
+2025-07-06 15:11:42,843 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:11:42,844 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:12:07,492 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:12:07,596 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:12:07,597 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:12:07,598 - uvicorn.error - INFO - Finished server process [32818]
+2025-07-06 15:12:09,363 - uvicorn.error - INFO - Started server process [32860]
+2025-07-06 15:12:09,364 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:12:09,365 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:12:09,871 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:12:09,973 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:12:09,974 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:12:09,974 - uvicorn.error - INFO - Finished server process [32860]
+2025-07-06 15:12:11,384 - uvicorn.error - INFO - Started server process [32924]
+2025-07-06 15:12:11,386 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:12:11,386 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:12:34,020 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:12:34,123 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:12:34,124 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:12:34,125 - uvicorn.error - INFO - Finished server process [32924]
+2025-07-06 15:12:35,956 - uvicorn.error - INFO - Started server process [32946]
+2025-07-06 15:12:35,957 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:12:35,957 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:12:42,328 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:12:42,430 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:12:42,431 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:12:42,432 - uvicorn.error - INFO - Finished server process [32946]
+2025-07-06 15:12:43,890 - uvicorn.error - INFO - Started server process [32964]
+2025-07-06 15:12:43,892 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:12:43,893 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:13:07,328 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:13:07,432 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:13:07,434 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:13:07,435 - uvicorn.error - INFO - Finished server process [32964]
+2025-07-06 15:13:09,051 - uvicorn.error - INFO - Started server process [32987]
+2025-07-06 15:13:09,052 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:13:09,052 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:13:21,702 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:13:21,804 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:13:21,804 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:13:21,805 - uvicorn.error - INFO - Finished server process [32987]
+2025-07-06 15:13:23,539 - uvicorn.error - INFO - Started server process [33011]
+2025-07-06 15:13:23,541 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:13:23,544 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:13:29,509 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:13:29,611 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:13:29,612 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:13:29,612 - uvicorn.error - INFO - Finished server process [33011]
+2025-07-06 15:13:31,108 - uvicorn.error - INFO - Started server process [33024]
+2025-07-06 15:13:31,109 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:13:31,109 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:13:32,524 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:13:32,626 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:13:32,628 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:13:32,629 - uvicorn.error - INFO - Finished server process [33024]
+2025-07-06 15:13:33,995 - uvicorn.error - INFO - Started server process [33028]
+2025-07-06 15:13:33,996 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:13:33,997 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:14:00,474 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:14:00,581 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:14:00,582 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:14:00,582 - uvicorn.error - INFO - Finished server process [33028]
+2025-07-06 15:14:02,259 - uvicorn.error - INFO - Started server process [33064]
+2025-07-06 15:14:02,260 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:14:02,261 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:14:04,587 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:14:04,688 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:14:04,689 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:14:04,689 - uvicorn.error - INFO - Finished server process [33064]
+2025-07-06 15:14:06,063 - uvicorn.error - INFO - Started server process [33071]
+2025-07-06 15:14:06,063 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:14:06,064 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:14:10,307 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:14:10,410 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:14:10,411 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:14:10,411 - uvicorn.error - INFO - Finished server process [33071]
+2025-07-06 15:14:11,846 - uvicorn.error - INFO - Started server process [33088]
+2025-07-06 15:14:11,846 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:14:11,847 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:14:13,162 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:14:13,264 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:14:13,265 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:14:13,265 - uvicorn.error - INFO - Finished server process [33088]
+2025-07-06 15:14:14,606 - uvicorn.error - INFO - Started server process [33091]
+2025-07-06 15:14:14,607 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:14:14,608 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:14:15,823 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:14:15,925 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:14:15,926 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:14:15,926 - uvicorn.error - INFO - Finished server process [33091]
+2025-07-06 15:14:17,379 - uvicorn.error - INFO - Started server process [33096]
+2025-07-06 15:14:17,380 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:14:17,381 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:14:25,363 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:14:25,467 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:14:25,468 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:14:25,468 - uvicorn.error - INFO - Finished server process [33096]
+2025-07-06 15:14:27,049 - uvicorn.error - INFO - Started server process [33111]
+2025-07-06 15:14:27,050 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:14:27,050 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:14:58,520 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:14:58,624 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:14:58,625 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:14:58,625 - uvicorn.error - INFO - Finished server process [33111]
+2025-07-06 15:15:00,380 - uvicorn.error - INFO - Started server process [33149]
+2025-07-06 15:15:00,381 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:15:00,382 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:15:06,670 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:15:06,773 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:15:06,774 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:15:06,774 - uvicorn.error - INFO - Finished server process [33149]
+2025-07-06 15:15:08,361 - uvicorn.error - INFO - Started server process [33167]
+2025-07-06 15:15:08,363 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:15:08,363 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:15:18,464 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:15:18,567 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:15:18,570 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:15:18,571 - uvicorn.error - INFO - Finished server process [33167]
+2025-07-06 15:15:53,130 - uvicorn.error - INFO - Started server process [33229]
+2025-07-06 15:15:53,138 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:15:53,140 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:15:54,667 - uvicorn.error - INFO - Started server process [33231]
+2025-07-06 15:15:54,669 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:15:54,670 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:16:06,194 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:16:06,306 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:16:06,307 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:16:06,308 - uvicorn.error - INFO - Finished server process [33231]
+2025-07-06 15:16:07,903 - uvicorn.error - INFO - Started server process [33251]
+2025-07-06 15:16:07,904 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:16:07,905 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:16:11,848 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:16:11,949 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:16:11,950 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:16:11,950 - uvicorn.error - INFO - Finished server process [33251]
+2025-07-06 15:16:13,407 - uvicorn.error - INFO - Started server process [33266]
+2025-07-06 15:16:13,408 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:16:13,409 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:17:05,839 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:17:05,944 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:17:05,945 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:17:05,945 - uvicorn.error - INFO - Finished server process [33266]
+2025-07-06 15:17:07,855 - uvicorn.error - INFO - Started server process [33324]
+2025-07-06 15:17:07,856 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:17:07,857 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:17:31,800 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:17:31,903 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:17:31,904 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:17:31,905 - uvicorn.error - INFO - Finished server process [33324]
+2025-07-06 15:17:37,867 - uvicorn.error - INFO - Started server process [33376]
+2025-07-06 15:17:37,869 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:17:37,869 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:17:52,720 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:17:52,822 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:17:52,823 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:17:52,823 - uvicorn.error - INFO - Finished server process [33376]
+2025-07-06 15:17:54,592 - uvicorn.error - INFO - Started server process [33396]
+2025-07-06 15:17:54,593 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:17:54,593 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:17:58,938 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:17:59,041 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:17:59,041 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:17:59,041 - uvicorn.error - INFO - Finished server process [33396]
+2025-07-06 15:18:00,588 - uvicorn.error - INFO - Started server process [33406]
+2025-07-06 15:18:00,590 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:00,591 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:02,008 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:02,110 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:02,111 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:02,111 - uvicorn.error - INFO - Finished server process [33406]
+2025-07-06 15:18:03,549 - uvicorn.error - INFO - Started server process [33417]
+2025-07-06 15:18:03,550 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:03,551 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:18,203 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:18,307 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:18,308 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:18,309 - uvicorn.error - INFO - Finished server process [33417]
+2025-07-06 15:18:25,620 - uvicorn.error - INFO - Started server process [33450]
+2025-07-06 15:18:25,621 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:25,622 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:26,632 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:26,734 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:26,736 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:26,736 - uvicorn.error - INFO - Finished server process [33450]
+2025-07-06 15:18:28,266 - uvicorn.error - INFO - Started server process [33455]
+2025-07-06 15:18:28,268 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:28,269 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:30,999 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:31,101 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:31,102 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:31,102 - uvicorn.error - INFO - Finished server process [33455]
+2025-07-06 15:18:32,783 - uvicorn.error - INFO - Started server process [33465]
+2025-07-06 15:18:32,785 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:32,786 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:36,122 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:36,224 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:36,225 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:36,225 - uvicorn.error - INFO - Finished server process [33465]
+2025-07-06 15:18:37,586 - uvicorn.error - INFO - Started server process [33478]
+2025-07-06 15:18:37,587 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:37,587 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:37,690 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:37,791 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:37,792 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:37,792 - uvicorn.error - INFO - Finished server process [33478]
+2025-07-06 15:18:39,143 - uvicorn.error - INFO - Started server process [33480]
+2025-07-06 15:18:39,144 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:39,145 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:39,450 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:39,551 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:39,551 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:39,551 - uvicorn.error - INFO - Finished server process [33480]
+2025-07-06 15:18:41,087 - uvicorn.error - INFO - Started server process [33483]
+2025-07-06 15:18:41,088 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:41,089 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:47,856 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:47,961 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:47,963 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:47,964 - uvicorn.error - INFO - Finished server process [33483]
+2025-07-06 15:18:49,393 - uvicorn.error - INFO - Started server process [33496]
+2025-07-06 15:18:49,395 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:49,395 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:18:54,650 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:18:54,752 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:18:54,754 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:18:54,754 - uvicorn.error - INFO - Finished server process [33496]
+2025-07-06 15:18:56,314 - uvicorn.error - INFO - Started server process [33507]
+2025-07-06 15:18:56,316 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:18:56,317 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:19:06,840 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:19:06,942 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:19:06,943 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:19:06,944 - uvicorn.error - INFO - Finished server process [33507]
+2025-07-06 15:19:08,936 - uvicorn.error - INFO - Started server process [33523]
+2025-07-06 15:19:08,937 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:19:08,938 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:19:39,463 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:19:39,568 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:19:39,569 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:19:39,569 - uvicorn.error - INFO - Finished server process [33523]
+2025-07-06 15:19:41,245 - uvicorn.error - INFO - Started server process [33558]
+2025-07-06 15:19:41,246 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:19:41,247 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:19:49,432 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:19:49,535 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:19:49,538 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:19:49,540 - uvicorn.error - INFO - Finished server process [33558]
+2025-07-06 15:19:51,232 - uvicorn.error - INFO - Started server process [33569]
+2025-07-06 15:19:51,233 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:19:51,234 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:19:52,664 - uvicorn.error - INFO - Started server process [33572]
+2025-07-06 15:19:52,665 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:19:52,666 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:19:57,512 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:19:57,615 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:19:57,616 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:19:57,616 - uvicorn.error - INFO - Finished server process [33572]
+2025-07-06 15:19:59,028 - uvicorn.error - INFO - Started server process [33586]
+2025-07-06 15:19:59,030 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:19:59,031 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:20:58,632 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:20:58,736 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:20:58,744 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:20:58,747 - uvicorn.error - INFO - Finished server process [33586]
+2025-07-06 15:21:01,127 - uvicorn.error - INFO - Started server process [33653]
+2025-07-06 15:21:01,128 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:21:01,129 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:21:08,711 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:21:08,814 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:21:08,815 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:21:08,815 - uvicorn.error - INFO - Finished server process [33653]
+2025-07-06 15:21:10,361 - uvicorn.error - INFO - Started server process [33678]
+2025-07-06 15:21:10,363 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:21:10,364 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:21:21,386 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:21:21,490 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:21:21,491 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:21:21,492 - uvicorn.error - INFO - Finished server process [33678]
+2025-07-06 15:21:23,144 - uvicorn.error - INFO - Started server process [33698]
+2025-07-06 15:21:23,145 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:21:23,146 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:21:41,336 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:21:41,445 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:21:41,447 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:21:41,448 - uvicorn.error - INFO - Finished server process [33698]
+2025-07-06 15:21:43,549 - uvicorn.error - INFO - Started server process [33724]
+2025-07-06 15:21:43,550 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:21:43,550 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:21:44,871 - uvicorn.error - INFO - Started server process [33739]
+2025-07-06 15:21:44,872 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:21:44,872 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:21:58,622 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:21:58,726 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:21:58,727 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:21:58,728 - uvicorn.error - INFO - Finished server process [33739]
+2025-07-06 15:22:00,475 - uvicorn.error - INFO - Started server process [33755]
+2025-07-06 15:22:00,476 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:22:00,477 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:22:01,284 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:22:01,386 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:22:01,386 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:22:01,387 - uvicorn.error - INFO - Finished server process [33755]
+2025-07-06 15:22:02,942 - uvicorn.error - INFO - Started server process [33760]
+2025-07-06 15:22:02,943 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:22:02,943 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:22:14,049 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:22:14,153 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:22:14,153 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:22:14,153 - uvicorn.error - INFO - Finished server process [33760]
+2025-07-06 15:22:15,709 - uvicorn.error - INFO - Started server process [33792]
+2025-07-06 15:22:15,711 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:22:15,712 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:22:19,353 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:22:19,455 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:22:19,456 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:22:19,457 - uvicorn.error - INFO - Finished server process [33792]
+2025-07-06 15:22:20,971 - uvicorn.error - INFO - Started server process [33795]
+2025-07-06 15:22:20,971 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:22:20,971 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:22:54,224 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:22:54,330 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:22:54,332 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:22:54,334 - uvicorn.error - INFO - Finished server process [33795]
+2025-07-06 15:23:45,912 - uvicorn.error - INFO - Started server process [33902]
+2025-07-06 15:23:45,914 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:23:45,914 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:24:39,152 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:24:39,256 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:24:39,257 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:24:39,258 - uvicorn.error - INFO - Finished server process [33902]
+2025-07-06 15:24:41,668 - uvicorn.error - INFO - Started server process [33974]
+2025-07-06 15:24:41,669 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:24:41,670 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:24:42,985 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:24:43,087 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:24:43,087 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:24:43,088 - uvicorn.error - INFO - Finished server process [33974]
+2025-07-06 15:24:45,234 - uvicorn.error - INFO - Started server process [33981]
+2025-07-06 15:24:45,235 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:24:45,236 - uvicorn.error - INFO - Application startup complete.
+2025-07-06 15:24:50,996 - uvicorn.error - INFO - Shutting down
+2025-07-06 15:24:51,105 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-07-06 15:24:51,110 - uvicorn.error - INFO - Application shutdown complete.
+2025-07-06 15:24:51,111 - uvicorn.error - INFO - Finished server process [33981]
+2025-07-06 15:24:53,145 - uvicorn.error - INFO - Started server process [33993]
+2025-07-06 15:24:53,145 - uvicorn.error - INFO - Waiting for application startup.
+2025-07-06 15:24:53,146 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:06:35,171 - uvicorn.error - INFO - Started server process [9523]
+2025-08-31 12:06:35,173 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:06:35,174 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:06:35,175 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:07:04,614 - logger - INFO - string 帮我导航到北京
+2025-08-31 12:07:29,632 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 12:07:37,051 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 12:07:37,052 - jieba - DEBUG - Building prefix dict from the default dictionary ...
+2025-08-31 12:07:37,052 - jieba - DEBUG - Loading model from cache /var/folders/dl/0x0qfc0s6vd9wdk53j4thvnh0000gn/T/jieba.cache
+2025-08-31 12:07:37,403 - jieba - DEBUG - Loading model cost 0.351 seconds.
+2025-08-31 12:07:37,404 - jieba - DEBUG - Prefix dict has been built successfully.
+2025-08-31 12:08:06,666 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:08:06,771 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-08-31 12:08:06,771 - uvicorn.error - INFO - Application shutdown complete.
+2025-08-31 12:08:06,772 - uvicorn.error - INFO - Finished server process [9523]
+2025-08-31 12:08:54,290 - uvicorn.error - INFO - Started server process [9651]
+2025-08-31 12:08:54,291 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:08:54,291 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:08:54,292 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:09:37,468 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:09:37,572 - uvicorn.error - INFO - Finished server process [9651]
+2025-08-31 12:09:37,582 - uvicorn.error - ERROR - Traceback (most recent call last):
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1512, in uvloop.loop.Loop.run_until_complete
+  File "uvloop/loop.pyx", line 1505, in uvloop.loop.Loop.run_until_complete
+  File "uvloop/loop.pyx", line 1379, in uvloop.loop.Loop.run_forever
+  File "uvloop/loop.pyx", line 557, in uvloop.loop.Loop._run
+  File "uvloop/loop.pyx", line 476, in uvloop.loop.Loop._on_idle
+  File "uvloop/cbhandles.pyx", line 83, in uvloop.loop.Handle._run
+  File "uvloop/cbhandles.pyx", line 63, in uvloop.loop.Handle._run
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/server.py", line 70, in serve
+    with self.capture_signals():
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/server.py", line 331, in capture_signals
+    signal.raise_signal(captured_signal)
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 157, in _on_sigint
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/starlette/routing.py", line 701, in lifespan
+    await receive()
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/lifespan/on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+2025-08-31 12:09:48,111 - uvicorn.error - INFO - Started server process [9795]
+2025-08-31 12:09:48,111 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:09:48,112 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:09:48,112 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:10:06,006 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:10:06,110 - uvicorn.error - INFO - Waiting for connections to close. (CTRL+C to force quit)
+2025-08-31 12:10:06,617 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-08-31 12:10:06,619 - uvicorn.error - INFO - Application shutdown complete.
+2025-08-31 12:10:06,619 - uvicorn.error - INFO - Finished server process [9795]
+2025-08-31 12:10:33,264 - uvicorn.error - INFO - Started server process [9889]
+2025-08-31 12:10:33,265 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:10:33,265 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:10:33,267 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:10:39,205 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+2025-08-31 12:10:50,144 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:10:50,249 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-08-31 12:10:50,251 - uvicorn.error - INFO - Application shutdown complete.
+2025-08-31 12:10:50,255 - uvicorn.error - INFO - Finished server process [9889]
+2025-08-31 12:12:34,523 - uvicorn.error - INFO - Started server process [10029]
+2025-08-31 12:12:34,524 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:12:34,524 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:12:34,526 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:12:36,162 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+2025-08-31 12:13:21,710 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:13:21,817 - uvicorn.error - INFO - Finished server process [10029]
+2025-08-31 12:13:21,830 - uvicorn.error - ERROR - Traceback (most recent call last):
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1512, in uvloop.loop.Loop.run_until_complete
+  File "uvloop/loop.pyx", line 1505, in uvloop.loop.Loop.run_until_complete
+  File "uvloop/loop.pyx", line 1379, in uvloop.loop.Loop.run_forever
+  File "uvloop/loop.pyx", line 557, in uvloop.loop.Loop._run
+  File "uvloop/loop.pyx", line 476, in uvloop.loop.Loop._on_idle
+  File "uvloop/cbhandles.pyx", line 83, in uvloop.loop.Handle._run
+  File "uvloop/cbhandles.pyx", line 63, in uvloop.loop.Handle._run
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/server.py", line 70, in serve
+    with self.capture_signals():
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/server.py", line 331, in capture_signals
+    signal.raise_signal(captured_signal)
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 157, in _on_sigint
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/starlette/routing.py", line 701, in lifespan
+    await receive()
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/lifespan/on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+2025-08-31 12:13:33,029 - uvicorn.error - INFO - Started server process [10135]
+2025-08-31 12:13:33,030 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:13:33,030 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:13:33,031 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:13:50,311 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:13:50,414 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-08-31 12:13:50,416 - uvicorn.error - INFO - Application shutdown complete.
+2025-08-31 12:13:50,416 - uvicorn.error - INFO - Finished server process [10135]
+2025-08-31 12:14:01,144 - uvicorn.error - INFO - Started server process [10202]
+2025-08-31 12:14:01,145 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:14:01,145 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:14:01,147 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:14:01,797 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+2025-08-31 12:14:27,111 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:14:27,216 - uvicorn.error - INFO - Finished server process [10202]
+2025-08-31 12:14:27,222 - uvicorn.error - ERROR - Traceback (most recent call last):
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1512, in uvloop.loop.Loop.run_until_complete
+  File "uvloop/loop.pyx", line 1505, in uvloop.loop.Loop.run_until_complete
+  File "uvloop/loop.pyx", line 1379, in uvloop.loop.Loop.run_forever
+  File "uvloop/loop.pyx", line 557, in uvloop.loop.Loop._run
+  File "uvloop/loop.pyx", line 476, in uvloop.loop.Loop._on_idle
+  File "uvloop/cbhandles.pyx", line 83, in uvloop.loop.Handle._run
+  File "uvloop/cbhandles.pyx", line 63, in uvloop.loop.Handle._run
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/server.py", line 70, in serve
+    with self.capture_signals():
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/server.py", line 331, in capture_signals
+    signal.raise_signal(captured_signal)
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/runners.py", line 157, in _on_sigint
+    raise KeyboardInterrupt()
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/starlette/routing.py", line 701, in lifespan
+    await receive()
+  File "/opt/miniconda3/envs/py312/lib/python3.12/site-packages/uvicorn/lifespan/on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/miniconda3/envs/py312/lib/python3.12/asyncio/queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+2025-08-31 12:14:37,990 - uvicorn.error - INFO - Started server process [10267]
+2025-08-31 12:14:37,990 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:14:37,991 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:14:37,992 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:14:38,499 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+2025-08-31 12:14:54,440 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 12:15:34,279 - uvicorn.error - INFO - Shutting down
+2025-08-31 12:15:34,384 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-08-31 12:15:34,386 - uvicorn.error - INFO - Application shutdown complete.
+2025-08-31 12:15:34,387 - uvicorn.error - INFO - Finished server process [10267]
+2025-08-31 12:15:45,224 - uvicorn.error - INFO - Started server process [10313]
+2025-08-31 12:15:45,225 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 12:15:45,225 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 12:15:45,226 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 12:15:45,871 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,422 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,428 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,428 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,429 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,430 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,430 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,431 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,431 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,431 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,431 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,432 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,435 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,436 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,436 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,436 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,436 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,437 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,437 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,438 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,438 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,438 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,441 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,441 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,441 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,442 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,442 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,442 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,442 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,442 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,443 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,443 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,444 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,444 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,445 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,446 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,446 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,447 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,448 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,448 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,448 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,448 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,448 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,448 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,449 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,449 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,451 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,451 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,451 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,452 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,452 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,456 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,456 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,456 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,456 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,456 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,457 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,457 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,457 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,458 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,458 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,459 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,459 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,459 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,459 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,460 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,460 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,460 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,460 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,461 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,462 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,464 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,468 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,472 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:11,472 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 13:50:17,473 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,473 - jieba - DEBUG - Building prefix dict from the default dictionary ...
+2025-08-31 13:50:17,473 - jieba - DEBUG - Loading model from cache /var/folders/dl/0x0qfc0s6vd9wdk53j4thvnh0000gn/T/jieba.cache
+2025-08-31 13:50:17,819 - jieba - DEBUG - Loading model cost 0.346 seconds.
+2025-08-31 13:50:17,819 - jieba - DEBUG - Prefix dict has been built successfully.
+2025-08-31 13:50:17,831 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,831 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,831 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,832 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,832 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,832 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,833 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,833 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,834 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,834 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,838 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,838 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,839 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,840 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,840 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,841 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,841 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,842 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,843 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,843 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,844 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,844 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,845 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,846 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,847 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,848 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,849 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,850 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,850 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,851 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,852 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,852 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,852 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,853 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,854 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,855 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,855 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,857 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,858 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,858 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,859 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,859 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,859 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,860 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,860 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,861 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,863 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,863 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,864 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,864 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,865 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,865 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,865 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,866 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,866 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,867 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,868 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,869 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,870 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,871 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,872 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,872 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,873 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,874 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,874 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,874 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,875 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,876 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,877 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,878 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,878 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,878 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,880 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,881 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,882 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,882 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,883 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,884 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,886 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,888 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,888 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,889 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,890 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,890 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,890 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,891 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,892 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,894 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,896 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,897 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,897 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,898 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,898 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,898 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,899 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,899 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,900 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,900 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 13:50:17,902 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:42:43,430 - uvicorn.error - INFO - Started server process [16437]
+2025-08-31 15:42:43,430 - uvicorn.error - INFO - Waiting for application startup.
+2025-08-31 15:42:43,431 - uvicorn.error - INFO - Application startup complete.
+2025-08-31 15:42:43,432 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-08-31 15:43:40,985 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:43:55,912 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:43:55,912 - jieba - DEBUG - Building prefix dict from the default dictionary ...
+2025-08-31 15:43:55,912 - jieba - DEBUG - Loading model from cache /var/folders/dl/0x0qfc0s6vd9wdk53j4thvnh0000gn/T/jieba.cache
+2025-08-31 15:43:56,250 - jieba - DEBUG - Loading model cost 0.338 seconds.
+2025-08-31 15:43:56,250 - jieba - DEBUG - Prefix dict has been built successfully.
+2025-08-31 15:44:01,496 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:44:25,682 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:25,684 - openai._base_client - INFO - Retrying request to /chat/completions in 0.486668 seconds
+2025-08-31 15:44:26,348 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:26,350 - openai._base_client - INFO - Retrying request to /chat/completions in 0.829860 seconds
+2025-08-31 15:44:27,380 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:43,236 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:43,237 - openai._base_client - INFO - Retrying request to /chat/completions in 0.414001 seconds
+2025-08-31 15:44:43,835 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:43,836 - openai._base_client - INFO - Retrying request to /chat/completions in 0.949126 seconds
+2025-08-31 15:44:44,965 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:47,395 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:47,396 - openai._base_client - INFO - Retrying request to /chat/completions in 0.383540 seconds
+2025-08-31 15:44:47,962 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:44:47,962 - openai._base_client - INFO - Retrying request to /chat/completions in 0.999442 seconds
+2025-08-31 15:44:49,163 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:45:01,405 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:45:01,406 - openai._base_client - INFO - Retrying request to /chat/completions in 0.407574 seconds
+2025-08-31 15:45:02,020 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:45:02,021 - openai._base_client - INFO - Retrying request to /chat/completions in 0.795727 seconds
+2025-08-31 15:45:03,036 - httpx - INFO - HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 502 Bad Gateway"
+2025-08-31 15:50:01,651 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,654 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,656 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,656 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,656 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,657 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,657 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,658 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,658 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,658 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,659 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,660 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,661 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,662 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,663 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,663 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,663 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,664 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,664 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,664 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,664 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,665 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,665 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,666 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,667 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,668 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,669 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,669 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,669 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,669 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,669 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,670 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,670 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,671 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,672 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,673 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,674 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,674 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,674 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,674 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,675 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,675 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,675 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,675 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,675 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,675 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,677 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,677 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,677 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,677 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,679 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,679 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,679 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,679 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,679 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,680 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,680 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,681 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,681 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,681 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,681 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,681 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,682 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,684 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,685 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,685 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,686 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,686 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,686 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,686 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,687 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,687 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,687 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,688 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,688 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,688 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,689 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,689 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,690 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,690 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,690 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,691 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,691 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,691 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,691 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,691 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,693 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,693 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,693 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,693 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,693 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,693 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,694 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,694 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,694 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,696 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,696 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,697 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,697 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:01,697 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,442 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,451 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,451 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,452 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,452 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,452 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,452 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,452 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,453 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,454 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,455 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,455 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,456 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,457 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,457 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,460 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,463 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,464 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,464 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,465 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,466 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,466 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,467 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,470 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,470 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,470 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,470 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,470 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,471 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,475 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,476 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,477 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,477 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,479 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,480 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,481 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,481 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,485 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,485 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,485 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,485 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,486 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,486 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,489 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,489 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:50:41,489 - logger - INFO - string 帮我播放周杰伦的歌曲
+2025-08-31 15:51:26,134 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,144 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,144 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,145 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,145 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,147 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,147 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,147 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,147 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,147 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,148 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,148 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,149 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,149 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,149 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,149 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,149 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,150 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,150 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,150 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,150 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,151 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,151 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,151 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,152 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,154 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,154 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,154 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,157 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,157 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,157 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,157 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,158 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,158 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,159 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,159 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,159 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,159 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,160 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,160 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,160 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,162 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,162 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,163 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,163 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,163 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,163 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,163 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,163 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,163 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,174 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,174 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,174 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,175 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,178 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,179 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,181 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,183 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,184 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,185 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,186 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,187 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,188 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,188 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,190 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,190 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,191 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,191 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,192 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,192 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,193 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,193 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,194 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,194 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,196 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,197 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,198 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,198 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,201 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,202 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,202 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,203 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,203 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,203 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,203 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,203 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,203 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,204 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,204 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-08-31 15:51:26,204 - logger - INFO - Get requst: {"request_id":"string","request_text":"帮我播放周杰伦的歌曲"}
+2025-09-05 02:50:34,696 - uvicorn.error - INFO - Started server process [45852]
+2025-09-05 02:50:34,699 - uvicorn.error - INFO - Waiting for application startup.
+2025-09-05 02:50:34,701 - uvicorn.error - INFO - Application startup complete.
+2025-09-05 02:50:34,702 - uvicorn.error - ERROR - [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8000): [winerror 10048] ͨ��ÿ���׽��ֵ�ַ(Э��/�����ַ/�˿�)ֻ����ʹ��һ�Ρ�
+2025-09-05 02:50:34,703 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-09-05 02:50:34,704 - uvicorn.error - INFO - Application shutdown complete.
+2025-09-05 02:56:50,827 - uvicorn.error - INFO - Started server process [27008]
+2025-09-05 02:56:50,827 - uvicorn.error - INFO - Waiting for application startup.
+2025-09-05 02:56:50,827 - uvicorn.error - INFO - Application startup complete.
+2025-09-05 02:56:50,827 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-09-05 02:59:44,569 - uvicorn.error - INFO - Shutting down
+2025-09-05 02:59:44,678 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-09-05 02:59:44,680 - uvicorn.error - INFO - Application shutdown complete.
+2025-09-05 02:59:44,681 - uvicorn.error - INFO - Finished server process [27008]
+2025-09-05 02:59:55,536 - uvicorn.error - INFO - Started server process [2492]
+2025-09-05 02:59:55,537 - uvicorn.error - INFO - Waiting for application startup.
+2025-09-05 02:59:55,538 - uvicorn.error - INFO - Application startup complete.
+2025-09-05 02:59:55,538 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-09-05 03:01:42,036 - uvicorn.error - INFO - Shutting down
+2025-09-05 03:01:42,144 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-09-05 03:01:42,146 - uvicorn.error - INFO - Application shutdown complete.
+2025-09-05 03:01:42,146 - uvicorn.error - INFO - Finished server process [2492]
+2025-09-05 03:03:48,627 - uvicorn.error - INFO - Started server process [14420]
+2025-09-05 03:03:48,629 - uvicorn.error - INFO - Waiting for application startup.
+2025-09-05 03:03:48,630 - uvicorn.error - INFO - Application startup complete.
+2025-09-05 03:03:48,632 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-09-05 03:07:39,403 - uvicorn.error - INFO - Shutting down
+2025-09-05 03:07:39,514 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-09-05 03:07:39,514 - uvicorn.error - INFO - Application shutdown complete.
+2025-09-05 03:07:39,514 - uvicorn.error - INFO - Finished server process [14420]
+2025-09-05 03:13:39,303 - uvicorn.error - INFO - Started server process [52088]
+2025-09-05 03:13:39,313 - uvicorn.error - INFO - Waiting for application startup.
+2025-09-05 03:13:39,313 - uvicorn.error - INFO - Application startup complete.
+2025-09-05 03:13:39,313 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-09-05 03:15:52,473 - uvicorn.error - INFO - Shutting down
+2025-09-05 03:15:52,586 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-09-05 03:15:52,586 - uvicorn.error - INFO - Application shutdown complete.
+2025-09-05 03:15:52,586 - uvicorn.error - INFO - Finished server process [52088]
+2025-09-05 03:16:01,457 - uvicorn.error - INFO - Started server process [51956]
+2025-09-05 03:16:01,457 - uvicorn.error - INFO - Waiting for application startup.
+2025-09-05 03:16:01,457 - uvicorn.error - INFO - Application startup complete.
+2025-09-05 03:16:01,457 - uvicorn.error - INFO - Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-09-05 03:53:12,740 - uvicorn.error - INFO - Shutting down
+2025-09-05 03:53:12,867 - uvicorn.error - INFO - Waiting for application shutdown.
+2025-09-05 03:53:12,869 - uvicorn.error - INFO - Application shutdown complete.
+2025-09-05 03:53:12,869 - uvicorn.error - INFO - Finished server process [51956]
