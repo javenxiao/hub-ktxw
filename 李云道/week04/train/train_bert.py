@@ -111,7 +111,7 @@ if __name__ == '__main__':
     from config import Config
 
     # 让路径指向上一级目录
-    Config["data_path"] += "../"
-    Config["model_path"] += "../"
+    Config["data_path"] = "../" + Config["data_path"]
+    Config["model_path"] = "../" + Config["model_path"]
 
     main(Config)
