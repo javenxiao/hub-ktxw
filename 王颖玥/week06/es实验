@@ -1,0 +1,225 @@
+from elasticsearch import Elasticsearch
+import json
+import time
+from sentence_transformers import SentenceTransformer
+
+'''
+针对书籍信息数据分别用传统关键词搜索和语义搜索来实现数据的插入和查询
+'''
+
+es = Elasticsearch("http://localhost:9200")
+
+# 检查连接
+if es.ping():
+    print("成功连接到 Elasticsearch！")
+else:
+    print("无法连接到 Elasticsearch，请检查服务是否运行。")
+
+documents = [
+    {
+        "book_id": "1",
+        "name": "红楼梦",
+        "author": "曹雪芹",
+        "nationality": "中国",
+        "price": 99.0,
+        "introduction": "《红楼梦》是中国古典文学巅峰之作，以贾、史、王、薛四大家族为背景，讲述了贾宝玉与林黛玉、薛宝钗的爱情悲剧，揭示了封建大家庭的必然衰亡。",
+        "publish_time": "1988-03-23"
+    },
+    {
+        "book_id": "2",
+        "name": "局外人",
+        "author": "阿尔贝·加缪",
+        "nationality": "法国",
+        "price": 68.0,
+        "introduction": "诺贝尔文学奖获得者加缪著作，主人公默尔索因一次意外杀人被指控，但法庭最终因其在母亲葬礼上的冷漠态度而判其死刑，揭示了社会的荒诞。",
+        "publish_time": "2007-06-14"
+    },
+    {
+        "book_id": "3",
+        "name": "梦的解析",
+        "author": "西格蒙德·弗洛伊德",
+        "nationality": "奥地利",
+        "price": 79.8,
+        "introduction": "弗洛伊德最重要的代表作，被誉为“精神分析的圣经”。他首次系统地提出了“无意识”理论，并指出梦是“通往无意识的康庄大道”，是愿望的伪装满足。",
+        "publish_time": "2010-10-07"
+    },
+    {
+        "book_id": "4",
+        "name": "半生缘",
+        "author": "张爱玲",
+        "nationality": "中国",
+        "price": 45.0,
+        "introduction": "中国著名女作家张爱玲作品，三十年代上海，曼桢与世钧相恋。一场阴谋使她被迫嫁给姐夫。多年后重逢，虽有缘相识，却已无份相守。",
+        "publish_time": "2019-08-27"
+    }
+]
+
+# ---------------- 传统关键词搜索 ----------------
+print("\n---------- 传统关键词搜索 ----------")
+
+index_traditional = "book_search_traditional"
+
+# 检查索引是否存在，如果不存在则创建
+if es.indices.exists(index=index_traditional):
+    es.indices.delete(index=index_traditional)
+    print(f"旧索引 '{index_traditional}' 已删除。")
+    time.sleep(2)
+
+if not es.indices.exists(index=index_traditional):
+    es.indices.create(
+        index=index_traditional,
+        body={
+            "mappings": {
+                "properties": {
+                    "book_id": {"type": "keyword"},
+                    "name": {"type": "text", "analyzer": "ik_max_word"},
+                    "author": {"type": "text", "analyzer": "ik_max_word"},
+                    "nationality": {"type": "keyword"},
+                    "price": {"type": "float"},
+                    "introduction": {"type": "text", "analyzer": "ik_smart"},
+                    "publish_time": {"type": "date"}
+                }
+            }
+        }
+    )
+    print(f"索引 '{index_traditional}' 创建成功。")
+else:
+    print(f"索引 '{index_traditional}' 已存在。")
+
+for doc in documents:
+    es.index(index=index_traditional, document=doc)  # 添加文档操作，相当于数据库的insert
+
+# 刷新索引以确保文档可被搜索到
+es.indices.refresh(index=index_traditional)
+
+print("\n--- 结合查询与过滤 ---")
+res_1 = es.search(
+    index=index_traditional,
+    body={
+        "query": {
+            "bool": {
+                "must": {
+                    "term": {"introduction": "诺贝尔"}
+                },
+                "filter": [
+                    {"range": {"price": {"gt": 50}}}
+                ]
+            }
+        }
+    }
+)
+
+print(f"找到 {res_1['hits']['total']['value']} 条文档：")
+for hit in res_1['hits']['hits']:
+    print(f"得分：{hit['_score']}\n文档内容：{json.dumps(hit['_source'], ensure_ascii=False, indent=2)}")
+
+print("\n--- 聚合查询 ---")
+res_2 = es.search(
+    index=index_traditional,
+    body={
+        "aggs": {
+            "books_form_china": {
+                "terms": {
+                    "field": "nationality",
+                    "size": 5
+                }
+            }
+        },
+        "size": 0
+    }
+)
+print("按国籍分类的结果：")
+print(json.dumps(res_2['aggregations']['books_form_china']['buckets'], ensure_ascii=False, indent=2))
+
+# ---------------- 语义搜索 ----------------
+print("\n------------- 语义搜索 -------------")
+print("正在加载 SentenceTransformer 模型...")
+model = SentenceTransformer('/Users/wangyingyue/materials/大模型学习资料——八斗/models/bge_models/BAAI/bge-small-zh-v1.5')
+print("模型加载完成。")
+
+index_semantic = "semantic_book_search"
+
+# 检查索引是否存在，如果不存在则创建
+if es.indices.exists(index=index_semantic):
+    es.indices.delete(index=index_semantic)
+    print(f"旧索引 '{index_semantic}' 已删除。")
+    time.sleep(2)
+
+print(f"正在创建新索引 '{index_semantic}'...")
+es.indices.create(
+    index=index_semantic,
+    body={
+        "mappings": {
+            "properties": {
+                "name": {"type": "text", "analyzer": "ik_max_word"},
+                "introduction": {"type": "text", "analyzer": "ik_smart"},
+                "text_vector": {
+                    "type": "dense_vector",
+                    "dims": 512,
+                    "index": True,
+                    "similarity": "cosine"
+                }
+            }
+        }
+    }
+)
+print(f"索引 '{index_semantic}' 创建成功。")
+
+for doc in documents:
+    text_to_encode = doc["introduction"]
+    vector = model.encode(text_to_encode).tolist()
+
+    es.index(
+        index=index_semantic,
+        document={
+            "name": doc["name"],
+            "introduction": doc["introduction"],
+            "text_vector": vector
+        }
+    )
+print("所有文档插入完成。")
+
+# 刷新索引
+es.indices.refresh(index=index_semantic)
+time.sleep(1)
+
+print("\n--- 执行向量检索 ---")
+# query_text = "我想买一本有关于心理学的书籍，外国作家的"
+
+query_texts = [
+    "我想买一本有关于心理学的书籍，外国作家的",
+    "有没有女作家的书，通过讲述爱情来反应社会现实的",
+    "想看世界名著，作者获得过诺贝尔文学奖的",
+    "推荐一本国内的名著，处于文学巅峰的作品"
+]
+
+# 将查询文本转换为向量
+# query_vector = model.encode(query_text).tolist()
+
+for query_text in query_texts:
+    query_vector = model.encode(query_text).tolist()
+    response = es.search(
+        index=index_semantic,
+        body={
+            "knn": {
+                "field": "text_vector",
+                "query_vector": query_vector,
+                "k": 3,
+                "num_candidates": 10
+            },
+            "fields": ["name", "introduction"],
+            "_source": False
+        }
+    )
+
+    # 打印结果
+    print(f"查询文本: '{query_text}'")
+    print(f"找到 {response['hits']['total']['value']} 个最相关的结果:")
+
+    for hit in response['hits']['hits']:
+        score = hit['_score']  # 向量相似度得分
+        text = hit['fields']['introduction'][0]
+        book_name = hit['fields']['name'][0]
+        print(f"得分: {score:.4f}, 书名: {book_name}, 内容: {text}")
+
+    print("\n")

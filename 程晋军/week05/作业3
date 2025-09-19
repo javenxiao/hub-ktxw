@@ -1,0 +1,5 @@
+作业3：
+1.通过增删改查把政府文档存进sqlite中，
+2.再用es对sqlite中的内容进行搜索，通过knowledge_id，docment_it获取sqlite存储的知识。
+3.RAG核心是通过es.search进行全文检索，用BM25对获取匹配的chunk进行打分，再采用对query进行embeeding后根据语义相关性进行选择前几个，把BM25和语义相关性获取的chuank综合进行排名获取分数概率最大的一个目标chuank。
+把目标chuank和实际的query，结合已经写好的prompt模型输给大模型进行问答获取结果。
