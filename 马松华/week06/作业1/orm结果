@@ -1,0 +1,52 @@
+CREATE TABLE authors (
+	author_id INTEGER NOT NULL,
+	name VARCHAR NOT NULL,
+	nationality VARCHAR,
+	PRIMARY KEY (author_id)
+)
+
+
+CREATE TABLE borrowers (
+	borrower_id INTEGER NOT NULL,
+	name VARCHAR NOT NULL,
+	email VARCHAR,
+	PRIMARY KEY (borrower_id),
+	UNIQUE (email)
+)
+
+
+CREATE TABLE books (
+	book_id INTEGER NOT NULL,
+	title VARCHAR NOT NULL,
+	published_year INTEGER,
+	author_id INTEGER,
+	PRIMARY KEY (book_id),
+	FOREIGN KEY(author_id) REFERENCES authors (author_id)
+)
+
+数据库和表已成功创建。
+---插入数据----
+2025-09-20 10:38:42,812 INFO sqlalchemy.engine.Engine INSERT INTO authors (name, nationality) VALUES (?, ?) RETURNING author_id
+2025-09-20 10:38:42,813 INFO sqlalchemy.engine.Engine INSERT INTO authors (name, nationality) VALUES (?, ?) RETURNING author_id
+2025-09-20 10:38:42,813 INFO sqlalchemy.engine.Engine INSERT INTO authors (name, nationality) VALUES (?, ?) RETURNING author_id
+2025-09-20 10:38:42,813 INFO sqlalchemy.engine.Engine INSERT INTO borrowers (name, email) VALUES (?, ?) RETURNING borrower_id
+2025-09-20 10:38:42,813 INFO sqlalchemy.engine.Engine INSERT INTO borrowers (name, email) VALUES (?, ?) RETURNING borrower_id
+2025-09-20 10:38:42,813 INFO sqlalchemy.engine.Engine INSERT INTO books (title, published_year, author_id) VALUES (?, ?, ?) RETURNING book_id
+2025-09-20 10:38:42,813 INFO sqlalchemy.engine.Engine INSERT INTO books (title, published_year, author_id) VALUES (?, ?, ?) RETURNING book_id
+数据已成功插入。
+
+--- 所有书籍和它们的作者 ---
+书籍: Harry Potter, 作者: J.K. Rowling
+书籍: 1984, 作者: George Orwell
+
+--- 更新书籍信息 ---
+书籍 'Harry Potter' 的出版年份已更新。
+更新后的信息: 书籍: Harry Potter, 出版年份: 1998
+
+--- 删除借阅人 ---
+借阅人 'Bob' 已被删除。
+
+--- 剩余的借阅人 ---
+姓名: Alice
+
+会话已关闭。

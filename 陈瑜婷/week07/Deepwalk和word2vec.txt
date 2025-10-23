@@ -1,0 +1,5 @@
+deepwalk是通过随机游走和word2vec实现的
+
+deepwalk通过随机游走生成节点序列，
+将节点序列放入word2vec(Skip-gram模型)进行训练，
+最终得到节点的向量表示

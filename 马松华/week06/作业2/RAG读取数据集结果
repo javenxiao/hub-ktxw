@@ -1,0 +1,16 @@
+/opt/anaconda3/envs/py312/bin/python /Users/masonghua/Downloads/work/AI/project/ai-master/week/week06/RAG101_01_读取数据集.py 
+questions.json
+{'question': '“前排座椅通风”的相关内容在第几页？', 'answer': '', 'reference': ''}
+
+
+pages:  354
+欢迎
+感谢您选择了具有优良安全性、舒适性、动力性和经济性的Lynk&Co领克汽车。
+首次使用前请仔细、完整地阅读本手册内容，将有助于您更好地了解和使用车辆。
+本手册中的所有资料均为出版时的最新资料，但本公司将对产品进行不断的改进和优化，您所购的车辆可能与本手册中的描述有所不同，请以实际
+接收的车辆为准。
+如您有任何问题，或需要预约服务，请拨打电话4006-010101联系我们。您也可以开车前往Lynk&Co领克中心。
+在抵达之前，请您注意驾车安全。
+©领克汽车销售有限公司
+
+Process finished with exit code 0

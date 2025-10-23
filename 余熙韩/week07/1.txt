@@ -1,0 +1,4 @@
+理解 03_DeepWalk.py 的原理，运行并进行可视化。回答 03_DeepWalk 与 word2vec的关系。
+    deepwalk 是基于随机游走的图节点嵌入方法，而 word2vec 是基于上下文的词嵌入方法。
+    deepwalk 是将图中的节点进行随机游走，得到节点序列(类似于句子中的单词序列)，然后用 word2vec 模型来学习节点的嵌入表示(文本转向量)。
+    因此，deepwalk 可以看作是 word2vec 在图结构上的应用。
