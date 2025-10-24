@@ -1,0 +1,258 @@
+app:
+  description: 一个高效的“穿衣智能指南”app，帮助用户实现穿搭无烦恼。
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: AI智能穿搭
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+kind: app
+version: 0.2.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: knowledge-retrieval
+      id: 1761187950336-source-1761188222186-target
+      source: '1761187950336'
+      sourceHandle: source
+      target: '1761188222186'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: 1761188222186--1761188622163-target
+      source: '1761188222186'
+      sourceHandle: source
+      target: '1761188622163'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1761188622163-source-1761188797965-target
+      source: '1761188622163'
+      sourceHandle: source
+      target: '1761188797965'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: 天气情况
+          max_length: 48
+          options:
+          - 晴天
+          - 雨天
+          - 雪天
+          required: true
+          type: select
+          variable: weather
+        - label: 温度
+          max_length: 48
+          options: []
+          required: true
+          type: number
+          variable: temperature
+        - label: 湿度（百分比）
+          max_length: 48
+          options: []
+          required: true
+          type: number
+          variable: humidity
+      height: 142
+      id: '1761187950336'
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        dataset_ids:
+        - XuRD2N7ovwlSLGLwwRK8Czro/rC3jjYyQqH0NAGVcfB54B1NdPDJD2B6kmL9yAYw
+        desc: 智能穿搭知识库
+        multiple_retrieval_config:
+          reranking_enable: false
+          reranking_mode: reranking_model
+          reranking_model:
+            model: gte-rerank
+            provider: langgenius/tongyi/tongyi
+          top_k: 4
+        query_variable_selector:
+        - '1761187950336'
+        - weather
+        retrieval_mode: multiple
+        selected: false
+        title: 知识检索
+        type: knowledge-retrieval
+      height: 120
+      id: '1761188222186'
+      position:
+        x: 384
+        y: 282
+      positionAbsolute:
+        x: 384
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: ''
+        model:
+          completion_params: {}
+          mode: chat
+          name: qwen2.5-72b-instruct
+          provider: langgenius/tongyi/tongyi
+        prompt_template:
+        - id: 1551d214-75fe-4adb-8693-72a163057c56
+          role: system
+          text: '你是一名专业的穿衣顾问，请根据以下信息为用户提供穿搭建议：
+
+
+            【用户输入】
+
+            天气状况：{{#1761187950336.weather#}}
+
+            温度：{{#1761187950336.temperature#}}°C
+
+            湿度：{{#1761187950336.humidity#}}%
+
+
+            【参考知识】
+
+            {{#context#}}  <-- 这个变量会自动注入知识库检索到的内容
+
+
+            【生成要求】
+
+            1. 紧密结合检索到的专业知识（特别是三明治穿衣法则和温湿度指南）。
+
+            2. 建议需具体，至少包含基础层、中间层和外层的搭配思路。
+
+            3. 考虑湿度对体感温度的影响，并给出材质选择的提醒。
+
+            4. 如果信息中存在针对特定天气（如雨天、大风）的专门建议，请优先采用。
+
+            5. 输出格式为条理清晰并且简短的 Markdown 文本。'
+        selected: false
+        structured_output_enabled: false
+        title: LLM
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 90
+      id: '1761188622163'
+      position:
+        x: 688
+        y: 282
+      positionAbsolute:
+        x: 688
+        y: 282
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: 穿搭输出
+        outputs:
+        - value_selector:
+          - '1761188622163'
+          - text
+          variable: text
+        selected: false
+        title: 结束
+        type: end
+      height: 118
+      id: '1761188797965'
+      position:
+        x: 992
+        y: 282
+      positionAbsolute:
+        x: 992
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: -86
+      y: 23
+      zoom: 1

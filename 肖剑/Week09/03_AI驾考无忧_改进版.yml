@@ -1,0 +1,234 @@
+app:
+  description: 拥有它，让驾照考试轻松通过
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: AI驾考无忧_改进版
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+kind: app
+version: 0.2.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: knowledge-retrieval
+      id: 1761190412761-source-1761191038154-target
+      source: '1761190412761'
+      sourceHandle: source
+      target: '1761191038154'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: 1761191038154-source-1761207962554-target
+      source: '1761191038154'
+      sourceHandle: source
+      target: '1761207962554'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1761207962554-source-1761203562680-target
+      source: '1761207962554'
+      sourceHandle: source
+      target: '1761203562680'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: Question
+          max_length: 48
+          options: []
+          required: true
+          type: text-input
+          variable: Question
+      height: 90
+      id: '1761190412761'
+      position:
+        x: -172
+        y: 53
+      positionAbsolute:
+        x: -172
+        y: 53
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        dataset_ids:
+        - xABKkGqMlBCrzbJ97fA0I1AOe3SnO8LDB6S4mOgoJdT62hIQ+gHEhuUlvyCfRqPr
+        desc: ''
+        multiple_retrieval_config:
+          reranking_enable: false
+          reranking_mode: reranking_model
+          reranking_model:
+            model: gte-rerank
+            provider: langgenius/tongyi/tongyi
+          top_k: 4
+        query_variable_selector:
+        - '1761190412761'
+        - Question
+        retrieval_mode: multiple
+        selected: false
+        title: 知识检索
+        type: knowledge-retrieval
+      height: 92
+      id: '1761191038154'
+      position:
+        x: -85
+        y: 171
+      positionAbsolute:
+        x: -85
+        y: 171
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: ''
+        outputs:
+        - value_selector:
+          - '1761207962554'
+          - text
+          variable: result
+        selected: false
+        title: 结束
+        type: end
+      height: 90
+      id: '1761203562680'
+      position:
+        x: 238
+        y: 434
+      positionAbsolute:
+        x: 238
+        y: 434
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: ''
+        model:
+          completion_params: {}
+          mode: chat
+          name: qwen2.5-72b-instruct
+          provider: langgenius/tongyi/tongyi
+        prompt_template:
+        - id: 7553ea6a-aa6c-40b3-8942-b8194f441f82
+          role: system
+          text: '你是一名专业的教练，请根据以下信息为用户提供驾照考试建议：
+
+
+            【用户输入】
+
+            用户提问：{{#1761190412761.Question#}}
+
+
+            【参考知识】
+
+            {{#context#}} <-- 这个变量会自动注入知识库检索到的内容
+
+
+            【生成要求】
+
+            1. 紧密结合检索到的专业知识；
+
+            2. 回答需清晰；
+
+            3. 输出格式为条理清晰并且简短的 Markdown 文本。'
+        selected: false
+        structured_output_enabled: false
+        title: LLM
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 90
+      id: '1761207962554'
+      position:
+        x: 4
+        y: 311
+      positionAbsolute:
+        x: 4
+        y: 311
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 292
+      y: -2
+      zoom: 1
