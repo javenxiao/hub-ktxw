@@ -1,0 +1,194 @@
+{
+  "app": [
+    "name"
+  ],
+  "bus": [
+    "Src",
+    "Dest"
+  ],
+  "map": [
+    "location_area",
+    "endLoc_poi",
+    "endLoc_province",
+    "startLoc_city",
+    "location_poi",
+    "endLoc_area",
+    "location_city",
+    "startLoc_area",
+    "endLoc_city",
+    "location_province",
+    "type",
+    "startLoc_poi"
+  ],
+  "train": [
+    "category",
+    "endLoc_province",
+    "startLoc_city",
+    "startDate_time",
+    "endLoc_area",
+    "startLoc_area",
+    "endLoc_city",
+    "startLoc_poi",
+    "startLoc_province",
+    "startDate_date"
+  ],
+  "cinemas": [
+    "category",
+    "timeDescr",
+    "location_city",
+    "film",
+    "theatre",
+    "name",
+    "datetime_date",
+    "datetime_time"
+  ],
+  "telephone": [
+    "category",
+    "teleOperator",
+    "name"
+  ],
+  "message": [
+    "category",
+    "receiver",
+    "headNum",
+    "name",
+    "teleOperator",
+    "content"
+  ],
+  "contacts": [
+    "code",
+    "name"
+  ],
+  "cookbook": [
+    "dishName",
+    "dishNamet",
+    "ingredient",
+    "keyword",
+    "utensil"
+  ],
+  "email": [
+    "content",
+    "name"
+  ],
+  "epg": [
+    "category",
+    "name",
+    "code",
+    "area",
+    "tvchannel",
+    "datetime_date",
+    "datetime_time"
+  ],
+  "flight": [
+    "endLoc_poi",
+    "startLoc_city",
+    "startDate_time",
+    "endLoc_area",
+    "startDate_dateOrig",
+    "startLoc_area",
+    "endLoc_city",
+    "startLoc_poi",
+    "startDate_date"
+  ],
+  "health": [
+    "keyword"
+  ],
+  "lottery": [
+    "category",
+    "absIssue",
+    "name",
+    "relIssue",
+    "datetime_date"
+  ],
+  "match": [
+    "category",
+    "awayName",
+    "homeName",
+    "name",
+    "type",
+    "datetime_date"
+  ],
+  "music": [
+    "category",
+    "artist",
+    "song"
+  ],
+  "news": [
+    "category",
+    "location_city",
+    "location_province",
+    "keyword",
+    "location_country",
+    "media",
+    "datetime_date",
+    "datetime_time"
+  ],
+  "novel": [
+    "author",
+    "category",
+    "popularity",
+    "name"
+  ],
+  "poetry": [
+    "author",
+    "queryField",
+    "name",
+    "keyword",
+    "dynasty"
+  ],
+  "radio": [
+    "location_province",
+    "category",
+    "code",
+    "name"
+  ],
+  "riddle": [
+    "category"
+  ],
+  "stock": [
+    "code",
+    "yesterday",
+    "name"
+  ],
+  "translation": [
+    "target",
+    "content"
+  ],
+  "tvchannel": [
+    "resolution",
+    "category",
+    "code",
+    "name"
+  ],
+  "video": [
+    "category",
+    "scoreDescr",
+    "timeDescr",
+    "popularity",
+    "tag",
+    "date",
+    "decade",
+    "season",
+    "name",
+    "payment",
+    "episode",
+    "artist",
+    "resolution",
+    "area",
+    "datetime_date",
+    "artistRole"
+  ],
+  "weather": [
+    "subfocus",
+    "location_city",
+    "questionWord",
+    "datetime_date"
+  ],
+  "website": [
+    "name"
+  ],
+  "joke": [],
+  "story": [
+    "category"
+  ]
+}

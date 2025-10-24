@@ -1,0 +1,404 @@
+app:
+  description: '基于天气条件的智能穿衣建议系统'
+  icon: clothes
+  icon_background: '#E3F2FD'
+  mode: workflow
+  name: 穿衣智能指南
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: openai:gpt-4:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+kind: app
+version: 0.2.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: '欢迎使用穿衣智能指南！请输入天气状况、温度和湿度，我将为您提供专业的穿衣建议。'
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - '晴天，25度，50%湿度应该穿什么？'
+    - '雨天，15度，85%湿度如何搭配？'
+    - '雪天，-5度，70%湿度需要什么装备？'
+    suggested_questions_after_answer:
+      enabled: true
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        sourceType: start
+        targetType: code
+      id: input-to-validation
+      source: 'start-node'
+      sourceHandle: source
+      target: 'validation-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: llm
+      id: validation-to-llm
+      source: 'validation-node'
+      sourceHandle: source
+      target: 'llm-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      id: llm-to-formatter
+      source: 'llm-node'
+      sourceHandle: source
+      target: 'formatter-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: template-transform
+      id: formatter-to-template
+      source: 'formatter-node'
+      sourceHandle: source
+      target: 'template-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: template-transform
+        targetType: end
+      id: template-to-end
+      source: 'template-node'
+      sourceHandle: source
+      target: 'end-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: '输入天气信息获取穿衣建议'
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: 天气状况
+          max_length: 20
+          options:
+          - 晴天
+          - 雨天
+          - 雪天
+          - 阴天
+          - 多云
+          - 大风
+          required: true
+          type: select
+          variable: weather
+        - label: 温度（摄氏度）
+          max_length: 5
+          options: []
+          required: true
+          type: text-input
+          variable: temperature
+        - label: 湿度（百分比）
+          max_length: 3
+          options: []
+          required: true
+          type: text-input
+          variable: humidity
+      height: 140
+      id: 'start-node'
+      position:
+        x: 50
+        y: 200
+      positionAbsolute:
+        x: 50
+        y: 200
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 260
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: ''
+        model:
+          completion_params:
+            temperature: 0.7
+            max_tokens: 2000
+          mode: chat
+          name: gpt-4
+          provider: openai
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: '你是一个专业的穿衣顾问。根据用户提供的天气、温度、湿度信息，给出专业的穿衣建议。
+
+            输出要求：
+            1. 按照标准的JSON格式输出
+            2. 包含服装类型、材质建议、颜色建议、注意事项
+            3. 根据温度分层建议：外层、中层、内层
+            4. 考虑湿度对体感温度的影响
+
+            输出格式模板：
+            {
+              "weather_condition": "",
+              "temperature_range": "",
+              "humidity_level": "",
+              "clothing_recommendation": {
+                "outer_layer": {
+                  "type": "",
+                  "material": "",
+                  "color_suggestion": "",
+                  "reason": ""
+                },
+                "middle_layer": {
+                  "type": "",
+                  "material": "", 
+                  "color_suggestion": "",
+                  "reason": ""
+                },
+                "inner_layer": {
+                  "type": "",
+                  "material": "",
+                  "color_suggestion": "",
+                  "reason": ""
+                },
+                "accessories": {
+                  "head": "",
+                  "hands": "",
+                  "feet": ""
+                }
+              },
+              "special_notes": []
+            }'
+        - id: user-prompt
+          role: user
+          text: "请根据以下天气信息给出穿衣建议：\n\n天气状况：{{#validation-node.validated_weather#}}\n温度：{{#validation-node.validated_temperature#}}°C\n湿度：{{#validation-node.validated_humidity#}}%\n舒适度等级：{{#validation-node.comfort_level#}}\n\n请严格按照JSON格式输出，不要包含其他文字。"
+        selected: false
+        title: AI穿衣顾问
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 120
+      id: 'llm-node'
+      position:
+        x: 650
+        y: 180
+      positionAbsolute:
+        x: 650
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 260
+    - data:
+        code: "function calculateComfortLevel(temp, hum) {\n  const temperature = parseFloat(temp);\n  const humidity = parseFloat(hum);\n  \n  if (temperature < 0) return \"极寒\";\n  if (temperature < 10 && humidity > 80) return \"湿冷\";\n  if (temperature < 10) return \"寒冷\";\n  if (temperature > 30 && humidity > 70) return \"闷热\";\n  if (temperature > 30) return \"炎热\";\n  if (temperature > 25 && humidity > 80) return \"湿热\";\n  if (temperature >= 20 && temperature <= 26 && humidity >= 40 && humidity <= 70) return \"舒适\";\n  return \"一般\";\n}\n\nasync function main({ weather, temperature, humidity }) {\n  // 验证输入数据\n  if (!weather || typeof weather !== 'string') {\n    throw new Error('天气参数必须为字符串');\n  }\n  \n  const temp = parseFloat(temperature);\n  const hum = parseFloat(humidity);\n  \n  if (isNaN(temp)) {\n    throw new Error('温度参数必须为数字');\n  }\n  \n  if (isNaN(hum) || hum < 0 || hum > 100) {\n    throw new Error('湿度参数必须为0-100之间的数字');\n  }\n  \n  const comfortLevel = calculateComfortLevel(temp, hum);\n  \n  return {\n    validated_weather: weather,\n    validated_temperature: temp,\n    validated_humidity: hum,\n    comfort_level: comfortLevel,\n    timestamp: new Date().toISOString()\n  };\n}"
+        code_language: javascript
+        desc: '验证输入数据并计算舒适度等级'
+        outputs:
+          validated_weather:
+            children: null
+            type: string
+          validated_temperature:
+            children: null
+            type: number
+          validated_humidity:
+            children: null
+            type: number
+          comfort_level:
+            children: null
+            type: string
+          timestamp:
+            children: null
+            type: string
+        selected: false
+        title: 输入验证
+        type: code
+        variables:
+        - value_selector:
+          - 'start-node'
+          - weather
+          variable: weather
+        - value_selector:
+          - 'start-node'
+          - temperature
+          variable: temperature
+        - value_selector:
+          - 'start-node'
+          - humidity
+          variable: humidity
+      height: 80
+      id: 'validation-node'
+      position:
+        x: 350
+        y: 190
+      positionAbsolute:
+        x: 350
+        y: 190
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 260
+    - data:
+        code: "function extractJSON(text) {\n  const stack = [];\n  for (let i = 0; i < text.length; i++) {\n    const c = text[i];\n    if (c === \"{\") {\n      stack.push(c);\n    } else if (c === \"}\") {\n      if (!stack.length) {\n        return text.substring(0, i);\n      }\n      if (c === \"}\" && stack[stack.length - 1] === \"{\") {\n        stack.pop();\n        if (!stack.length) {\n          return text.substring(0, i + 1);\n        }\n      } else {\n        return text.substring(0, i);\n      }\n    }\n  }\n  return null;\n}\n\nasync function main({ llm_output, validated_data }) {\n  try {\n    // 解析LLM输出\n    let clothingData;\n    if (typeof llm_output === 'string') {\n      try {\n        clothingData = JSON.parse(llm_output);\n      } catch (e) {\n        // 尝试提取JSON部分\n        const jsonMatch = llm_output.match(/\\{[\\s\\S]*\\}/);\n        if (jsonMatch) {\n          clothingData = JSON.parse(jsonMatch[0]);\n        } else {\n          throw new Error('无法解析LLM输出为JSON');\n        }\n      }\n    } else {\n      clothingData = llm_output;\n    }\n    \n    // 构建标准DSL格式\n    const standardizedDSL = {\n      version: \"1.0\",\n      timestamp: validated_data.timestamp,\n      input_conditions: {\n        weather: validated_data.validated_weather,\n        temperature: validated_data.validated_temperature,\n        humidity: validated_data.validated_humidity,\n        comfort_level: validated_data.comfort_level\n      },\n      recommendation: clothingData\n    };\n    \n    return standardizedDSL;\n    \n  } catch (error) {\n    // 错误处理\n    return {\n      error: \"DSL格式转换失败\",\n      message: error.message,\n      raw_output: llm_output,\n      timestamp: validated_data.timestamp\n    };\n  }\n}"
+        code_language: javascript
+        desc: '将LLM输出转换为标准DSL格式'
+        outputs:
+          version:
+            children: null
+            type: string
+          timestamp:
+            children: null
+            type: string
+          input_conditions:
+            children: null
+            type: object
+          recommendation:
+            children: null
+            type: object
+          error:
+            children: null
+            type: string
+          message:
+            children: null
+            type: string
+          raw_output:
+            children: null
+            type: string
+        selected: false
+        title: DSL格式化
+        type: code
+        variables:
+        - value_selector:
+          - 'llm-node'
+          - text
+          variable: llm_output
+        - value_selector:
+          - 'validation-node'
+          - outputs
+          variable: validated_data
+      height: 80
+      id: 'formatter-node'
+      position:
+        x: 950
+        y: 180
+      positionAbsolute:
+        x: 950
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 260
+    - data:
+        desc: ''
+        outputs:
+        - value_selector:
+          - 'template-node'
+          - output
+          variable: output
+        selected: false
+        title: 结束
+        type: end
+      height: 80
+      id: 'end-node'
+      position:
+        x: 1350
+        y: 190
+      positionAbsolute:
+        x: 1350
+        y: 190
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 260
+    - data:
+        desc: '美化输出显示'
+        selected: false
+        template: "<div style=\"font-family: 'Microsoft YaHei', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);\">\n  <div style=\"text-align: center; margin-bottom: 20px;\">\n    <h2 style=\"color: #2c3e50; margin-bottom: 5px;\">👕 穿衣智能指南</h2>\n    <p style=\"color: #7f8c8d; font-size: 14px;\">基于您的天气条件提供的专业建议</p>\n  </div>\n  \n  <div style=\"background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px;\">\n    <h3 style=\"color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 10px;\">📊 输入条件</h3>\n    <div style=\"display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;\">\n      <div style=\"text-align: center;\">\n        <div style=\"font-size: 12px; color: #7f8c8d;\">天气</div>\n        <div style=\"font-weight: bold; color: #2c3e50;\">{{ input_conditions.weather }}</div>\n      </div>\n      <div style=\"text-align: center;\">\n        <div style=\"font-size: 12px; color: #7f8c8d;\">温度</div>\n        <div style=\"font-weight: bold; color: #2c3e50;\">{{ input_conditions.temperature }}°C</div>\n      </div>\n      <div style=\"text-align: center;\">\n        <div style=\"font-size: 12px; color: #7f8c8d;\">湿度</div>\n        <div style=\"font-weight: bold; color: #2c3e50;\">{{ input_conditions.humidity }}%</div>\n      </div>\n    </div>\n    <div style=\"text-align: center; margin-top: 10px;\">\n      <span style=\"background: #3498db; color: white; padding: 5px 15px; border-radius: 20px; font-size: 12px;\">舒适度: {{ input_conditions.comfort_level }}</span>\n    </div>\n  </div>\n  \n  <div style=\"background: white; border-radius: 10px; padding: 20px;\">\n    <h3 style=\"color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;\">🎯 穿衣建议</h3>\n    \n    <div style=\"margin-top: 15px;\">\n      <h4 style=\"color: #2c3e50; margin-bottom: 10px;\">👔 服装搭配</h4>\n      <div style=\"display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;\">\n        <div style=\"background: #f8f9fa; padding: 15px; border-radius: 8px;\">\n          <div style=\"font-weight: bold; color: #e74c3c; margin-bottom: 5px;\">外层</div>\n          <div style=\"font-size: 14px;\"><strong>{{ recommendation.clothing_recommendation.outer_layer.type }}</strong></div>\n          <div style=\"font-size: 12px; color: #7f8c8d;\">材质: {{ recommendation.clothing_recommendation.outer_layer.material }}</div>\n          <div style=\"font-size: 12px; color: #7f8c8d;\">颜色: {{ recommendation.clothing_recommendation.outer_layer.color_suggestion }}</div>\n        </div>\n        <div style=\"background: #f8f9fa; padding: 15px; border-radius: 8px;\">\n          <div style=\"font-weight: bold; color: #3498db; margin-bottom: 5px;\">中层</div>\n          <div style=\"font-size: 14px;\"><strong>{{ recommendation.clothing_recommendation.middle_layer.type }}</strong></div>\n          <div style=\"font-size: 12px; color: #7f8c8d;\">材质: {{ recommendation.clothing_recommendation.middle_layer.material }}</div>\n          <div style=\"font-size: 12px; color: #7f8c8d;\">颜色: {{ recommendation.clothing_recommendation.middle_layer.color_suggestion }}</div>\n        </div>\n        <div style=\"background: #f8f9fa; padding: 15px; border-radius: 8px;\">\n          <div style=\"font-weight: bold; color: #2ecc71; margin-bottom: 5px;\">内层</div>\n          <div style=\"font-size: 14px;\"><strong>{{ recommendation.clothing_recommendation.inner_layer.type }}</strong></div>\n          <div style=\"font-size: 12px; color: #7f8c8d;\">材质: {{ recommendation.clothing_recommendation.inner_layer.material }}</div>\n          <div style=\"font-size: 12px; color: #7f8c8d;\">颜色: {{ recommendation.clothing_recommendation.inner_layer.color_suggestion }}</div>\n        </div>\n      </div>\n    </div>\n    \n    <div style=\"margin-top: 20px;\">\n      <h4 style=\"color: #2c3e50; margin-bottom: 10px;\">🧤 配饰建议</h4>\n      <div style=\"background: #f8f9fa; padding: 15px; border-radius: 8px;\">\n        <div style=\"display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center;\">\n          <div>\n            <div style=\"font-size: 12px; color: #7f8c8d;\">头部</div>\n            <div style=\"font-size: 14px; font-weight: bold;\">{{ recommendation.clothing_recommendation.accessories.head }}</div>\n          </div>\n          <div>\n            <div style=\"font-size: 12px; color: #7f8c8d;\">手部</div>\n            <div style=\"font-size: 14px; font-weight: bold;\">{{ recommendation.clothing_recommendation.accessories.hands }}</div>\n          </div>\n          <div>\n            <div style=\"font-size: 12px; color: #7f8c8d;\">脚部</div>\n            <div style=\"font-size: 14px; font-weight: bold;\">{{ recommendation.clothing_recommendation.accessories.feet }}</div>\n          </div>\n        </div>\n      </div>\n    </div>\n    \n    {{#if recommendation.special_notes.length}}\n    <div style=\"margin-top: 20px;\">\n      <h4 style=\"color: #f39c12; margin-bottom: 10px;\">💡 特别提醒</h4>\n      <div style=\"background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;\">\n        {{#each recommendation.special_notes}}\n        <div style=\"margin-bottom: 5px; font-size: 14px;\">• {{ this }}</div>\n        {{/each}}\n      </div>\n    </div>\n    {{/if}}\n  </div>\n  \n  <div style=\"text-align: center; margin-top: 20px; color: #95a5a6; font-size: 12px;\">\n    建议时间: {{ timestamp }} | 版本: {{ version }}\n  </div>\n</div>"
+        title: 美化输出
+        type: template-transform
+        variables:
+        - value_selector:
+          - 'formatter-node'
+          - version
+          variable: version
+        - value_selector:
+          - 'formatter-node'
+          - timestamp
+          variable: timestamp
+        - value_selector:
+          - 'formatter-node'
+          - input_conditions
+          variable: input_conditions
+        - value_selector:
+          - 'formatter-node'
+          - recommendation
+          variable: recommendation
+      height: 80
+      id: 'template-node'
+      position:
+        x: 1150
+        y: 180
+      positionAbsolute:
+        x: 1150
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 260
+    viewport:
+      x: 100
+      y: 100
+      zoom: 0.8

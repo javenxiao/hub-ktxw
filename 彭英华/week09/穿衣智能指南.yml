@@ -1,0 +1,247 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: 穿衣智能指南
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1761047252393-source-1761047463790-target
+      source: '1761047252393'
+      sourceHandle: source
+      target: '1761047463790'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: template-transform
+      id: 1761047463790-source-1761047661467-target
+      source: '1761047463790'
+      sourceHandle: source
+      target: '1761047661467'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: template-transform
+        targetType: end
+      id: 1761047661467-source-1761047926573-target
+      source: '1761047661467'
+      sourceHandle: source
+      target: '1761047926573'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: weather
+          max_length: 48
+          options: []
+          required: true
+          type: text-input
+          variable: weather
+        - label: temperature(℃）
+          max_length: 48
+          options: []
+          required: true
+          type: number
+          variable: temperature
+        - label: humidity(%RH)
+          max_length: 48
+          options: []
+          required: true
+          type: number
+          variable: humidity
+      height: 141
+      id: '1761047252393'
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1761047252393'
+          - temperature
+        desc: ''
+        model:
+          completion_params: {}
+          mode: chat
+          name: qwen-max
+          provider: langgenius/tongyi/tongyi
+        prompt_template:
+        - id: bb1835fa-c45f-4acf-9321-6c9deee2f4ec
+          role: system
+          text: 你是一个穿衣方面的专家，请根据用户给出的温度，天气，湿度给出穿衣建议
+        - id: 65a886ff-8ebd-492d-bf9d-3b8876ffe1c8
+          role: user
+          text: '温度：{{#1761047252393.temperature#}}，单位为℃
+
+            天气：{{#1761047252393.weather#}}
+
+            湿度：{{#1761047252393.humidity#}}，单位为%RH'
+        selected: false
+        title: LLM
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 89
+      id: '1761047463790'
+      position:
+        x: 385
+        y: 282
+      positionAbsolute:
+        x: 385
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: ''
+        selected: true
+        template: "## 天气\r\n{{ weather }}\r\n\r\n## 温度(℃)\r\n{{ temperature }}\r\n\
+          \r\n## 湿度(%RH)\r\n{{ humidity }}\r\n\r\n## 穿衣建议\r\n{{ text }}"
+        title: 模板转换
+        type: template-transform
+        variables:
+        - value_selector:
+          - '1761047252393'
+          - weather
+          value_type: string
+          variable: weather
+        - value_selector:
+          - '1761047252393'
+          - temperature
+          value_type: number
+          variable: temperature
+        - value_selector:
+          - '1761047252393'
+          - humidity
+          value_type: number
+          variable: humidity
+        - value_selector:
+          - '1761047463790'
+          - text
+          value_type: string
+          variable: text
+      height: 53
+      id: '1761047661467'
+      position:
+        x: 689
+        y: 282
+      positionAbsolute:
+        x: 689
+        y: 282
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: ''
+        outputs:
+        - value_selector:
+          - '1761047661467'
+          - output
+          value_type: string
+          variable: output
+        selected: false
+        title: 结束
+        type: end
+      height: 89
+      id: '1761047926573'
+      position:
+        x: 993
+        y: 282
+      positionAbsolute:
+        x: 993
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: -195.5119858295468
+      y: 208.0592705171776
+      zoom: 0.7578582832551989

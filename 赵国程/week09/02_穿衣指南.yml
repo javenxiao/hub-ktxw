@@ -1,0 +1,253 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: 穿衣指南
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.0.56@42a5fb7bc09b2f14f9d19f0ac79bec42c3c50dba07a52bf1b6d3abcd6906c739
+    version: null
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1760942841444-source-1760943164589-target
+      source: '1760942841444'
+      sourceHandle: source
+      target: '1760943164589'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: template-transform
+      id: 1760943164589-source-1761034444458-target
+      source: '1760943164589'
+      sourceHandle: source
+      target: '1761034444458'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: template-transform
+        targetType: end
+      id: 1761034444458-source-1761034438965-target
+      source: '1761034444458'
+      sourceHandle: source
+      target: '1761034438965'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - default: ''
+          hint: ''
+          label: 天气
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: text-input
+          variable: weather
+        - default: ''
+          hint: ''
+          label: 温度
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: temperature
+        - default: ''
+          hint: ''
+          label: 湿度
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: humidity
+      height: 140
+      id: '1760942841444'
+      position:
+        x: 17.78114572894154
+        y: 292.86360947589907
+      positionAbsolute:
+        x: 17.78114572894154
+        y: 292.86360947589907
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params: {}
+          mode: chat
+          name: qwen3-vl-plus
+          provider: langgenius/tongyi/tongyi
+        prompt_config:
+          jinja2_variables: []
+        prompt_template:
+        - edition_type: basic
+          id: 710b29d7-2e50-4e55-a1db-9565d4576b94
+          role: system
+          text: 根据用户输入的天气、温度、湿度，给出穿衣指南
+        - id: 240cb356-b9be-4586-afe4-f305a80261d6
+          role: user
+          text: 温度：{{#1760942841444.temperature#}}，湿度:{{#1760942841444.humidity#}}，天气:{{#1760942841444.weather#}}
+        selected: false
+        structured_output_enabled: false
+        title: LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: '1760943164589'
+      position:
+        x: 283.358310632466
+        y: 206.49161603863593
+      positionAbsolute:
+        x: 283.358310632466
+        y: 206.49161603863593
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        outputs:
+        - value_selector:
+          - '1761034444458'
+          - output
+          value_type: string
+          variable: output
+        selected: false
+        title: 结束
+        type: end
+      height: 88
+      id: '1761034438965'
+      position:
+        x: 565.6223857931169
+        y: 436.8164523068477
+      positionAbsolute:
+        x: 565.6223857931169
+        y: 436.8164523068477
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        selected: false
+        template: '今日天气: {{ weather }} 温度: {{ temperature }} 湿度: {{ humidity }}
+
+          穿衣建议：
+
+          {{ llm_result }}'
+        title: 模板转换
+        type: template-transform
+        variables:
+        - value_selector:
+          - '1760943164589'
+          - text
+          value_type: string
+          variable: llm_result
+        - value_selector:
+          - '1760942841444'
+          - weather
+          value_type: string
+          variable: weather
+        - value_selector:
+          - '1760942841444'
+          - temperature
+          value_type: number
+          variable: temperature
+        - value_selector:
+          - '1760942841444'
+          - humidity
+          value_type: number
+          variable: humidity
+      height: 52
+      id: '1761034444458'
+      position:
+        x: 455.2699977212817
+        y: 342.26857676495723
+      positionAbsolute:
+        x: 455.2699977212817
+        y: 342.26857676495723
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: 82.5740314745201
+      y: 34.66595729961239
+      zoom: 1.0281138266560672
+  rag_pipeline_variables: []

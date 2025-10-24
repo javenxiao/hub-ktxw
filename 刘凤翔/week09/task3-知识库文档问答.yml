@@ -1,0 +1,374 @@
+app:
+  description: '基于上传文档的智能问答系统，能够从文档中提取信息并准确回答用户问题'
+  icon: book-open
+  icon_background: '#E8F5E9'
+  mode: workflow
+  name: 文档智能问答助手
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: openai:gpt-4:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+kind: app
+version: 0.2.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .pdf
+      - .doc
+      - .docx
+      - .txt
+      - .md
+      - .ppt
+      - .pptx
+      - .xls
+      - .xlsx
+      allowed_file_types:
+      - document
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: true
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 10
+        file_size_limit: 20
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 50
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 10
+    opening_statement: '您好！我是文档智能问答助手。您可以上传文档（PDF、Word、TXT等格式），然后针对文档内容提问，我会基于文档内容为您提供准确的答案。'
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - '这篇文档的主要内容是什么？'
+    - '文档中提到了哪些关键点？'
+    - '能总结一下文档的核心观点吗？'
+    - '文档的作者是谁？'
+    suggested_questions_after_answer:
+      enabled: true
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        sourceType: start
+        targetType: knowledge-retrieval
+      id: start-to-retrieval
+      source: 'start-node'
+      sourceHandle: source
+      target: 'retrieval-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: retrieval-to-llm
+      source: 'retrieval-node'
+      sourceHandle: source
+      target: 'llm-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      id: llm-to-validator
+      source: 'llm-node'
+      sourceHandle: source
+      target: 'validator-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: template-transform
+      id: validator-to-template
+      source: 'validator-node'
+      sourceHandle: source
+      target: 'template-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: template-transform
+        targetType: end
+      id: template-to-end
+      source: 'template-node'
+      sourceHandle: source
+      target: 'end-node'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: '输入您的问题，系统将从已上传的文档中寻找答案'
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: 问题
+          max_length: 1000
+          options: []
+          required: true
+          type: text-input
+          variable: question
+        - label: 相关文档
+          max_length: 100
+          options: []
+          required: false
+          type: file
+          variable: document
+      height: 140
+      id: 'start-node'
+      position:
+        x: 50
+        y: 200
+      positionAbsolute:
+        x: 50
+        y: 200
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 280
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: ''
+        model:
+          completion_params:
+            temperature: 0.1
+            max_tokens: 2000
+          mode: chat
+          name: gpt-4
+          provider: openai
+        prompt_template:
+        - id: system-prompt
+          role: system
+          text: '你是一个专业的文档分析助手。基于用户提供的文档内容和问题，给出准确、详细的回答。
+
+回答要求：
+1. 必须基于提供的文档内容回答，不要编造文档中没有的信息
+2. 如果文档中没有相关信息，请明确告知用户
+3. 回答要结构清晰，重点突出
+4. 引用文档中的具体信息时，可以注明出处
+5. 如果问题涉及多个方面，请分点回答
+
+请按照以下JSON格式输出回答：
+{
+  "answer": "完整的回答内容",
+  "confidence": "高/中/低",
+  "sources": ["引用的文档片段1", "引用的文档片段2"],
+  "has_relevant_info": true/false,
+  "suggested_follow_up": ["建议追问问题1", "建议追问问题2"]
+}'
+        - id: user-prompt
+          role: user
+          text: "用户问题：{{#start-node.question#}}\n\n相关文档内容：\n{{#retrieval-node.content#}}\n\n请基于以上文档内容回答用户的问题。"
+        selected: false
+        title: 文档分析助手
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 120
+      id: 'llm-node'
+      position:
+        x: 700
+        y: 180
+      positionAbsolute:
+        x: 700
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 280
+    - data:
+        desc: '从知识库中检索与问题相关的文档内容'
+        knowledge_base:
+          datasets:
+          - id: 'default-knowledge-base'
+            name: 默认知识库
+          retriever:
+            max_tokens: 2000
+            retrieval_mode: multiple
+            top_k: 5
+        selected: false
+        title: 知识库检索
+        type: knowledge-retrieval
+        variables:
+        - value_selector:
+          - 'start-node'
+          - question
+          variable: query
+      height: 80
+      id: 'retrieval-node'
+      position:
+        x: 380
+        y: 190
+      positionAbsolute:
+        x: 380
+        y: 190
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 280
+    - data:
+        code: "function extractJSON(text) {\n  const stack = [];\n  for (let i = 0; i < text.length; i++) {\n    const c = text[i];\n    if (c === \"{\") {\n      stack.push(c);\n    } else if (c === \"}\") {\n      if (!stack.length) {\n        return text.substring(0, i);\n      }\n      if (c === \"}\" && stack[stack.length - 1] === \"{\") {\n        stack.pop();\n        if (!stack.length) {\n          return text.substring(0, i + 1);\n        }\n      } else {\n        return text.substring(0, i);\n      }\n    }\n  }\n  return null;\n}\n\nasync function main({ llm_output, question, retrieval_content }) {\n  try {\n    // 解析LLM输出\n    let answerData;\n    if (typeof llm_output === 'string') {\n      try {\n        answerData = JSON.parse(llm_output);\n      } catch (e) {\n        // 尝试提取JSON部分\n        const jsonMatch = llm_output.match(/\\{[\\s\\S]*\\}/);\n        if (jsonMatch) {\n          answerData = JSON.parse(jsonMatch[0]);\n        } else {\n          // 如果不是JSON格式，构建默认响应\n          answerData = {\n            answer: llm_output,\n            confidence: \"中\",\n            sources: [],\n            has_relevant_info: true,\n            suggested_follow_up: []\n          };\n        }\n      }\n    } else {\n      answerData = llm_output;\n    }\n    \n    // 验证必要字段\n    if (!answerData.answer) {\n      answerData.answer = \"抱歉，我无法从文档中找到相关答案。\";\n      answerData.confidence = \"低\";\n      answerData.has_relevant_info = false;\n    }\n    \n    // 构建标准响应格式\n    const standardizedResponse = {\n      version: \"1.0\",\n      timestamp: new Date().toISOString(),\n      question: question,\n      answer: answerData.answer,\n      metadata: {\n        confidence: answerData.confidence || \"中\",\n        has_relevant_info: answerData.has_relevant_info !== false,\n        sources_count: answerData.sources ? answerData.sources.length : 0,\n        retrieval_tokens: retrieval_content ? retrieval_content.length : 0\n      },\n      sources: answerData.sources || [],\n      suggested_questions: answerData.suggested_follow_up || [\n        \"文档中还有哪些重要信息？\",\n        \"能详细解释一下这个概念吗？\",\n        \"这个信息的具体应用场景是什么？\"\n      ]\n    };\n    \n    return standardizedResponse;\n    \n  } catch (error) {\n    // 错误处理\n    return {\n      version: \"1.0\",\n      timestamp: new Date().toISOString(),\n      question: question,\n      answer: \"抱歉，处理您的问题时出现了错误。\",\n      error: {\n        message: error.message,\n        type: \"processing_error\"\n      },\n      metadata: {\n        confidence: \"低\",\n        has_relevant_info: false,\n        sources_count: 0\n      },\n      sources: [],\n      suggested_questions: [\"请重新表述您的问题\", \"您可以尝试上传相关文档\"]\n    };\n  }\n}"
+        code_language: javascript
+        desc: '验证和标准化LLM的输出格式'
+        outputs:
+          version:
+            children: null
+            type: string
+          timestamp:
+            children: null
+            type: string
+          question:
+            children: null
+            type: string
+          answer:
+            children: null
+            type: string
+          metadata:
+            children: null
+            type: object
+          sources:
+            children: null
+            type: array
+          suggested_questions:
+            children: null
+            type: array
+          error:
+            children: null
+            type: object
+        selected: false
+        title: 响应验证器
+        type: code
+        variables:
+        - value_selector:
+          - 'llm-node'
+          - text
+          variable: llm_output
+        - value_selector:
+          - 'start-node'
+          - question
+          variable: question
+        - value_selector:
+          - 'retrieval-node'
+          - content
+          variable: retrieval_content
+      height: 80
+      id: 'validator-node'
+      position:
+        x: 1020
+        y: 180
+      positionAbsolute:
+        x: 1020
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 280
+    - data:
+        desc: ''
+        outputs:
+        - value_selector:
+          - 'template-node'
+          - output
+          variable: output
+        selected: false
+        title: 结束
+        type: end
+      height: 80
+      id: 'end-node'
+      position:
+        x: 1480
+        y: 190
+      positionAbsolute:
+        x: 1480
+        y: 190
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 280
+    - data:
+        desc: '美化问答结果显示'
+        selected: false
+        template: "<div style=\"font-family: 'Microsoft YaHei', sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);\">\n  <div style=\"text-align: center; margin-bottom: 20px;\">\n    <h2 style=\"color: #2c3e50; margin-bottom: 5px;\">📚 文档智能问答</h2>\n    <p style=\"color: #7f8c8d; font-size: 14px;\">基于知识库的精准答案</p>\n  </div>\n  \n  <!-- 问题显示 -->\n  <div style=\"background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; border-left: 4px solid #3498db;\">\n    <div style=\"display: flex; align-items: center; margin-bottom: 10px;\">\n      <div style=\"background: #3498db; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 12px;\">Q</div>\n      <h3 style=\"color: #2c3e50; margin: 0;\">用户问题</h3>\n    </div>\n    <p style=\"color: #2c3e50; font-size: 16px; line-height: 1.5; margin: 0;\">{{ question }}</p>\n  </div>\n  \n  <!-- 答案显示 -->\n  <div style=\"background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; border-left: 4px solid #27ae60;\">\n    <div style=\"display: flex; align-items: center; margin-bottom: 15px;\">\n      <div style=\"background: #27ae60; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 12px;\">A</div>\n      <h3 style=\"color: #2c3e50; margin: 0;\">智能回答</h3>\n      <span style=\"margin-left: auto; background: {{#if (metadata.confidence == '高')}}#2ecc71{{else if (metadata.confidence == '中')}}#f39c12{{else}}#e74c3c{{/if}}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px;\">置信度: {{ metadata.confidence }}</span>\n    </div>\n    <div style=\"color: #2c3e50; font-size: 15px; line-height: 1.6;\">\n      {{{ answer }}}\n    </div>\n    \n    {{#unless metadata.has_relevant_info}}\n    <div style=\"background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin-top: 15px;\">\n      <div style=\"display: flex; align-items: center;\">\n        <span style=\"color: #f39c12; margin-right: 8px;\">⚠️</span>\n        <span style=\"color: #856404; font-size: 14px;\">未在文档中找到直接相关信息，以上回答基于模型的一般知识。</span>\n      </div>\n    </div>\n    {{/unless}}\n  </div>\n  \n  <!-- 来源信息 -->\n  {{#if sources.length}}\n  <div style=\"background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px;\">\n    <h4 style=\"color: #2c3e50; border-bottom: 2px solid #9b59b6; padding-bottom: 10px; margin-bottom: 15px;\">📖 参考来源</h4>\n    <div style=\"max-height: 200px; overflow-y: auto;\">\n      {{#each sources}}\n      <div style=\"background: #f8f9fa; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #9b59b6;\">\n        <div style=\"font-size: 13px; color: #7f8c8d; margin-bottom: 5px;\">来源 {{add @index 1}}</div>\n        <div style=\"font-size: 14px; color: #2c3e50; line-height: 1.4;\">{{ this }}</div>\n      </div>\n      {{/each}}\n    </div>\n  </div>\n  {{/if}}\n  \n  <!-- 建议追问 -->\n  {{#if suggested_questions.length}}\n  <div style=\"background: white; border-radius: 10px; padding: 20px;\">\n    <h4 style=\"color: #2c3e50; border-bottom: 2px solid #e74c3c; padding-bottom: 10px; margin-bottom: 15px;\">💡 您可能还想了解</h4>\n    <div style=\"display: flex; flex-wrap: wrap; gap: 10px;\">\n      {{#each suggested_questions}}\n      <span style=\"background: #e74c3c; color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; transition: all 0.3s;\" onmouseover=\"this.style.backgroundColor='#c0392b'\" onmouseout=\"this.style.backgroundColor='#e74c3c'\">{{ this }}</span>\n      {{/each}}\n    </div>\n  </div>\n  {{/if}}\n  \n  <!-- 元信息 -->\n  <div style=\"text-align: center; margin-top: 20px; color: #95a5a6; font-size: 12px;\">\n    回答时间: {{ timestamp }} | 检索片段: {{ metadata.sources_count }} | 系统版本: {{ version }}\n  </div>\n</div>\n\n<script>\n// 为建议问题添加点击事件\nfunction setupSuggestedQuestions() {\n  const suggestedElements = document.querySelectorAll('[onmouseover]');\n  suggestedElements.forEach(element => {\n    element.addEventListener('click', function() {\n      const question = this.textContent;\n      // 这里可以添加将问题发送回系统的逻辑\n      alert('点击了问题: ' + question);\n    });\n  });\n}\n\ndocument.addEventListener('DOMContentLoaded', setupSuggestedQuestions);\n</script>"
+        title: 问答展示
+        type: template-transform
+        variables:
+        - value_selector:
+          - 'validator-node'
+          - version
+          variable: version
+        - value_selector:
+          - 'validator-node'
+          - timestamp
+          variable: timestamp
+        - value_selector:
+          - 'validator-node'
+          - question
+          variable: question
+        - value_selector:
+          - 'validator-node'
+          - answer
+          variable: answer
+        - value_selector:
+          - 'validator-node'
+          - metadata
+          variable: metadata
+        - value_selector:
+          - 'validator-node'
+          - sources
+          variable: sources
+        - value_selector:
+          - 'validator-node'
+          - suggested_questions
+          variable: suggested_questions
+      height: 80
+      id: 'template-node'
+      position:
+        x: 1250
+        y: 180
+      positionAbsolute:
+        x: 1250
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 280
+    viewport:
+      x: 100
+      y: 100
+      zoom: 0.8

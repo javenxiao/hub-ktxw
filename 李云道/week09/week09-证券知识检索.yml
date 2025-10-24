@@ -1,0 +1,245 @@
+app:
+  description: ''
+  icon: ghost
+  icon_background: '#E4FBCC'
+  mode: advanced-chat
+  name: week09-证券知识助手
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.1.5
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        sourceType: start
+        targetType: knowledge-retrieval
+      id: 1761202149526-source-1761202164259-target
+      source: '1761202149526'
+      sourceHandle: source
+      target: '1761202164259'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: knowledge-retrieval
+        targetType: llm
+      id: 1761202164259-source-1761202421094-target
+      source: '1761202164259'
+      sourceHandle: source
+      target: '1761202421094'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: template-transform
+      id: 1761202421094-source-1761203076986-target
+      source: '1761202421094'
+      sourceHandle: source
+      target: '1761203076986'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: template-transform
+        targetType: answer
+      id: 1761203076986-source-1761203010260-target
+      source: '1761203076986'
+      sourceHandle: source
+      target: '1761203010260'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 开始
+        type: start
+        variables: []
+      height: 54
+      id: '1761202149526'
+      position:
+        x: 30
+        y: 251.5
+      positionAbsolute:
+        x: 30
+        y: 251.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        dataset_ids:
+        - 51dcc2de-3ec8-4d6b-b7b6-510da02654ae
+        desc: ''
+        multiple_retrieval_config:
+          reranking_enable: true
+          reranking_mode: reranking_model
+          reranking_model:
+            model: gte-rerank
+            provider: tongyi
+          top_k: 4
+        query_variable_selector:
+        - '1761202149526'
+        - sys.query
+        retrieval_mode: multiple
+        selected: false
+        title: 知识检索
+        type: knowledge-retrieval
+      height: 92
+      id: '1761202164259'
+      position:
+        x: 30
+        y: 345.7857142857143
+      positionAbsolute:
+        x: 30
+        y: 345.7857142857143
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1761202164259'
+          - result
+        desc: ''
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: deepseek-chat
+          provider: deepseek
+        prompt_template:
+        - id: 328530e6-fd56-4380-8bf5-4657754aceb6
+          role: system
+          text: '你是一名专业证券咨询师，请结合上下文，回答用户提问
+
+            {{#context#}}'
+        - id: e99bd173-ca21-493c-9c5d-fc48292a88ac
+          role: user
+          text: '{{#sys.query#}}'
+        selected: true
+        title: LLM
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 98
+      id: '1761202421094'
+      position:
+        x: 30
+        y: 472.92857142857144
+      positionAbsolute:
+        x: 30
+        y: 472.92857142857144
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#1761203076986.output#}}'
+        desc: ''
+        selected: false
+        title: 直接回复
+        type: answer
+        variables: []
+      height: 103
+      id: '1761203010260'
+      position:
+        x: 30
+        y: 694.3571428571429
+      positionAbsolute:
+        x: 30
+        y: 694.3571428571429
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: ''
+        selected: false
+        template: "## 用户提问\r\n{{ query }}\r\n\r\n## RAG回答\r\n{{ text }}"
+        title: 模板转换
+        type: template-transform
+        variables:
+        - value_selector:
+          - sys
+          - query
+          variable: query
+        - value_selector:
+          - '1761202421094'
+          - text
+          variable: text
+      height: 54
+      id: '1761203076986'
+      position:
+        x: 30
+        y: 604.3571428571428
+      positionAbsolute:
+        x: 30
+        y: 604.3571428571428
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 356.73086815208035
+      y: -319.00803676114265
+      zoom: 1.515716566510398
