@@ -1,0 +1,206 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: 穿衣指南-工作流
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.6@dd589dc093c8084925858034ab5ec1fdf0d33819f43226c2f8c4a749a9acbbb2
+    version: null
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1761453712316-source-1761453852111-target
+      source: '1761453712316'
+      sourceHandle: source
+      target: '1761453852111'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1761453852111-source-1761454005866-target
+      source: '1761453852111'
+      sourceHandle: source
+      target: '1761454005866'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - default: ''
+          hint: ''
+          label: 天气
+          max_length: 48
+          options:
+          - 晴天
+          - 阴天
+          - 下雨天
+          placeholder: ''
+          required: true
+          type: select
+          variable: weather
+        - default: ''
+          hint: ''
+          label: 湿度
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: humidity
+        - default: ''
+          hint: ''
+          label: 温度
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: temperature
+      height: 140
+      id: '1761453712316'
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: deepseek-chat
+          provider: langgenius/deepseek/deepseek
+        prompt_template:
+        - id: 1abccf1c-3a41-429f-b29f-27e8c29fa6df
+          role: system
+          text: 你是一位穿衣大师
+        - id: 3e689cef-3157-4709-81ce-82eb6e261abf
+          role: user
+          text: '根据下面的信息
+
+            天气：{{#1761453712316.weather#}}
+
+            温度：{{#1761453712316.temperature#}}
+
+            湿度：{{#1761453712316.humidity#}}
+
+            ，给出合理的穿衣指南'
+        selected: false
+        title: LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: '1761453852111'
+      position:
+        x: 382
+        y: 282
+      positionAbsolute:
+        x: 382
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        outputs:
+        - value_selector:
+          - '1761453852111'
+          - text
+          value_type: string
+          variable: text
+        selected: false
+        title: 结束
+        type: end
+      height: 88
+      id: '1761454005866'
+      position:
+        x: 684
+        y: 282
+      positionAbsolute:
+        x: 684
+        y: 282
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: -277
+      y: 38
+      zoom: 1
+  rag_pipeline_variables: []

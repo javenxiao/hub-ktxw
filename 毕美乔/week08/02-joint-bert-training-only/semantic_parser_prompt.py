@@ -90,7 +90,7 @@ class SemanticParser:
 
 if __name__ == "__main__":
     # 示例运行
-    OPENAI_API_KEY = "sk-b7cb9c156f954f55a8c1d911dfd47f50"
+    OPENAI_API_KEY = "sk-******"
     parser = SemanticParser(api_key=OPENAI_API_KEY)
     text = "茅屋为秋风所破歌杜甫"
     result = parser.parse(text)

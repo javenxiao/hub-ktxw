@@ -1,0 +1,114 @@
+app:
+  description: 基于领克汽车知识库，回答相关问题。
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: chat
+  name: 汽车知识问答助手
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+    version: null
+kind: app
+model_config:
+  agent_mode:
+    enabled: false
+    max_iteration: 10
+    strategy: react
+    tools: []
+  annotation_reply:
+    enabled: false
+  chat_prompt_config: {}
+  completion_prompt_config: {}
+  dataset_configs:
+    datasets:
+      datasets:
+      - dataset:
+          enabled: true
+          id: 660ed320-79b1-48a9-9810-b33e4cbe1739
+    reranking_enable: true
+    reranking_mode: reranking_model
+    reranking_model:
+      reranking_model_name: gte-rerank
+      reranking_provider_name: langgenius/tongyi/tongyi
+    retrieval_model: multiple
+    top_k: 4
+  dataset_query_variable: ''
+  external_data_tools: []
+  file_upload:
+    allowed_file_extensions:
+    - .JPG
+    - .JPEG
+    - .PNG
+    - .GIF
+    - .WEBP
+    - .SVG
+    - .MP4
+    - .MOV
+    - .MPEG
+    - .WEBM
+    allowed_file_types: []
+    allowed_file_upload_methods:
+    - remote_url
+    - local_file
+    enabled: false
+    image:
+      detail: high
+      enabled: false
+      number_limits: 3
+      transfer_methods:
+      - remote_url
+      - local_file
+    number_limits: 3
+  model:
+    completion_params:
+      stop: []
+    mode: chat
+    name: qwen2.5-vl-72b-instruct
+    provider: langgenius/tongyi/tongyi
+  more_like_this:
+    enabled: false
+  opening_statement: ''
+  pre_prompt: '你是一名专业的汽车顾问，负责为用户提供汽车相关的知识问答。
+
+
+    【规则】：
+
+    1. 优先根据知识库中的内容回答；
+
+    2. 如果知识库中未提及，请回答：“知识库中暂无相关信息。”；
+
+    3. 回答要简洁、清晰、易于理解；
+
+    4. 如果问题涉及安全风险（如刹车失灵、打不着火），要提醒用户联系专业维修；
+
+    5. 不要编造内容。
+
+
+    【回答格式】：
+
+    - 直接回答问题，不要列出知识片段。
+
+    - 若有多种可能原因，可用编号或分点说明。
+
+    '
+  prompt_type: simple
+  retriever_resource:
+    enabled: true
+  sensitive_word_avoidance:
+    configs: []
+    enabled: false
+    type: ''
+  speech_to_text:
+    enabled: false
+  suggested_questions: []
+  suggested_questions_after_answer:
+    enabled: false
+  text_to_speech:
+    enabled: false
+    language: ''
+    voice: ''
+  user_input_form: []
+version: 0.4.0

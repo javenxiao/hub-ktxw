@@ -1,0 +1,151 @@
+app:
+  description: '根据天气条件提供穿衣建议的智能助手'
+  icon: 👕
+  icon_background: '#E3F2FD'
+  mode: workflow
+  name: 穿衣智能指南
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+kind: app
+version: 0.2.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+    - data:
+        sourceType: start
+        targetType: llm
+      id: start-llm
+      source: start
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+    - data:
+        sourceType: llm
+        targetType: end
+      id: llm-end
+      source: llm
+      sourceHandle: source
+      target: end
+      targetHandle: target
+    nodes:
+    - data:
+        title: 开始
+        type: start
+        variables:
+        - label: 天气状况
+          max_length: 48
+          options:
+          - 晴天
+          - 阴天
+          - 雨天
+          - 雪天
+          - 大风
+          required: true
+          type: select
+          variable: weather
+        - label: 温度(℃)
+          max_length: 48
+          options: []
+          required: true
+          type: number
+          variable: temperature
+        - label: 湿度(%)
+          max_length: 48
+          options: []
+          required: true
+          type: number
+          variable: humidity
+        - label: 场合
+          max_length: 48
+          options:
+          - 日常休闲
+          - 商务办公
+          - 运动健身
+          - 正式场合
+          - 户外活动
+          required: false
+          type: select
+          variable: occasion
+      height: 160
+      id: start
+      position:
+        x: 100
+        y: 100
+      width: 244
+    - data:
+        title: LLM
+        type: llm
+        model:
+          provider: langgenius/tongyi/tongyi
+          name: qwen2.5-7b-instruct
+          mode: chat
+        prompt_template:
+        - role: system
+          text: |-
+            你是一个专业的穿衣顾问，根据用户提供的天气信息给出详细的穿衣建议。
+            请按照以下结构回复：
+            
+            ## 🌤️ 天气分析
+            [简要分析天气特点]
+            
+            ## 👚 穿衣建议
+            **上衣**：[具体建议]
+            **下装**：[具体建议]  
+            **鞋子**：[具体建议]
+            **配件**：[帽子、雨具等建议]
+            
+            ## 💡 温馨提示
+            [特殊注意事项]
+        - role: user
+          text: |-
+            天气状况：{{#start.weather#}}
+            当前温度：{{#start.temperature#}}℃
+            湿度：{{#start.humidity#}}%
+            {{#if start.occasion}}场合：{{#start.occasion#}}{{/if}}
+            
+            请给出专业的穿衣建议：
+      height: 120
+      id: llm
+      position:
+        x: 100
+        y: 300
+      width: 244
+    - data:
+        title: 结束
+        type: end
+        outputs:
+        - value_selector:
+          - llm
+          - text
+          variable: 穿衣建议
+      height: 80
+      id: end
+      position:
+        x: 100
+        y: 460
+      width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1

@@ -11,7 +11,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# export OPENAI_API_KEY="sk-b7cb9c156f954f55a8c1d911dfd47f50"
+# export OPENAI_API_KEY="sk-******"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:

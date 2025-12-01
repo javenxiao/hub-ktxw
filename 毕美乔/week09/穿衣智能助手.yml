@@ -1,0 +1,245 @@
+app:
+  description: 输入天气、温度、湿度，让大模型给出穿衣建议
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: 穿衣智能助手
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/tongyi:0.0.26@4f1c4ded3d189719b7dd54e9d4e5b26f724f3632f3dfaa299491b42accc112c8
+    version: null
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1761644553203-source-1761648320224-target
+      source: '1761644553203'
+      sourceHandle: source
+      target: '1761648320224'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1761644545987-source-1761644553203-target
+      source: '1761644545987'
+      sourceHandle: source
+      target: '1761644553203'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - default: ''
+          hint: ''
+          label: temp
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: temperature_c
+        - default: ''
+          hint: ''
+          label: weather
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: text-input
+          variable: weather
+        - default: ''
+          hint: ''
+          label: humidity_pct
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: humidity_pct
+        - default: ''
+          hint: ''
+          label: wind_kph
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: wind_kph
+        - default: ''
+          hint: ''
+          label: location
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: false
+          type: text-input
+          variable: location
+        - default: ''
+          hint: ''
+          label: precip_mm
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: number
+          variable: precip_mm
+      height: 218
+      id: '1761644545987'
+      position:
+        x: -41.58792831830965
+        y: 86.24343540752147
+      positionAbsolute:
+        x: -41.58792831830965
+        y: 86.24343540752147
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: qwen2.5-vl-72b-instruct
+          provider: langgenius/tongyi/tongyi
+        prompt_config:
+          jinja2_variables: []
+        prompt_template:
+        - edition_type: basic
+          id: b98aaef3-eaf1-4b88-a865-2d32d2ba6545
+          role: system
+          text: "你是一名专业的个人穿搭顾问与气象穿衣助手。\n你的任务是根据输入的天气数据，智能生成穿衣建议。\n\n输入：\n- location（地点）\n\
+            - weather（天气）\n- temperature_c（气温，摄氏度）\n- humidity_pct（湿度百分比）\n- wind_kph（风速，公里/小时）\n\
+            - precip_mm（降水量，毫米）。\n\n输出格式：\n必须严格输出一个符合以下结构的 JSON 对象：\n{\n  \"layers\"\
+            : [],\n  \"clothing_items\": [],\n  \"accessories\": [],\n  \"optional_alternatives\"\
+            : [],\n  \"confidence\": 0.0,\n  \"advice_text\": \"\",\n  \"explainability\"\
+            : \"\"\n}\n\n规则说明：\n1.如果缺少地点信息，不影响结果，可基于天气和气象数据直接给出建议。\n2.温度区间逻辑（自动判断层次）\n\
+            - ≥ 28°C → 「炎热」：仅推荐轻薄单层（如短袖、短裤、防晒衣等）。\n- 20–27°C → 「温暖」：1–2 层（如短袖 + 薄外套）。\n\
+            - 10–19°C → 「凉爽」：2 层（如长袖 + 轻薄外套）。\n- 0–9°C → 「寒冷」：3 层（如保暖内层 + 毛衣 + 厚外套）。\n\
+            - < 0°C → 「严寒」：3 层以上，并推荐防寒配件（帽子、手套、围巾等）。\n3.湿度 / 风速 / 降水修正\n- 湿度 > 80%\
+            \ 且温度 > 25°C → 建议选择透气快干面料。\n- 风速 > 15 km/h → 增加防风外层。\n- 降水量 > 0 → 优先推荐防水外套或雨具，并在配件中加入「雨伞」。\n\
+            4.输出要求\n- 每个衣物(clothing_items)附带“reason”，简述依据。\n- advice_text 为一句简洁自然的综合建议。\n\
+            - explainability 用于说明判断逻辑（例如“因温度较高且湿度大，建议轻薄透气衣物”）。\n- 输出必须为合法 JSON 格式。\n"
+        - id: 45b7a694-30ea-456e-9ccb-5ad253b98655
+          role: user
+          text: '天气:  {{#1761644545987.weather#}}
+
+            温度: {{#1761644545987.temperature_c#}}
+
+            湿度: {{#1761644545987.humidity_pct#}}
+
+            风速: {{#1761644545987.wind_kph#}}
+
+            地点: {{#1761644545987.location#}}
+
+            降水量{{#1761644545987.precip_mm#}}'
+        selected: false
+        title: LLM
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: '1761644553203'
+      position:
+        x: 476.5164011420567
+        y: 173.78674379670443
+      positionAbsolute:
+        x: 476.5164011420567
+        y: 173.78674379670443
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        outputs:
+        - value_selector:
+          - '1761644553203'
+          - text
+          value_type: string
+          variable: output
+        selected: false
+        title: 结束
+        type: end
+      height: 88
+      id: '1761648320224'
+      position:
+        x: 895.0837830931607
+        y: 173.78674379670443
+      positionAbsolute:
+        x: 895.0837830931607
+        y: 173.78674379670443
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: -274.5581947850876
+      y: 240.70360444167335
+      zoom: 0.775930854274857
+  rag_pipeline_variables: []
