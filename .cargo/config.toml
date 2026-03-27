@@ -1,0 +1,6 @@
+[alias]
+build-a7 = "build --release --target armv7-unknown-linux-gnueabihf"
+check-a7 = "check --target armv7-unknown-linux-gnueabihf"
+
+[target.armv7-unknown-linux-gnueabihf]
+linker = "arm-linux-gnueabihf-gcc"

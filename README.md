@@ -24,6 +24,49 @@
 cargo run
 ```
 
+## 编译
+
+本机构建:
+
+```bash
+cargo build --release
+```
+
+A7 交叉编译:
+
+```bash
+rustup target add armv7-unknown-linux-gnueabihf
+cargo build-a7
+```
+
+A7 发布打包（构建后执行 strip 和 upx 压缩）:
+
+```bash
+python3 ./scripts/package-a7.py
+```
+
+默认使用交叉链接器 `arm-linux-gnueabihf-gcc`，产物输出到:
+
+- `target/armv7-unknown-linux-gnueabihf/release/wireless_status_server`
+
+如果当前环境里的 A7 工具链名字不同，也可以在编译前覆盖 linker，例如:
+
+```bash
+CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=/path/to/arm-linux-gnueabihf-gcc cargo build-a7
+```
+
+如果 strip 工具或 upx 的路径不同，也可以在打包前覆盖:
+
+```bash
+CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_STRIP=/path/to/arm-linux-gnueabihf-strip UPX=/path/to/upx python3 ./scripts/package-a7.py
+```
+
+如果只想直接执行脚本，也可以这样传入覆盖变量:
+
+```bash
+CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_STRIP=/path/to/arm-linux-gnueabihf-strip UPX=/path/to/upx python3 ./scripts/package-a7.py
+```
+
 默认监听：
 
 - http://127.0.0.1:8080
