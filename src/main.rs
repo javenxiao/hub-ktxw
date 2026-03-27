@@ -50,18 +50,25 @@ struct ConnectionStatus {
     tx_mod: String,
     rx_mod: String,
     snr_db: i32,
-    rssi_dbm: i32,
-    signal_level: u8,
-    rssi_history: Vec<i32>,
+    rssi_main_dbm: i32,
+    rssi_aux_dbm: i32,
+    signal_level_main: u8,
+    signal_level_aux: u8,
+    rssi_main_history: Vec<i32>,
+    rssi_aux_history: Vec<i32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct RssiChart {
     target_mac_address: String,
-    current_rssi_dbm: i32,
+    primary_label: String,
+    secondary_label: String,
+    current_primary_rssi_dbm: i32,
+    current_secondary_rssi_dbm: i32,
     min_rssi_dbm: i32,
     max_rssi_dbm: i32,
-    points: Vec<i32>,
+    primary_points: Vec<i32>,
+    secondary_points: Vec<i32>,
 }
 
 struct AppState {
@@ -174,13 +181,19 @@ fn spawn_data_feeder(state: Arc<AppState>) {
 }
 
 fn build_snapshot(sequence: u64) -> WirelessSnapshot {
-    let base_rssi = -72 + oscillate(sequence, 5, 17) - oscillate(sequence / 3, 3, 11);
-    let peer_rssi = -65 + oscillate(sequence + 4, 4, 13);
-    let current_rssi = base_rssi.clamp(-79, -58);
-    let peer_current_rssi = peer_rssi.clamp(-74, -52);
+    let main_rssi = -72 + oscillate(sequence, 5, 17) - oscillate(sequence / 3, 3, 11);
+    let aux_rssi = -76 + oscillate(sequence + 5, 4, 19) - oscillate(sequence / 2, 2, 7);
+    let peer_main_rssi = -65 + oscillate(sequence + 4, 4, 13);
+    let peer_aux_rssi = -69 + oscillate(sequence + 7, 5, 15);
+    let current_main_rssi = main_rssi.clamp(-79, -58);
+    let current_aux_rssi = aux_rssi.clamp(-83, -60);
+    let peer_current_main_rssi = peer_main_rssi.clamp(-74, -52);
+    let peer_current_aux_rssi = peer_aux_rssi.clamp(-78, -56);
 
-    let history = build_history(sequence, current_rssi, 18, 6);
-    let peer_history = build_history(sequence + 9, peer_current_rssi, 18, 5);
+    let main_history = build_history(sequence, current_main_rssi, 18, 6);
+    let aux_history = build_history(sequence + 3, current_aux_rssi, 18, 5);
+    let peer_main_history = build_history(sequence + 9, peer_current_main_rssi, 18, 5);
+    let peer_aux_history = build_history(sequence + 12, peer_current_aux_rssi, 18, 4);
 
     let receive_bytes = 3_965_000 + sequence * 18_400;
     let transmit_bytes = 10_085_000 + sequence * 24_900;
@@ -216,16 +229,33 @@ fn build_snapshot(sequence: u64) -> WirelessSnapshot {
                 "16-QAM FEC 3/4".to_string()
             },
             snr_db: 34 + oscillate(sequence, 2, 7),
-            rssi_dbm: peer_current_rssi,
-            signal_level: map_signal_level(peer_current_rssi),
-            rssi_history: peer_history,
+            rssi_main_dbm: peer_current_main_rssi,
+            rssi_aux_dbm: peer_current_aux_rssi,
+            signal_level_main: map_signal_level(peer_current_main_rssi),
+            signal_level_aux: map_signal_level(peer_current_aux_rssi),
+            rssi_main_history: peer_main_history,
+            rssi_aux_history: peer_aux_history,
         }],
         chart: RssiChart {
             target_mac_address: "00:0F:92:FA:37:C5".to_string(),
-            current_rssi_dbm: current_rssi,
-            min_rssi_dbm: history.iter().copied().min().unwrap_or(current_rssi),
-            max_rssi_dbm: history.iter().copied().max().unwrap_or(current_rssi),
-            points: history,
+            primary_label: "RSSI Main".to_string(),
+            secondary_label: "RSSI Aux".to_string(),
+            current_primary_rssi_dbm: current_main_rssi,
+            current_secondary_rssi_dbm: current_aux_rssi,
+            min_rssi_dbm: main_history
+                .iter()
+                .chain(aux_history.iter())
+                .copied()
+                .min()
+                .unwrap_or(current_main_rssi.min(current_aux_rssi)),
+            max_rssi_dbm: main_history
+                .iter()
+                .chain(aux_history.iter())
+                .copied()
+                .max()
+                .unwrap_or(current_main_rssi.max(current_aux_rssi)),
+            primary_points: main_history,
+            secondary_points: aux_history,
         },
     }
 }

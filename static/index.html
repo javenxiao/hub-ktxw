@@ -121,14 +121,15 @@
                                         <th>Tx Mod</th>
                                         <th>Rx Mod</th>
                                         <th>SNR (dB)</th>
-                                        <th>RSSI (dBm)</th>
+                                        <th>RSSI Main (dBm)</th>
+                                        <th>RSSI Aux (dBm)</th>
                                         <th>Signal Level</th>
                                         <th>RSSI Graph</th>
                                     </tr>
                                 </thead>
                                 <tbody id="connection-table-body">
                                     <tr>
-                                        <td colspan="7">等待连接数据...</td>
+                                        <td colspan="8">等待连接数据...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -139,8 +140,14 @@
                         <h2 id="chart-title">RSSI Graph</h2>
                         <div class="chart-box">
                             <div class="chart-notes">
-                                <p class="rssi-reading" id="chart-current-rssi">RSSI -- dBm</p>
+                                <p class="rssi-reading" id="chart-current-rssi-main">RSSI Main -- dBm</p>
+                                <p class="rssi-reading secondary" id="chart-current-rssi-aux">RSSI Aux -- dBm</p>
                                 <p id="chart-history-range">History: Min -- Max --</p>
+                            </div>
+
+                            <div class="chart-legend" aria-label="RSSI 曲线图例">
+                                <span><i class="legend-swatch primary"></i><span id="legend-primary-label">RSSI Main</span></span>
+                                <span><i class="legend-swatch secondary"></i><span id="legend-secondary-label">RSSI Aux</span></span>
                             </div>
 
                             <div class="graph-area">
@@ -153,7 +160,8 @@
                                     <line x1="72" y1="130" x2="600" y2="130"></line>
                                     <line x1="72" y1="190" x2="600" y2="190"></line>
                                     <line x1="72" y1="210" x2="600" y2="210"></line>
-                                    <polyline id="main-chart-line" points="72,190 108,186 144,182 180,186 216,180 252,176 288,170 324,174 360,168 396,164 432,166 468,162 504,158 540,154 576,150 600,146"></polyline>
+                                    <polyline class="main-rssi-line" id="main-chart-line" points="72,190 108,186 144,182 180,186 216,180 252,176 288,170 324,174 360,168 396,164 432,166 468,162 504,158 540,154 576,150 600,146"></polyline>
+                                    <polyline class="aux-rssi-line" id="aux-chart-line" points="72,196 108,194 144,190 180,194 216,188 252,184 288,180 324,184 360,178 396,176 432,178 468,174 504,170 540,168 576,164 600,162"></polyline>
                                 </svg>
                             </div>
                         </div>
@@ -229,9 +237,10 @@
                 .join('')}</span>`;
         }
 
-        function buildMiniChart(history) {
-            const points = toPolylinePoints(history, 44, 28, -82, -48, 2, 2, 41, 25);
-            return `<span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="RSSI 缩略图"><polyline points="${points}"></polyline></svg></span>`;
+        function buildMiniChart(mainHistory, auxHistory) {
+            const mainPoints = toPolylinePoints(mainHistory, 44, 28, -82, -48, 2, 2, 41, 25);
+            const auxPoints = toPolylinePoints(auxHistory, 44, 28, -82, -48, 2, 2, 41, 25);
+            return `<span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="双路 RSSI 缩略图"><polyline class="mini-line-main" points="${mainPoints}"></polyline><polyline class="mini-line-aux" points="${auxPoints}"></polyline></svg></span>`;
         }
 
         function toPolylinePoints(values, width, height, minValue, maxValue, startX, startY, endX, endY) {
@@ -252,7 +261,7 @@
 
         function renderConnections(connections) {
             if (!Array.isArray(connections) || connections.length === 0) {
-                connectionTableBody.innerHTML = '<tr><td colspan="7">暂无连接数据</td></tr>';
+                connectionTableBody.innerHTML = '<tr><td colspan="8">暂无连接数据</td></tr>';
                 setText('connection-count', '0');
                 return;
             }
@@ -264,20 +273,28 @@
                     <td>${escapeHtml(connection.tx_mod)}</td>
                     <td>${escapeHtml(connection.rx_mod)}</td>
                     <td>${escapeHtml(connection.snr_db)}</td>
-                    <td>${escapeHtml(connection.rssi_dbm)}</td>
-                    <td>${buildSignalBars(connection.signal_level)}</td>
-                    <td>${buildMiniChart(connection.rssi_history)}</td>
+                    <td>${escapeHtml(connection.rssi_main_dbm)}</td>
+                    <td>${escapeHtml(connection.rssi_aux_dbm)}</td>
+                    <td>${buildSignalBars(Math.max(connection.signal_level_main, connection.signal_level_aux))}</td>
+                    <td>${buildMiniChart(connection.rssi_main_history, connection.rssi_aux_history)}</td>
                 </tr>
             `).join('');
         }
 
         function renderChart(chart) {
             setText('chart-title', `RSSI Graph - ${chart.target_mac_address}`);
-            setText('chart-current-rssi', `RSSI ${chart.current_rssi_dbm} dBm`);
+            setText('legend-primary-label', chart.primary_label);
+            setText('legend-secondary-label', chart.secondary_label);
+            setText('chart-current-rssi-main', `${chart.primary_label} ${chart.current_primary_rssi_dbm} dBm`);
+            setText('chart-current-rssi-aux', `${chart.secondary_label} ${chart.current_secondary_rssi_dbm} dBm`);
             setText('chart-history-range', `History: Min ${chart.min_rssi_dbm} Max ${chart.max_rssi_dbm}`);
             document.getElementById('main-chart-line').setAttribute(
                 'points',
-                toPolylinePoints(chart.points, 640, 250, -82, -48, 72, 20, 600, 210)
+                toPolylinePoints(chart.primary_points, 640, 250, -82, -48, 72, 20, 600, 210)
+            );
+            document.getElementById('aux-chart-line').setAttribute(
+                'points',
+                toPolylinePoints(chart.secondary_points, 640, 250, -82, -48, 72, 20, 600, 210)
             );
         }
 

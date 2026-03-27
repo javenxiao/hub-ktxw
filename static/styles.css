@@ -286,8 +286,15 @@ tbody td {
 
 .mini-chart polyline {
     fill: none;
-    stroke: #2db236;
     stroke-width: 2;
+}
+
+.mini-chart .mini-line-main {
+    stroke: #2db236;
+}
+
+.mini-chart .mini-line-aux {
+    stroke: #3152cb;
 }
 
 .chart-panel {
@@ -315,6 +322,38 @@ tbody td {
 
 .rssi-reading {
     font-size: 14px;
+}
+
+.rssi-reading.secondary {
+    color: #5870d9;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 14px;
+    margin: 4px 0 0 145px;
+    color: #5e6470;
+    font-weight: 700;
+}
+
+.chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-swatch {
+    display: inline-block;
+    width: 18px;
+    height: 3px;
+}
+
+.legend-swatch.primary {
+    background: #54da51;
+}
+
+.legend-swatch.secondary {
+    background: #3152cb;
 }
 
 .graph-area {
@@ -355,10 +394,17 @@ tbody td {
 
 .graph-svg polyline {
     fill: none;
-    stroke: var(--green);
     stroke-width: 3;
     stroke-linecap: round;
     stroke-linejoin: round;
+}
+
+.graph-svg .main-rssi-line {
+    stroke: var(--green);
+}
+
+.graph-svg .aux-rssi-line {
+    stroke: #3152cb;
 }
 
 @media (max-width: 760px) {
@@ -390,6 +436,11 @@ tbody td {
 
     .chart-notes {
         margin-left: 90px;
+    }
+
+    .chart-legend {
+        margin-left: 90px;
+        flex-wrap: wrap;
     }
 
     table {
