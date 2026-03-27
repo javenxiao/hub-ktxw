@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>无线状态面板</title>
+    <meta name="description" content="仿设备管理后台的无线状态页面。">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="console-frame">
+        <div class="tab-state">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-system">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-network">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-wireless" checked>
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-firewall">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-serial">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-diag">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-admin">
+
+            <nav class="top-tabs" aria-label="主栏目切换">
+                <label class="tab-label" for="tab-system">System</label>
+                <label class="tab-label" for="tab-network">Network</label>
+                <label class="tab-label" for="tab-wireless">Wireless</label>
+                <label class="tab-label" for="tab-firewall">Firewall</label>
+                <label class="tab-label" for="tab-serial">Serial</label>
+                <label class="tab-label" for="tab-diag">Diag</label>
+                <label class="tab-label" for="tab-admin">Admin</label>
+            </nav>
+
+            <section class="content-panel panel-system">
+                <div class="section-strip"></div>
+                <div class="panel-body placeholder-panel">
+                    <h2>System</h2>
+                    <p>系统信息区域预留，后续可以补设备型号、版本、时间同步和运行状态。</p>
+                </div>
+            </section>
+
+            <section class="content-panel panel-network">
+                <div class="section-strip"></div>
+                <div class="panel-body placeholder-panel">
+                    <h2>Network</h2>
+                    <p>网络配置区域预留，后续可以补 IP、路由、DHCP 或 WAN/LAN 相关内容。</p>
+                </div>
+            </section>
+
+            <section class="content-panel panel-wireless">
+                <div class="section-strip"></div>
+                <div class="panel-body wireless-page">
+                    <div class="sub-tabs" aria-label="无线二级栏目">
+                        <span class="sub-tab active">Status</span>
+                        <span class="sub-tab">RF</span>
+                    </div>
+
+                    <div class="page-header">
+                        <h1>Wireless Interfaces</h1>
+                        <div class="live-state" id="live-state">等待服务器数据</div>
+                    </div>
+
+                    <section class="panel-box">
+                        <h2>RF Status</h2>
+
+                        <div class="table-block">
+                            <h3>General Status</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>MAC Address</th>
+                                        <th>Operation Mode</th>
+                                        <th>Network ID</th>
+                                        <th>Compatibility Mode</th>
+                                        <th>Bandwidth</th>
+                                        <th>Frequency</th>
+                                        <th>Tx Power</th>
+                                        <th>Encryption Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td id="general-mac">--</td>
+                                        <td id="general-mode">--</td>
+                                        <td id="general-network">--</td>
+                                        <td id="general-compatibility">--</td>
+                                        <td id="general-bandwidth">--</td>
+                                        <td id="general-frequency">--</td>
+                                        <td id="general-tx-power">--</td>
+                                        <td id="general-encryption">--</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="table-block compact">
+                            <h3>Traffic Status</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Receive Bytes</th>
+                                        <th>Receive Packets</th>
+                                        <th>Transmit Bytes</th>
+                                        <th>Transmit Packets</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td id="traffic-rx-bytes">--</td>
+                                        <td id="traffic-rx-packets">--</td>
+                                        <td id="traffic-tx-bytes">--</td>
+                                        <td id="traffic-tx-packets">--</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="table-block compact">
+                            <h3>Connection Info (<span id="connection-count">0</span>)</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>MAC Address</th>
+                                        <th>Tx Mod</th>
+                                        <th>Rx Mod</th>
+                                        <th>SNR (dB)</th>
+                                        <th>RSSI (dBm)</th>
+                                        <th>Signal Level</th>
+                                        <th>RSSI Graph</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="connection-table-body">
+                                    <tr>
+                                        <td colspan="7">等待连接数据...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="chart-panel">
+                        <h2 id="chart-title">RSSI Graph</h2>
+                        <div class="chart-box">
+                            <div class="chart-notes">
+                                <p class="rssi-reading" id="chart-current-rssi">RSSI -- dBm</p>
+                                <p id="chart-history-range">History: Min -- Max --</p>
+                            </div>
+
+                            <div class="graph-area">
+                                <div class="graph-label top">-25 dBm</div>
+                                <div class="graph-label middle">-50 dBm</div>
+                                <div class="graph-label bottom">-75 dBm</div>
+                                <svg class="graph-svg" viewBox="0 0 640 250" preserveAspectRatio="none" role="img" aria-label="RSSI 走势">
+                                    <line x1="72" y1="20" x2="72" y2="210"></line>
+                                    <line x1="72" y1="70" x2="600" y2="70"></line>
+                                    <line x1="72" y1="130" x2="600" y2="130"></line>
+                                    <line x1="72" y1="190" x2="600" y2="190"></line>
+                                    <line x1="72" y1="210" x2="600" y2="210"></line>
+                                    <polyline id="main-chart-line" points="72,190 108,186 144,182 180,186 216,180 252,176 288,170 324,174 360,168 396,164 432,166 468,162 504,158 540,154 576,150 600,146"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <section class="content-panel panel-firewall">
+                <div class="section-strip"></div>
+                <div class="panel-body placeholder-panel">
+                    <h2>Firewall</h2>
+                    <p>防火墙配置区域预留，后续可以补 ACL、端口过滤和访问策略。</p>
+                </div>
+            </section>
+
+            <section class="content-panel panel-serial">
+                <div class="section-strip"></div>
+                <div class="panel-body placeholder-panel">
+                    <h2>Serial</h2>
+                    <p>串口设置区域预留，后续可以补波特率、数据位和串口透传设置。</p>
+                </div>
+            </section>
+
+            <section class="content-panel panel-diag">
+                <div class="section-strip"></div>
+                <div class="panel-body placeholder-panel">
+                    <h2>Diag</h2>
+                    <p>诊断区域预留，后续可以补日志、Ping、Trace 和链路检测。</p>
+                </div>
+            </section>
+
+            <section class="content-panel panel-admin">
+                <div class="section-strip"></div>
+                <div class="panel-body placeholder-panel">
+                    <h2>Admin</h2>
+                    <p>管理区域预留，后续可以补用户权限、密码修改和备份恢复。</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const liveState = document.getElementById('live-state');
+        const connectionTableBody = document.getElementById('connection-table-body');
+        let socket = null;
+
+        function setText(id, value) {
+            document.getElementById(id).textContent = value;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes >= 1024 * 1024) {
+                return `${(bytes / (1024 * 1024)).toFixed(3)}MB`;
+            }
+            if (bytes >= 1024) {
+                return `${(bytes / 1024).toFixed(1)}KB`;
+            }
+            return `${bytes}B`;
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function buildSignalBars(level) {
+            return `<span class="signal-bars" aria-label="信号强度 ${level} 格">${[1, 2, 3, 4]
+                .map((index) => `<span class="${index <= level ? 'filled' : ''}"></span>`)
+                .join('')}</span>`;
+        }
+
+        function buildMiniChart(history) {
+            const points = toPolylinePoints(history, 44, 28, -82, -48, 2, 2, 41, 25);
+            return `<span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="RSSI 缩略图"><polyline points="${points}"></polyline></svg></span>`;
+        }
+
+        function toPolylinePoints(values, width, height, minValue, maxValue, startX, startY, endX, endY) {
+            if (!Array.isArray(values) || values.length === 0) {
+                return `${startX},${endY} ${endX},${endY}`;
+            }
+
+            const usableWidth = endX - startX;
+            const usableHeight = endY - startY;
+
+            return values.map((value, index) => {
+                const x = startX + (usableWidth * index) / Math.max(values.length - 1, 1);
+                const ratio = (value - minValue) / (maxValue - minValue);
+                const y = endY - (Math.max(0, Math.min(1, ratio)) * usableHeight);
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+        }
+
+        function renderConnections(connections) {
+            if (!Array.isArray(connections) || connections.length === 0) {
+                connectionTableBody.innerHTML = '<tr><td colspan="7">暂无连接数据</td></tr>';
+                setText('connection-count', '0');
+                return;
+            }
+
+            setText('connection-count', String(connections.length));
+            connectionTableBody.innerHTML = connections.map((connection) => `
+                <tr>
+                    <td>${escapeHtml(connection.mac_address)}</td>
+                    <td>${escapeHtml(connection.tx_mod)}</td>
+                    <td>${escapeHtml(connection.rx_mod)}</td>
+                    <td>${escapeHtml(connection.snr_db)}</td>
+                    <td>${escapeHtml(connection.rssi_dbm)}</td>
+                    <td>${buildSignalBars(connection.signal_level)}</td>
+                    <td>${buildMiniChart(connection.rssi_history)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderChart(chart) {
+            setText('chart-title', `RSSI Graph - ${chart.target_mac_address}`);
+            setText('chart-current-rssi', `RSSI ${chart.current_rssi_dbm} dBm`);
+            setText('chart-history-range', `History: Min ${chart.min_rssi_dbm} Max ${chart.max_rssi_dbm}`);
+            document.getElementById('main-chart-line').setAttribute(
+                'points',
+                toPolylinePoints(chart.points, 640, 250, -82, -48, 72, 20, 600, 210)
+            );
+        }
+
+        function renderSnapshot(snapshot) {
+            setText('general-mac', snapshot.general.mac_address);
+            setText('general-mode', snapshot.general.operation_mode);
+            setText('general-network', snapshot.general.network_id);
+            setText('general-compatibility', snapshot.general.compatibility_mode);
+            setText('general-bandwidth', snapshot.general.bandwidth);
+            setText('general-frequency', snapshot.general.frequency);
+            setText('general-tx-power', snapshot.general.tx_power);
+            setText('general-encryption', snapshot.general.encryption_type);
+
+            setText('traffic-rx-bytes', formatBytes(snapshot.traffic.receive_bytes));
+            setText('traffic-rx-packets', snapshot.traffic.receive_packets.toLocaleString());
+            setText('traffic-tx-bytes', formatBytes(snapshot.traffic.transmit_bytes));
+            setText('traffic-tx-packets', snapshot.traffic.transmit_packets.toLocaleString());
+
+            renderConnections(snapshot.connections);
+            renderChart(snapshot.chart);
+            liveState.textContent = `实时数据已连接 · 序号 ${snapshot.sequence}`;
+            liveState.classList.add('online');
+        }
+
+        async function loadInitialSnapshot() {
+            const response = await fetch('/api/wireless/status', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const snapshot = await response.json();
+            renderSnapshot(snapshot);
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            socket.addEventListener('open', () => {
+                liveState.textContent = '实时数据通道已建立';
+                liveState.classList.add('online');
+            });
+
+            socket.addEventListener('message', (event) => {
+                const snapshot = JSON.parse(event.data);
+                renderSnapshot(snapshot);
+            });
+
+            socket.addEventListener('close', () => {
+                liveState.textContent = '实时通道断开，3 秒后重连';
+                liveState.classList.remove('online');
+                window.setTimeout(connectWebSocket, 3000);
+            });
+
+            socket.addEventListener('error', () => {
+                liveState.textContent = '实时通道异常';
+                liveState.classList.remove('online');
+            });
+        }
+
+        loadInitialSnapshot().catch((error) => {
+            liveState.textContent = `初始数据加载失败: ${error.message}`;
+        }).finally(() => {
+            connectWebSocket();
+        });
+    </script>
+</body>
+</html>
