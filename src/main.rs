@@ -9,6 +9,22 @@ use axum::{
     routing::get,
     Json, Router,
 };
+#[derive(Debug, Clone, Serialize)]
+struct SystemInfo {
+    host_name: String,
+    product_name: String,
+    description: String,
+    system_date: String,
+    system_uptime: String,
+    build_date: String,
+    build_time: String,
+    mac_address: String,
+    ip_address: String,
+    subnet_mask: String,
+    connection_type: String,
+    gateway: String,
+}
+
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
 use tokio::sync::{broadcast, RwLock};
@@ -99,10 +115,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .route("/api/wireless/status", get(get_wireless_status))
+        .route("/api/system/info", get(get_system_info))
         .route("/ws", get(ws_handler))
         .nest_service("/", ServeDir::new("static").append_index_html_on_directories(true))
         .layer(CorsLayer::permissive())
         .with_state(state);
+async fn get_system_info() -> Json<SystemInfo> {
+    Json(SystemInfo {
+        host_name: "UserDevice".to_string(),
+        product_name: "pDDL-MIMO".to_string(),
+        description: "mypDDL-MIMO".to_string(),
+        system_date: "2026-03-31 10:00:00".to_string(),
+        system_uptime: "5 min".to_string(),
+        build_date: "2026-03-31".to_string(),
+        build_time: "09:00:00".to_string(),
+        mac_address: "00:0F:92:FA:94:CF".to_string(),
+        ip_address: "192.168.168.1".to_string(),
+        subnet_mask: "255.255.255.0".to_string(),
+        connection_type: "static".to_string(),
+        gateway: "192.168.168.1".to_string(),
+    })
+}
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     info!("wireless status server listening on http://{}", addr);

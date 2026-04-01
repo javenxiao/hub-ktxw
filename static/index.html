@@ -30,11 +30,223 @@
 
             <section class="content-panel panel-system">
                 <div class="section-strip"></div>
-                <div class="panel-body placeholder-panel">
-                    <h2>System</h2>
-                    <p>系统信息区域预留，后续可以补设备型号、版本、时间同步和运行状态。</p>
+                <div class="panel-body system-panel sys-bg">
+                    <nav class="sys-subnav">
+                        <span class="sys-subnav-item active" data-tab="summary">Summary</span>
+                        <span class="sys-subnav-item" data-tab="settings">Settings</span>
+                        <span class="sys-subnav-item" data-tab="services">Services</span>
+                        <span class="sys-subnav-item" data-tab="maintenance">Maintenance</span>
+                        <span class="sys-subnav-item" data-tab="reboot">Reboot</span>
+                    </nav>
+                    <div class="sys-tab-content" id="sys-tab-summary">
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">System Information</h3>
+                            <table class="sys-table">
+                                <tr><td>Host Name</td><td id="sys-host-name">--</td><td>Description</td><td id="sys-description">--</td></tr>
+                                <tr><td>Product Name</td><td id="sys-product-name">--</td><td>System Date</td><td id="sys-system-date">--</td></tr>
+                                <tr><td>Hardware Version</td><td id="sys-hw-version">--</td><td>System Uptime</td><td id="sys-uptime">--</td></tr>
+                                <tr><td>Software Version</td><td id="sys-sw-version">--</td><td>Build Date</td><td id="sys-build-date">--</td></tr>
+                                <tr><td>Software Build</td><td id="sys-sw-build">--</td><td>Build Time</td><td id="sys-build-time">--</td></tr>
+                            </table>
+                        </div>
+                        <hr class="sys-divider">
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">LAN Status</h3>
+                            <table class="sys-table">
+                                <tr><td>MAC Address</td><td id="lan-mac">--</td><td>Connection Type</td><td id="lan-conn-type">--</td></tr>
+                                <tr><td>IP Address</td><td id="lan-ip">--</td><td>Gateway</td><td id="lan-gateway">--</td></tr>
+                                <tr><td>Subnet Mask</td><td id="lan-mask">--</td><td></td><td></td></tr>
+                            </table>
+                        </div>
+                        <hr class="sys-divider">
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">WAN Status</h3>
+                            <table class="sys-table">
+                                <tr><td>MAC Address</td><td id="wan-mac">--</td><td>Connection Type</td><td id="wan-conn-type">--</td></tr>
+                                <tr><td>IP Address</td><td id="wan-ip">--</td><td>Gateway</td><td id="wan-gateway">--</td></tr>
+                                <tr><td>Subnet Mask</td><td id="wan-mask">--</td><td>Primary DNS</td><td id="wan-dns">--</td></tr>
+                                <tr><td></td><td></td><td>Secondary DNS</td><td id="wan-dns2">--</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="sys-tab-content" id="sys-tab-settings" style="display:none">
+                        <h2>System Settings</h2>
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">System Settings</h3>
+                            <div class="sys-form">
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Host Name</label>
+                                        <input type="text" id="set-host-name" value="UserDevice" class="sys-input">
+                                    </div>
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Description</label>
+                                        <input type="text" id="set-description" value="mypDDL-MIMO" class="sys-input">
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Console Timeout (s)</label>
+                                        <div class="sys-input-inline">
+                                            <input type="text" id="set-timeout" value="120" class="sys-input-inline-input">
+                                            <span class="sys-note">[30 ~ 65535] 0-Disable</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">CFG Reset to Default Button</label>
+                                        <div class="sys-radio-group">
+                                            <input type="radio" id="cfg-enable" name="cfg-reset" checked> 
+                                            <label for="cfg-enable" class="sys-radio-label">Enable</label> 
+                                            <input type="radio" id="cfg-disable" name="cfg-reset"> 
+                                            <label for="cfg-disable" class="sys-radio-label">Disable</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">System Log Server IP/Name</label>
+                                        <input type="text" id="set-log-ip" value="0.0.0.0" class="sys-input">
+                                    </div>
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">System Log Server Port</label>
+                                        <input type="text" id="set-log-port" value="514" class="sys-input">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="sys-divider">
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">Time Settings</h3>
+                            <div class="sys-form">
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Current Date(yyyy-mm-dd)</label>
+                                        <input type="date" id="set-date" value="2026-03-31" class="sys-input">
+                                    </div>
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Current Time(hh:mm:ss)</label>
+                                        <input type="time" id="set-time" value="10:00:00" class="sys-input">
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Date and Time Setting Mode</label>
+                                        <div class="sys-radio-group">
+                                            <input type="radio" id="time-local" name="time-mode" checked> 
+                                            <label for="time-local" class="sys-radio-label">Local Time</label> 
+                                            <input type="radio" id="time-ntp" name="time-mode"> 
+                                            <label for="time-ntp" class="sys-radio-label">NTP</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Timezone</label>
+                                        <select id="set-timezone" class="sys-input"><option>Mountain Time</option></select>
+                                    </div>
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">POSIX TZ String</label>
+                                        <input type="text" id="set-posix-tz" value="MST7MDT,M3.2.0,M11.1.0" class="sys-input">
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">NTP Server IP/Name</label>
+                                        <input type="text" id="set-ntp-server" value="pool.ntp.org" class="sys-input">
+                                    </div>
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">NTP Local Port</label>
+                                        <input type="text" id="set-ntp-port" value="123" class="sys-input">
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">NTP Client Interval (seconds)</label>
+                                        <div class="sys-input-inline">
+                                            <input type="text" id="set-ntp-interval" value="0" class="sys-input-inline-input">
+                                            <span class="sys-note">[15 ~ 65535] 0-Disable</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; text-align: right;">
+                            <button id="btn-save-settings" class="sys-button-primary">Save</button>
+                            <button id="btn-cancel-settings" class="sys-button-default" style="margin-left: 10px;">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="sys-tab-content" id="sys-tab-services" style="display:none"><div class="sys-section"><h2>Services</h2><p>Services 配置内容占位</p></div></div>
+                    <div class="sys-tab-content" id="sys-tab-maintenance" style="display:none"><div class="sys-section"><h2>Maintenance</h2><p>Maintenance 配置内容占位</p></div></div>
+                    <div class="sys-tab-content" id="sys-tab-reboot" style="display:none"><div class="sys-section"><h2>Reboot</h2><p>Reboot 配置内容占位</p></div></div>
                 </div>
             </section>
+    <script>
+        // System 信息加载（完全仿照图片结构）
+        function loadSystemInfo() {
+            fetch('/api/system/info')
+                .then(res => res.json())
+                .then(data => {
+                    // 系统信息
+                    document.getElementById('sys-host-name').textContent = data.host_name || '--';
+                    document.getElementById('sys-description').textContent = data.description || '--';
+                    document.getElementById('sys-product-name').textContent = data.product_name || '--';
+                    document.getElementById('sys-system-date').textContent = data.system_date || '--';
+                    document.getElementById('sys-hw-version').textContent = data.hardware_version || 'Rev A';
+                    document.getElementById('sys-uptime').textContent = data.system_uptime || '--';
+                    document.getElementById('sys-sw-version').textContent = data.software_version || 'v1.4.0';
+                    document.getElementById('sys-build-date').textContent = data.build_date || '--';
+                    document.getElementById('sys-sw-build').textContent = data.software_build || '1005';
+                    document.getElementById('sys-build-time').textContent = data.build_time || '--';
+                    // LAN
+                    document.getElementById('lan-mac').textContent = data.lan_mac_address || data.mac_address || '--';
+                    document.getElementById('lan-conn-type').textContent = data.lan_connection_type || data.connection_type || '--';
+                    document.getElementById('lan-ip').textContent = data.lan_ip_address || data.ip_address || '--';
+                    document.getElementById('lan-gateway').textContent = data.lan_gateway || data.gateway || '--';
+                    document.getElementById('lan-mask').textContent = data.lan_subnet_mask || data.subnet_mask || '--';
+                    // WAN
+                    document.getElementById('wan-mac').textContent = data.wan_mac_address || '--';
+                    document.getElementById('wan-conn-type').textContent = data.wan_connection_type || '--';
+                    document.getElementById('wan-ip').textContent = data.wan_ip_address || '--';
+                    document.getElementById('wan-gateway').textContent = data.wan_gateway || '--';
+                    document.getElementById('wan-mask').textContent = data.wan_subnet_mask || '--';
+                    document.getElementById('wan-dns').textContent = data.wan_primary_dns || '--';
+                    document.getElementById('wan-dns2').textContent = data.wan_secondary_dns || '--';
+                });
+        }
+        // 监听 system 二级导航切换
+        document.querySelectorAll('.sys-subnav-item').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.sys-subnav-item').forEach(e => e.classList.remove('active'));
+                this.classList.add('active');
+                document.querySelectorAll('.sys-tab-content').forEach(e => e.style.display = 'none');
+                const tabId = this.getAttribute('data-tab');
+                const content = document.getElementById('sys-tab-' + tabId);
+                if (content) content.style.display = '';
+                if (tabId === 'summary') loadSystemInfo();
+            });
+        });
+        // 监听主 tab 切换
+        document.getElementById('tab-system').addEventListener('change', function() {
+            if (this.checked) {
+                // 默认显示 summary
+                document.querySelectorAll('.sys-subnav-item').forEach(e => e.classList.remove('active'));
+                document.querySelector('.sys-subnav-item[data-tab="summary"]').classList.add('active');
+                document.querySelectorAll('.sys-tab-content').forEach(e => e.style.display = 'none');
+                document.getElementById('sys-tab-summary').style.display = '';
+                loadSystemInfo();
+            }
+        });
+        // 页面加载时如果 system tab 默认选中也加载
+        if (document.getElementById('tab-system').checked) {
+            document.querySelectorAll('.sys-subnav-item').forEach(e => e.classList.remove('active'));
+            document.querySelector('.sys-subnav-item[data-tab="summary"]').classList.add('active');
+            document.querySelectorAll('.sys-tab-content').forEach(e => e.style.display = 'none');
+            document.getElementById('sys-tab-summary').style.display = '';
+            loadSystemInfo();
+        }
+    </script>
 
             <section class="content-panel panel-network">
                 <div class="section-strip"></div>
