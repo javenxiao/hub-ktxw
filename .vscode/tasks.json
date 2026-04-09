@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Debug Rust Project",
+			"type": "shell",
+			"command": "cargo build; if ($LASTEXITCODE -eq 0) { .\\target\\debug\\wireless_status_server.exe }",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

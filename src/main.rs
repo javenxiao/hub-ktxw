@@ -1,3 +1,6 @@
+mod ffi;
+mod bb_api;
+
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
@@ -9,6 +12,14 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use futures_util::{SinkExt, StreamExt};
+use serde::Serialize;
+use tokio::sync::{broadcast, RwLock};
+use tower_http::{cors::CorsLayer, services::ServeDir};
+use tracing::{error, info, warn};
+
+use bb_api::{BasebandManager, CommunicationStats};
+
 #[derive(Debug, Clone, Serialize)]
 struct SystemInfo {
     host_name: String,
@@ -16,6 +27,9 @@ struct SystemInfo {
     description: String,
     system_date: String,
     system_uptime: String,
+    hardware_version: String,
+    software_version: String,
+    software_build: String,
     build_date: String,
     build_time: String,
     mac_address: String,
@@ -23,13 +37,34 @@ struct SystemInfo {
     subnet_mask: String,
     connection_type: String,
     gateway: String,
+    lan_mac_address: String,
+    lan_ip_address: String,
+    lan_subnet_mask: String,
+    lan_connection_type: String,
+    lan_gateway: String,
+    wan_mac_address: String,
+    wan_ip_address: String,
+    wan_subnet_mask: String,
+    wan_connection_type: String,
+    wan_gateway: String,
+    wan_primary_dns: String,
+    wan_secondary_dns: String,
 }
 
-use futures_util::{SinkExt, StreamExt};
-use serde::Serialize;
-use tokio::sync::{broadcast, RwLock};
-use tower_http::{cors::CorsLayer, services::ServeDir};
-use tracing::{error, info};
+#[derive(Debug, Clone, Serialize)]
+struct BasebandStatsResponse {
+    available: bool,
+    stats: Option<CommunicationStats>,
+    message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct BasebandTestResponse {
+    available: bool,
+    socket_initialized: bool,
+    bytes_sent: Option<usize>,
+    message: String,
+}
 
 #[derive(Debug, Clone, Serialize)]
 struct WirelessSnapshot {
@@ -90,14 +125,16 @@ struct RssiChart {
 struct AppState {
     snapshot: RwLock<WirelessSnapshot>,
     tx: broadcast::Sender<WirelessSnapshot>,
+    baseband: Option<Arc<BasebandManager>>,
 }
 
 impl AppState {
-    fn new(initial: WirelessSnapshot) -> Self {
+    fn new(initial: WirelessSnapshot, baseband: Option<Arc<BasebandManager>>) -> Self {
         let (tx, _) = broadcast::channel(128);
         Self {
             snapshot: RwLock::new(initial),
             tx,
+            baseband,
         }
     }
 }
@@ -108,37 +145,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    info!("========== RSHTML Server Starting ==========");
+
+    // 初始化基带 API
+    let baseband = match BasebandManager::new() {
+        Ok(bb) => {
+            info!("✓ Baseband API initialized successfully");
+            
+            // 初始化通信 socket
+            if let Err(e) = bb.initialize_socket(0) {
+                warn!("Failed to initialize socket: {}", e);
+            } else {
+                info!("✓ Socket 0 initialized for data communication");
+            }
+
+            Some(Arc::new(bb))
+        }
+        Err(e) => {
+            warn!("Failed to initialize baseband API: {}", e);
+            warn!("Using simulator mode without hardware communication");
+            None
+        }
+    };
+
     let initial = build_snapshot(0);
-    let state = Arc::new(AppState::new(initial));
+    let state = Arc::new(AppState::new(initial, baseband.clone()));
 
     spawn_data_feeder(state.clone());
 
     let app = Router::new()
         .route("/api/wireless/status", get(get_wireless_status))
         .route("/api/system/info", get(get_system_info))
+        .route("/api/baseband/stats", get(get_baseband_stats))
+        .route("/api/baseband/test", get(test_baseband_communication))
         .route("/ws", get(ws_handler))
         .nest_service("/", ServeDir::new("static").append_index_html_on_directories(true))
         .layer(CorsLayer::permissive())
         .with_state(state);
-async fn get_system_info() -> Json<SystemInfo> {
-    Json(SystemInfo {
-        host_name: "UserDevice".to_string(),
-        product_name: "pDDL-MIMO".to_string(),
-        description: "mypDDL-MIMO".to_string(),
-        system_date: "2026-03-31 10:00:00".to_string(),
-        system_uptime: "5 min".to_string(),
-        build_date: "2026-03-31".to_string(),
-        build_time: "09:00:00".to_string(),
-        mac_address: "00:0F:92:FA:94:CF".to_string(),
-        ip_address: "192.168.168.1".to_string(),
-        subnet_mask: "255.255.255.0".to_string(),
-        connection_type: "static".to_string(),
-        gateway: "192.168.168.1".to_string(),
-    })
-}
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     info!("wireless status server listening on http://{}", addr);
+    info!("========== Server Ready ==========\n");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
@@ -148,6 +195,84 @@ async fn get_system_info() -> Json<SystemInfo> {
 
 async fn get_wireless_status(State(state): State<Arc<AppState>>) -> Json<WirelessSnapshot> {
     Json(state.snapshot.read().await.clone())
+}
+
+async fn get_system_info() -> Json<SystemInfo> {
+    Json(SystemInfo {
+        host_name: "UserDevice".to_string(),
+        product_name: "MIMO Wireless Bridge".to_string(),
+        description: "mypDDL-MIMO".to_string(),
+        system_date: "2026-04-09 10:00:00".to_string(),
+        system_uptime: "5 days 08:16:42".to_string(),
+        hardware_version: "Rev A".to_string(),
+        software_version: "v1.4.0".to_string(),
+        software_build: "1005".to_string(),
+        build_date: "2026-04-08".to_string(),
+        build_time: "17:30:00".to_string(),
+        mac_address: "00:0F:92:FA:37:CE".to_string(),
+        ip_address: "192.168.1.2".to_string(),
+        subnet_mask: "255.255.255.0".to_string(),
+        connection_type: "Static".to_string(),
+        gateway: "192.168.1.1".to_string(),
+        lan_mac_address: "00:0F:92:FA:37:CE".to_string(),
+        lan_ip_address: "192.168.1.2".to_string(),
+        lan_subnet_mask: "255.255.255.0".to_string(),
+        lan_connection_type: "Static".to_string(),
+        lan_gateway: "192.168.1.1".to_string(),
+        wan_mac_address: "00:0F:92:FA:37:CF".to_string(),
+        wan_ip_address: "10.10.10.2".to_string(),
+        wan_subnet_mask: "255.255.255.0".to_string(),
+        wan_connection_type: "DHCP".to_string(),
+        wan_gateway: "10.10.10.1".to_string(),
+        wan_primary_dns: "8.8.8.8".to_string(),
+        wan_secondary_dns: "8.8.4.4".to_string(),
+    })
+}
+
+async fn get_baseband_stats(State(state): State<Arc<AppState>>) -> Json<BasebandStatsResponse> {
+    let response = match state.baseband.as_ref() {
+        Some(baseband) => BasebandStatsResponse {
+            available: true,
+            stats: Some(baseband.get_communication_stats()),
+            message: "Baseband statistics fetched successfully".to_string(),
+        },
+        None => BasebandStatsResponse {
+            available: false,
+            stats: None,
+            message: "Baseband SDK not available; running in simulator mode".to_string(),
+        },
+    };
+
+    Json(response)
+}
+
+async fn test_baseband_communication(
+    State(state): State<Arc<AppState>>,
+) -> Json<BasebandTestResponse> {
+    let response = match state.baseband.as_ref() {
+        Some(baseband) => match baseband.send_data(0, b"ping") {
+            Ok(bytes_sent) => BasebandTestResponse {
+                available: true,
+                socket_initialized: true,
+                bytes_sent: Some(bytes_sent),
+                message: "Baseband communication test completed".to_string(),
+            },
+            Err(err) => BasebandTestResponse {
+                available: true,
+                socket_initialized: false,
+                bytes_sent: None,
+                message: format!("Baseband communication test failed: {}", err),
+            },
+        },
+        None => BasebandTestResponse {
+            available: false,
+            socket_initialized: false,
+            bytes_sent: None,
+            message: "Baseband SDK not available; running in simulator mode".to_string(),
+        },
+    };
+
+    Json(response)
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
