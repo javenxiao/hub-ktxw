@@ -28,7 +28,7 @@
 - src/main.rs：服务端入口、接口定义、WebSocket 推送、状态组装
 - src/bb_api.rs：对基带 SDK 的安全包装，屏蔽底层错误码和裸指针
 - src/ffi.rs：C 接口绑定、常量、底层调用声明
-- build.rs：配置第三方库链接，并在本机构建时复制 DLL 到目标目录
+- build.rs：在本机构建时复制第三方 DLL 到目标目录，SDK 运行时加载逻辑位于 src/ffi.rs
 - third_party/include：第三方头文件目录
 - third_party/lib：第三方库文件目录
 - scripts/package-a7.py：A7 目标打包脚本
@@ -103,6 +103,42 @@ cargo run
 - WebSocket /ws 是否能收到推送数据
 - 运行目录下是否存在 ar8030_client.dll
 
+### 4.1 当前基线验证结果
+
+已在本仓库执行过一次基线验证，当前结果如下：
+
+- cargo build 成功
+- cargo run 成功
+- 页面入口 / 可正常返回 static/index.html
+- GET /api/system/info 可正常返回 JSON
+- GET /api/wireless/status 可正常返回 JSON
+- 当 SDK 无法完成加载时，服务会自动回退到模拟模式继续运行
+
+当前 Windows 本地环境中的已知现象：
+
+- ar8030_client.dll 已复制到 target/debug
+- 但第三方 DLL 的依赖仍可能缺失，导致 SDK 初始化失败
+- 这种情况下，Web 服务本身仍可启动，只是基带能力不可用
+
+如果要尝试走远程 host 模式，可以在启动前设置：
+
+```powershell
+$env:BB_HOST_ADDR="<bb_host_ip>"
+$env:BB_HOST_PORT="<bb_host_port>"
+cargo run
+```
+
+说明：
+
+- 当 BB_HOST_ADDR 存在时，程序会尝试先连接远程 bb_host，再走设备枚举和设备打开流程
+- 当 BB_HOST_ADDR 不存在时，程序走本地 SDK 模式
+- 当前仓库已经修复了远程 RPC 设备路径的崩溃问题，但是否能真正进入真实模式，仍取决于外部 bb_host、设备、驱动和 SDK 环境是否满足要求
+
+这意味着：
+
+- “cargo run 成功”不等于“真实基带模式已成功启动”
+- 当前项目已经支持在 SDK 不可用时继续做页面和接口开发
+
 ## 5. 开发人员如何开始工作
 
 建议按下面顺序上手，而不是一开始就直接修改底层 FFI：
@@ -127,6 +163,7 @@ cargo run
 
 - GET /api/system/info：返回系统信息
 - GET /api/wireless/status：返回当前无线状态快照
+- GET /api/baseband/health：返回基带运行模式、依赖状态、host 配置和 init/start 结果
 - GET /api/baseband/stats：返回基带通信统计
 - GET /api/baseband/test：测试基带通信
 - GET /ws：推送实时无线状态更新
@@ -253,7 +290,26 @@ cargo run
 
 - DLL 是否被复制到 target/debug 或 target/release
 - DLL 位数是否和当前构建目标一致
-- 链接库名称是否和 build.rs 中一致
+- SDK 是否在运行时被 src/ffi.rs 正常加载
+
+当前已确认的实际行为：
+
+- 本项目使用运行时动态加载 SDK，而不是在进程启动前强依赖静态链接成功
+- 如果 ar8030_client.dll 的外部依赖缺失，SDK 初始化会失败
+- 即使 SDK 初始化失败，Web 服务仍会回退到模拟模式继续运行
+
+如果本机仍无法进入真实模式，优先检查第三方 DLL 的外部依赖，例如：
+
+- pthread.dll
+- VCRUNTIME140D.dll
+- ucrtbased.dll
+
+如果 DLL 依赖已经满足，但 `bb_init failed with code: -1` 仍然出现，优先继续排查：
+
+- 当前是否应该使用远程 bb_host 模式而不是本地模式
+- BB_HOST_ADDR 和 BB_HOST_PORT 是否配置正确
+- 目标 8030 设备是否真实在线
+- SDK 所需驱动或宿主服务是否已经启动
 
 ## 10. 常见问题
 

@@ -18,7 +18,7 @@ use tokio::sync::{broadcast, RwLock};
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info, warn};
 
-use bb_api::{BasebandManager, CommunicationStats};
+use bb_api::{BasebandHealthStatus, BasebandManager, CommunicationStats};
 
 #[derive(Debug, Clone, Serialize)]
 struct SystemInfo {
@@ -126,15 +126,21 @@ struct AppState {
     snapshot: RwLock<WirelessSnapshot>,
     tx: broadcast::Sender<WirelessSnapshot>,
     baseband: Option<Arc<BasebandManager>>,
+    baseband_health: BasebandHealthStatus,
 }
 
 impl AppState {
-    fn new(initial: WirelessSnapshot, baseband: Option<Arc<BasebandManager>>) -> Self {
+    fn new(
+        initial: WirelessSnapshot,
+        baseband: Option<Arc<BasebandManager>>,
+        baseband_health: BasebandHealthStatus,
+    ) -> Self {
         let (tx, _) = broadcast::channel(128);
         Self {
             snapshot: RwLock::new(initial),
             tx,
             baseband,
+            baseband_health,
         }
     }
 }
@@ -148,34 +154,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("========== RSHTML Server Starting ==========");
 
     // 初始化基带 API
-    let baseband = match BasebandManager::new() {
-        Ok(bb) => {
+    let (baseband, baseband_health) = match BasebandManager::initialize_with_health() {
+        (Some(bb), health) => {
             info!("✓ Baseband API initialized successfully");
-            
+
             // 初始化通信 socket
-            if let Err(e) = bb.initialize_socket(0) {
+            let socket_result = bb.initialize_socket(0);
+            let mut health = health;
+            health.record_socket_init(socket_result.clone(), 0);
+
+            if let Err(e) = socket_result {
                 warn!("Failed to initialize socket: {}", e);
             } else {
                 info!("✓ Socket 0 initialized for data communication");
             }
 
-            Some(Arc::new(bb))
+            (Some(Arc::new(bb)), health)
         }
-        Err(e) => {
-            warn!("Failed to initialize baseband API: {}", e);
+        (None, health) => {
+            let failure_message = if health.start.attempted {
+                health.start.message.clone()
+            } else {
+                health.init.message.clone()
+            };
+
+            warn!("Failed to initialize baseband API: {}", failure_message);
             warn!("Using simulator mode without hardware communication");
-            None
+            (None, health)
         }
     };
 
     let initial = build_snapshot(0);
-    let state = Arc::new(AppState::new(initial, baseband.clone()));
+    let state = Arc::new(AppState::new(initial, baseband.clone(), baseband_health));
 
     spawn_data_feeder(state.clone());
 
     let app = Router::new()
         .route("/api/wireless/status", get(get_wireless_status))
         .route("/api/system/info", get(get_system_info))
+        .route("/api/baseband/health", get(get_baseband_health))
         .route("/api/baseband/stats", get(get_baseband_stats))
         .route("/api/baseband/test", get(test_baseband_communication))
         .route("/ws", get(ws_handler))
@@ -227,6 +244,10 @@ async fn get_system_info() -> Json<SystemInfo> {
         wan_primary_dns: "8.8.8.8".to_string(),
         wan_secondary_dns: "8.8.4.4".to_string(),
     })
+}
+
+async fn get_baseband_health(State(state): State<Arc<AppState>>) -> Json<BasebandHealthStatus> {
+    Json(state.baseband_health.clone())
 }
 
 async fn get_baseband_stats(State(state): State<Arc<AppState>>) -> Json<BasebandStatsResponse> {
