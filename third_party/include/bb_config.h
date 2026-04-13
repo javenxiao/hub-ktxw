@@ -20,7 +20,7 @@ extern "C" {
  * \subsection cmd_d 1.d命令
  * 格式：d [addr] [size]
  * 说明：显示地址空间，其中addr和size有记忆功能，如果第一次执行 d 0xa110800 1，第二次执行d，得到的效果与前一次相同
- *5;
+ *
  * \subsection cmd_m 2.m命令
  * 格式：m [addr] [width] [value]
  * 说明：修改地址空间，其中addr为想要修改的地址，width是访问位宽，支持8、16、32，具体用哪一种取决于地址空间所处总线的访问限制，value是要写入的数值
@@ -224,9 +224,9 @@ extern "C" {
 #define BB_CONFIG_MAX_CHAN_HOP_ITEM_NUM     5           /**<@note 最大跳频触发项条目数量*/
 #define BB_CONFIG_MAX_SLOT_CANDIDATE        5           /**<@note 每个SLOT可设置的最大候选人数量*/
 #define BB_CONFIG_BR_FREQ_OFFSET            0           /**<@note BR与信道的频偏值 单位：KHz*/
-#define BB_CONFIG_LINK_UNLOCK_TIMEOUT       2000        /**<@note Link通道超时门限 单位：毫秒*/
-#define BB_CONFIG_SLOT_UNLOCK_TIMEOUT       2000        /**<@note FCH超时门限 单位：毫秒*/
-#define BB_CONFIG_IDLE_SLOT_THRED           3          /**<@note SLOT空闲门限，用于动态slot模式，单位：秒*/
+#define BB_CONFIG_LINK_UNLOCK_TIMEOUT       1000        /**<@note Link通道超时门限 单位：毫秒*/
+#define BB_CONFIG_SLOT_UNLOCK_TIMEOUT       1000        /**<@note FCH超时门限 单位：毫秒*/
+#define BB_CONFIG_IDLE_SLOT_THRED           10          /**<@note SLOT空闲门限，用于动态slot模式，单位：秒*/
 #define BB_CONFIG_EOP_SAMPLE_NUM            8           /**<@note EOP处理最近样本大小*/
 #define BB_CONFIG_ENABLE_BR_MCS             1           /**<@note 使能BR的MCS控制，仅对1V1模式有效*/
 #define BB_CONFIG_ENABLE_BLOCK_SWITCH       1           /**<@note 使用阻塞式模式切换机制（实验室阶段）*/
@@ -234,27 +234,27 @@ extern "C" {
 #define BB_CONFIG_1V1_COMPT_BR              1           /**<@note 1V1模式下，BR压缩模式（实验室阶段）*/
 #define BB_CONFIG_ENABLE_LTP                1           /**<@note 使能网络隔离机制*/
 #define BB_CONFIG_ENABLE_TIME_DISPATCH      1           /**<@note 使能链路授时机制*/
-#define BB_CONFIG_ENABLE_FRAME_CHANGE       1           /**<@note 使能1V1模式下，改变帧结构的功能*/
+#define BB_CONFIG_ENABLE_FRAME_CHANGE       0           /**<@note 使能1V1模式下，改变帧结构的功能*/
 #define BB_CONFIG_ENABLE_RC_HOP_POLICY      1           /**<@note 使能选择性跳频策略*/
 #define BB_CONFIG_ENABLE_AUTO_BAND_POLICY   1           /**<@note 使能频段自适应功能*/
-#define BB_CONFIG_ENABLE_LNA_POLICY         1           /**<@note 使能LNA策略*/
-#define BB_CONFIG_ENABLE_1V1_POWER_SAVE     1           /**<@note 使能1V1模式的节能机制*/
+#define BB_CONFIG_ENABLE_LNA_POLICY         0           /**<@note 使能LNA策略*/
+#define BB_CONFIG_ENABLE_1V1_POWER_SAVE     0           /**<@note 使能1V1模式的节能机制*/
+#define BB_CONFIG_ENABLE_RF_POLICY          0           /**<@note 使能B路开关自适应策略*/
 #define BB_CONFIG_DEMO_STREAM               0           // TBD
 #define BB_CONFIG_OLD_PLOT_MODE             0           // TBD
 #define BB_CONFIG_FRAME_CROPPING            1           /**<@note 1VN模式下，动态删除或增加csma帧结构*/
 #define BB_CONFIG_LINK_BY_GROUPID           0           /**<@note 分组配对开关(for hyy)*/
 #define BB_CONFIG_ENABLE_RF_FILTER_PATCH    0           /**<@note 使能RF滤波patch*/
-#define BB_CONFIG_ENABLE_DECODE_HALT_PATCH  1           /**<@note 使能接收机解码死机patch*/
 #define BB_CONFIG_ENABLE_DFS                0           /**<@note 使能DFS开关*/
 #define BB_CONFIG_DFS_FREQ_OFFSET           500         /**<@note dfs检测的频偏值 单位：KHz*/
 #define BB_CONFIG_TLV_PACKET_LOST_DEBUG     0           /**<@note 基带丢包检测开关*/
 #define BB_CONFIG_PWR_AUTO2                 1           /**<@note 功率自适应2.0版本，参考了packet err*/
-#define BB_CONFIG_ENABLE_HOP_DEBUG          1
-#define BB_CONFIG_ENABLE_SAFE_CHAN_HOP      1           /**<@note 使能安全跳频机制*/
-#define BB_CONFIG_ENABLE_SAFE_CHAN_HOP_EX   1           /**<@note 使能安全跳频增强机制*/
-#define BB_CONFIG_AUTH_MODE_CE              1           /**<@note CE跳频自适应认证模式*/
-#define BB_CONFIG_ENABLE_THROUGHPUT_FUNC    1           /**<@note 使能获取吞吐率功能*/
-#define BB_CONFIG_MAX_SOCKET_MBLK_NUM       8           /**<@note 最大用户可设置的用于socket buffer的mblk表项数量*/
+#define BB_CONFIG_BR_HOP_FREQS_MAX_NUM      9           /**<@note br接入频点最多多少个*/
+#define BB_CONFIG_FRAME_PLOT_MAX_CACHE      1           /**<@note 帧帧上报最多缓存多少个一起上报，0代表关闭该功能*/
+#define BB_CONFIG_FREQ_POWER_LIMIT_NUM      96          /**<@note 频率功率限制最大数量*/
+#define BB_CONFIG_FREQ_PWR_LIMIT            1           /**<@note 频率功率限制*/
+#define BB_CONFIG_ENABLE_XDS_UDF            (0)         /**<@note 透传模块UDF匹配功能*/
+#define BB_CONFIG_XDS_UDF_LENGTH            (32)        /**<@note 透传模块UDF最大匹配长度*/
 
 #define BB_CONFIG_INCLUDE_D_CMD             1           /**<@note 包括d、p命令（显示地址空间）*/
 #define BB_CONFIG_INCLUDE_M_CMD             1           /**<@note 包括m命令（修改地址空间）*/

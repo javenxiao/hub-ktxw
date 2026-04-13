@@ -574,6 +574,41 @@ tbody td {
     height: 13px;
 }
 
+.status-pill {
+    display: inline-flex;
+    min-width: 58px;
+    justify-content: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+
+.status-pill.connect {
+    color: #1d6b28;
+    background: #dff4df;
+    border-color: #9fd4a1;
+}
+
+.status-pill.lock {
+    color: #8a5b00;
+    background: #fff0c7;
+    border-color: #e6c56b;
+}
+
+.status-pill.pairing {
+    color: #6c3ea5;
+    background: #efe1ff;
+    border-color: #c8a7f3;
+}
+
+.status-pill.idle {
+    color: #475767;
+    background: #e8edf2;
+    border-color: #c6d0da;
+}
+
 .mini-chart {
     position: relative;
     display: inline-flex;

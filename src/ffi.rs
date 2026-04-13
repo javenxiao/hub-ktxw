@@ -9,6 +9,7 @@
 
 use std::{
     env,
+    ffi::CStr,
     os::raw::{c_int, c_uint, c_void},
     path::{Path, PathBuf},
     sync::OnceLock,
@@ -33,6 +34,37 @@ pub struct FfiRuntimeDiagnostics {
     pub loaded_dependency_paths: Vec<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BbLinkStatusSummary {
+    pub slot: usize,
+    pub state: u8,
+    pub rx_mcs: Option<u8>,
+    pub pair_state: bool,
+    pub peer_mac_bytes: Option<[u8; BB_MAC_LEN]>,
+    pub peer_mac_hex: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BbGetStatusSummary {
+    pub role: u8,
+    pub mode: u8,
+    pub sync_mode: u8,
+    pub sync_master: u8,
+    pub cfg_sbmp: u8,
+    pub rt_sbmp: u8,
+    pub mac_bytes: [u8; BB_MAC_LEN],
+    pub mac_hex: String,
+    pub frequency_khz: Option<u32>,
+    pub bandwidth: Option<u8>,
+    pub tx_mcs: Option<u8>,
+    pub rx_mcs: Option<u8>,
+    pub link_state: Option<u8>,
+    pub pair_state: Option<bool>,
+    pub peer_mac_bytes: Option<[u8; BB_MAC_LEN]>,
+    pub peer_mac_hex: Option<String>,
+    pub links: Vec<BbLinkStatusSummary>,
+}
+
 #[repr(C)]
 pub struct bb_sock_opt_t {
     pub tx_buf_size: u32,
@@ -54,16 +86,87 @@ pub struct bb_host_t {
     _private: [u8; 0],
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_mac_t {
+    pub addr: [u8; BB_MAC_LEN],
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_phy_status_t {
+    pub mcs: u8,
+    pub rf_mode: u8,
+    pub tintlv_enable: u8,
+    pub tintlv_num: u8,
+    pub tintlv_len: u8,
+    pub bandwidth: u8,
+    pub freq_khz: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_link_status_t {
+    pub state: u8,
+    pub rx_mcs_pair_state: u8,
+    pub peer_mac: bb_mac_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_user_status_t {
+    pub tx_status: bb_phy_status_t,
+    pub rx_status: bb_phy_status_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_get_status_in_t {
+    pub user_bmp: u16,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_get_status_out_t {
+    pub role: u8,
+    pub mode: u8,
+    pub sync_mode: u8,
+    pub sync_master: u8,
+    pub cfg_sbmp: u8,
+    pub rt_sbmp: u8,
+    pub mac: bb_mac_t,
+    pub user_status: [bb_user_status_t; BB_DATA_USER_MAX],
+    pub link_status: [bb_link_status_t; BB_SLOT_MAX],
+}
+
+impl Default for bb_get_status_out_t {
+    fn default() -> Self {
+        Self {
+            role: 0,
+            mode: 0,
+            sync_mode: 0,
+            sync_master: 0,
+            cfg_sbmp: 0,
+            rt_sbmp: 0,
+            mac: bb_mac_t::default(),
+            user_status: [bb_user_status_t::default(); BB_DATA_USER_MAX],
+            link_status: [bb_link_status_t::default(); BB_SLOT_MAX],
+        }
+    }
+}
+
 type BbInitFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
 type BbDeinitFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
 type BbStartFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
 type BbStopFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
+type BbIoctlFn = unsafe extern "C" fn(dev: *mut bb_dev_handle_t, request: c_uint, input: *const c_void, output: *mut c_void) -> c_int;
+type BbGetDaemonVerFn = unsafe extern "C" fn(phost: *mut bb_host_t) -> *const i8;
 type BbHostConnectFn = unsafe extern "C" fn(phost: *mut *mut bb_host_t, addr: *const i8, port: c_int) -> c_int;
 type BbHostDisconnectFn = unsafe extern "C" fn(phost: *mut bb_host_t) -> c_int;
-type BbDevGetListFn = unsafe extern "C" fn(phost: *mut bb_host_t, plist: *mut *mut bb_dev_t) -> c_int;
+type BbDevGetListFn = unsafe extern "C" fn(phost: *mut bb_host_t, plist: *mut *mut *mut bb_dev_t) -> c_int;
 type BbDevOpenFn = unsafe extern "C" fn(devs: *mut bb_dev_t) -> *mut bb_dev_handle_t;
 type BbDevCloseFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
-type BbDevFreeListFn = unsafe extern "C" fn(plist: *mut bb_dev_t) -> c_int;
+type BbDevFreeListFn = unsafe extern "C" fn(plist: *mut *mut bb_dev_t) -> c_int;
 type BbSocketOpenFn = unsafe extern "C" fn(
     dev: *mut bb_dev_handle_t,
     slot: c_int,
@@ -83,6 +186,8 @@ struct Ar8030Sdk {
     bb_deinit: BbDeinitFn,
     bb_start: BbStartFn,
     bb_stop: BbStopFn,
+    bb_ioctl: BbIoctlFn,
+    bb_get_daemon_ver: BbGetDaemonVerFn,
     bb_host_connect: BbHostConnectFn,
     bb_host_disconnect: BbHostDisconnectFn,
     bb_dev_getlist: BbDevGetListFn,
@@ -106,6 +211,9 @@ pub const BB_BLACK_LIST_SIZE: usize = 3;
 pub const BB_RC_FREQ_NUM: usize = 4;
 pub const BB_SOCK_INFO_NUM: usize = 8;
 pub const BB_REMOTE_CMD_WAIT_MAX: usize = 8;
+pub const BB_SLOT_MAX: usize = 8;
+pub const BB_DATA_USER_MAX: usize = 10;
+pub const BB_ALL_DATA_USER_BMP: u16 = ((1_u32 << BB_DATA_USER_MAX) - 1) as u16;
 
 // Socket 选项标志
 pub const BB_SOCK_FLAG_RX: u32 = 1 << 0;
@@ -199,6 +307,8 @@ fn load_sdk() -> Result<Ar8030Sdk, String> {
             let bb_deinit = load_symbol::<BbDeinitFn>(&library, b"bb_deinit\0")?;
             let bb_start = load_symbol::<BbStartFn>(&library, b"bb_start\0")?;
             let bb_stop = load_symbol::<BbStopFn>(&library, b"bb_stop\0")?;
+            let bb_ioctl = load_symbol::<BbIoctlFn>(&library, b"bb_ioctl\0")?;
+            let bb_get_daemon_ver = load_symbol::<BbGetDaemonVerFn>(&library, b"bb_get_daemon_ver\0")?;
             let bb_host_connect = load_symbol::<BbHostConnectFn>(&library, b"bb_host_connect\0")?;
             let bb_host_disconnect = load_symbol::<BbHostDisconnectFn>(&library, b"bb_host_disconnect\0")?;
             let bb_dev_getlist = load_symbol::<BbDevGetListFn>(&library, b"bb_dev_getlist\0")?;
@@ -218,6 +328,8 @@ fn load_sdk() -> Result<Ar8030Sdk, String> {
                 bb_deinit,
                 bb_start,
                 bb_stop,
+                bb_ioctl,
+                bb_get_daemon_ver,
                 bb_host_connect,
                 bb_host_disconnect,
                 bb_dev_getlist,
@@ -415,6 +527,24 @@ pub fn connect_host(addr: &str, port: i32) -> Result<*mut bb_host_t, String> {
     }
 }
 
+pub fn get_daemon_version(host: *mut bb_host_t) -> Result<String, String> {
+    let sdk = sdk()?;
+
+    if host.is_null() {
+        return Err("bb_get_daemon_ver requires a valid host handle".to_string());
+    }
+
+    unsafe {
+        let version_ptr = (sdk.bb_get_daemon_ver)(host);
+
+        if version_ptr.is_null() {
+            Err("bb_get_daemon_ver returned null".to_string())
+        } else {
+            Ok(CStr::from_ptr(version_ptr).to_string_lossy().into_owned())
+        }
+    }
+}
+
 pub fn disconnect_host(host: *mut bb_host_t) -> Result<(), String> {
     let sdk = sdk()?;
 
@@ -430,11 +560,11 @@ pub fn disconnect_host(host: *mut bb_host_t) -> Result<(), String> {
     }
 }
 
-pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<*mut bb_dev_handle_t, String> {
+pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<(*mut bb_dev_handle_t, i32), String> {
     let sdk = sdk()?;
 
     unsafe {
-        let mut device_list: *mut bb_dev_t = std::ptr::null_mut();
+        let mut device_list: *mut *mut bb_dev_t = std::ptr::null_mut();
         let device_count = (sdk.bb_dev_getlist)(host, &mut device_list);
 
         if device_count < 0 {
@@ -445,15 +575,157 @@ pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<*mut bb_dev_han
             return Err("No baseband devices detected".to_string());
         }
 
-        let handle = (sdk.bb_dev_open)(device_list);
+        let first_device = *device_list;
+        if first_device.is_null() {
+            let _ = (sdk.bb_dev_freelist)(device_list);
+            return Err("bb_dev_getlist returned a null first device entry".to_string());
+        }
+
+        let handle = (sdk.bb_dev_open)(first_device);
         let _ = (sdk.bb_dev_freelist)(device_list);
 
         if handle.is_null() {
             Err("bb_dev_open returned null handle".to_string())
         } else {
-            Ok(handle)
+            Ok((handle, device_count))
         }
     }
+}
+
+pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetStatusSummary, String> {
+    let sdk = sdk()?;
+    let input = bb_get_status_in_t { user_bmp };
+    let mut output = bb_get_status_out_t::default();
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_GET_STATUS as c_uint,
+            &input as *const bb_get_status_in_t as *const c_void,
+            &mut output as *mut bb_get_status_out_t as *mut c_void,
+        ) {
+            0 => {
+                let active_user = output
+                    .user_status
+                    .iter()
+                    .find(|user| user.tx_status.freq_khz != 0 || user.rx_status.freq_khz != 0);
+                let links = output
+                    .link_status
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, link)| {
+                        summarize_link_status(slot, link, output.cfg_sbmp, output.rt_sbmp)
+                    })
+                    .collect::<Vec<_>>();
+                let active_link = links.first();
+
+                let frequency_khz = active_user.and_then(preferred_frequency_khz);
+                let bandwidth = active_user.and_then(preferred_bandwidth);
+                let tx_mcs = active_user.map(|user| user.tx_status.mcs);
+                let rx_mcs = active_link.and_then(|link| link.rx_mcs);
+                let link_state = active_link.map(|link| link.state);
+                let pair_state = active_link.map(|link| link.pair_state);
+                let peer_mac_bytes = active_link.and_then(|link| link.peer_mac_bytes);
+                let peer_mac_hex = active_link.and_then(|link| link.peer_mac_hex.clone());
+
+                Ok(BbGetStatusSummary {
+                    role: output.role,
+                    mode: output.mode,
+                    sync_mode: output.sync_mode,
+                    sync_master: output.sync_master,
+                    cfg_sbmp: output.cfg_sbmp,
+                    rt_sbmp: output.rt_sbmp,
+                    mac_bytes: output.mac.addr,
+                    mac_hex: format_bb_mac(&output.mac),
+                    frequency_khz,
+                    bandwidth,
+                    tx_mcs,
+                    rx_mcs,
+                    link_state,
+                    pair_state,
+                    peer_mac_bytes,
+                    peer_mac_hex,
+                    links,
+                })
+            }
+            e => Err(format!("bb_ioctl(BB_GET_STATUS) failed with code: {}", e)),
+        }
+    }
+}
+
+fn format_bb_mac(mac: &bb_mac_t) -> String {
+    mac.addr
+        .iter()
+        .map(|value| format!("{:02X}", value))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+fn preferred_frequency_khz(user: &bb_user_status_t) -> Option<u32> {
+    if user.tx_status.freq_khz != 0 {
+        Some(user.tx_status.freq_khz)
+    } else if user.rx_status.freq_khz != 0 {
+        Some(user.rx_status.freq_khz)
+    } else {
+        None
+    }
+}
+
+fn preferred_bandwidth(user: &bb_user_status_t) -> Option<u8> {
+    if user.tx_status.freq_khz != 0 {
+        Some(user.tx_status.bandwidth)
+    } else if user.rx_status.freq_khz != 0 {
+        Some(user.rx_status.bandwidth)
+    } else {
+        None
+    }
+}
+
+fn decode_rx_mcs(packed: u8) -> u8 {
+    packed & 0x1F
+}
+
+fn decode_pair_state(packed: u8) -> bool {
+    ((packed >> 5) & 0x01) != 0
+}
+
+fn summarize_link_status(
+    slot: usize,
+    link: &bb_link_status_t,
+    cfg_sbmp: u8,
+    rt_sbmp: u8,
+) -> Option<BbLinkStatusSummary> {
+    let pair_state = decode_pair_state(link.rx_mcs_pair_state);
+    let peer_mac_bytes = if is_zero_mac(&link.peer_mac.addr) {
+        None
+    } else {
+        Some(link.peer_mac.addr)
+    };
+    let slot_mask = 1_u8.checked_shl(slot as u32).unwrap_or(0);
+    let slot_declared = (cfg_sbmp & slot_mask) != 0 || (rt_sbmp & slot_mask) != 0;
+
+    if link.state == 0 && !pair_state && peer_mac_bytes.is_none() && !slot_declared {
+        return None;
+    }
+
+    let peer_mac_hex = peer_mac_bytes.map(|addr| format_bb_mac(&bb_mac_t { addr }));
+
+    Some(BbLinkStatusSummary {
+        slot,
+        state: link.state,
+        rx_mcs: if link.state == 0 {
+            None
+        } else {
+            Some(decode_rx_mcs(link.rx_mcs_pair_state))
+        },
+        pair_state,
+        peer_mac_bytes,
+        peer_mac_hex,
+    })
+}
+
+fn is_zero_mac(mac: &[u8; BB_MAC_LEN]) -> bool {
+    mac.iter().all(|value| *value == 0)
 }
 
 pub fn close_device(handle: *mut bb_dev_handle_t) -> Result<(), String> {

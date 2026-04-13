@@ -329,6 +329,9 @@
                             <table>
                                 <thead>
                                     <tr>
+                                        <th>Link Slot</th>
+                                        <th>Link State</th>
+                                        <th>Pair State</th>
                                         <th>MAC Address</th>
                                         <th>Tx Mod</th>
                                         <th>Rx Mod</th>
@@ -341,7 +344,7 @@
                                 </thead>
                                 <tbody id="connection-table-body">
                                     <tr>
-                                        <td colspan="8">等待连接数据...</td>
+                                        <td colspan="11">等待连接数据...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -455,6 +458,18 @@
             return `<span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="双路 RSSI 缩略图"><polyline class="mini-line-main" points="${mainPoints}"></polyline><polyline class="mini-line-aux" points="${auxPoints}"></polyline></svg></span>`;
         }
 
+        function buildStatePill(label) {
+            const normalized = String(label).toLowerCase();
+            const stateClass = normalized.includes('connect')
+                ? 'connect'
+                : normalized.includes('lock')
+                    ? 'lock'
+                    : normalized.includes('pair')
+                        ? 'pairing'
+                        : 'idle';
+            return `<span class="status-pill ${stateClass}">${escapeHtml(label)}</span>`;
+        }
+
         function toPolylinePoints(values, width, height, minValue, maxValue, startX, startY, endX, endY) {
             if (!Array.isArray(values) || values.length === 0) {
                 return `${startX},${endY} ${endX},${endY}`;
@@ -473,7 +488,7 @@
 
         function renderConnections(connections) {
             if (!Array.isArray(connections) || connections.length === 0) {
-                connectionTableBody.innerHTML = '<tr><td colspan="8">暂无连接数据</td></tr>';
+                connectionTableBody.innerHTML = '<tr><td colspan="11">暂无连接数据</td></tr>';
                 setText('connection-count', '0');
                 return;
             }
@@ -481,6 +496,9 @@
             setText('connection-count', String(connections.length));
             connectionTableBody.innerHTML = connections.map((connection) => `
                 <tr>
+                    <td>${escapeHtml(connection.link_slot)}</td>
+                    <td>${buildStatePill(connection.link_state)}</td>
+                    <td>${buildStatePill(connection.pair_state)}</td>
                     <td>${escapeHtml(connection.mac_address)}</td>
                     <td>${escapeHtml(connection.tx_mod)}</td>
                     <td>${escapeHtml(connection.rx_mod)}</td>

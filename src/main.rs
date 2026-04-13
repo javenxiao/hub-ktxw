@@ -19,6 +19,7 @@ use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{error, info, warn};
 
 use bb_api::{BasebandHealthStatus, BasebandManager, CommunicationStats};
+use ffi::BbGetStatusSummary;
 
 #[derive(Debug, Clone, Serialize)]
 struct SystemInfo {
@@ -97,6 +98,9 @@ struct TrafficStatus {
 
 #[derive(Debug, Clone, Serialize)]
 struct ConnectionStatus {
+    link_slot: String,
+    link_state: String,
+    pair_state: String,
     mac_address: String,
     tx_mod: String,
     rx_mod: String,
@@ -121,6 +125,10 @@ struct RssiChart {
     primary_points: Vec<i32>,
     secondary_points: Vec<i32>,
 }
+
+const HISTORY_POINTS: usize = 18;
+const RSSI_UNAVAILABLE_DBM: i32 = -127;
+const SNR_UNAVAILABLE_DB: i32 = -1;
 
 struct AppState {
     snapshot: RwLock<WirelessSnapshot>,
@@ -157,26 +165,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (baseband, baseband_health) = match BasebandManager::initialize_with_health() {
         (Some(bb), health) => {
             info!("✓ Baseband API initialized successfully");
-
-            // 初始化通信 socket
-            let socket_result = bb.initialize_socket(0);
             let mut health = health;
-            health.record_socket_init(socket_result.clone(), 0);
 
-            if let Err(e) = socket_result {
-                warn!("Failed to initialize socket: {}", e);
+            if health.effective_mode == "hardware-remote-bb-host" {
+                health.socket_init.message = "Skipped in remote bb_host mode".to_string();
             } else {
-                info!("✓ Socket 0 initialized for data communication");
+                // 初始化通信 socket
+                let socket_result = bb.initialize_socket(0);
+                health.record_socket_init(socket_result.clone(), 0);
+
+                if let Err(e) = socket_result {
+                    warn!("Failed to initialize socket: {}", e);
+                } else {
+                    info!("✓ Socket 0 initialized for data communication");
+                }
             }
 
             (Some(Arc::new(bb)), health)
         }
         (None, health) => {
-            let failure_message = if health.start.attempted {
-                health.start.message.clone()
-            } else {
-                health.init.message.clone()
-            };
+            let failure_message = health.primary_failure_message();
 
             warn!("Failed to initialize baseband API: {}", failure_message);
             warn!("Using simulator mode without hardware communication");
@@ -184,7 +192,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let initial = build_snapshot(0);
+    let initial = match (baseband.as_ref(), baseband_health.runtime.status_snapshot.as_ref()) {
+        (Some(baseband), Some(status)) => {
+            build_hardware_snapshot(0, status, &baseband.get_communication_stats(), None)
+        }
+        _ => build_simulated_snapshot(0),
+    };
     let state = Arc::new(AppState::new(initial, baseband.clone(), baseband_health));
 
     spawn_data_feeder(state.clone());
@@ -348,7 +361,23 @@ fn spawn_data_feeder(state: Arc<AppState>) {
         loop {
             ticker.tick().await;
 
-            let snapshot = build_snapshot(tick);
+            let previous = state.snapshot.read().await.clone();
+            let snapshot = match state.baseband.as_ref() {
+                Some(baseband) => match baseband.get_status_snapshot() {
+                    Ok(status) => {
+                        let stats = baseband.get_communication_stats();
+                        build_hardware_snapshot(tick, &status, &stats, Some(&previous))
+                    }
+                    Err(err) => {
+                        if tick % 30 == 1 {
+                            warn!("Failed to refresh wireless status from baseband: {}", err);
+                        }
+                        carry_forward_snapshot(previous, tick)
+                    }
+                },
+                None => build_simulated_snapshot(tick),
+            };
+
             {
                 let mut guard = state.snapshot.write().await;
                 *guard = snapshot.clone();
@@ -359,7 +388,7 @@ fn spawn_data_feeder(state: Arc<AppState>) {
     });
 }
 
-fn build_snapshot(sequence: u64) -> WirelessSnapshot {
+fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
     let main_rssi = -72 + oscillate(sequence, 5, 17) - oscillate(sequence / 3, 3, 11);
     let aux_rssi = -76 + oscillate(sequence + 5, 4, 19) - oscillate(sequence / 2, 2, 7);
     let peer_main_rssi = -65 + oscillate(sequence + 4, 4, 13);
@@ -369,10 +398,10 @@ fn build_snapshot(sequence: u64) -> WirelessSnapshot {
     let peer_current_main_rssi = peer_main_rssi.clamp(-74, -52);
     let peer_current_aux_rssi = peer_aux_rssi.clamp(-78, -56);
 
-    let main_history = build_history(sequence, current_main_rssi, 18, 6);
-    let aux_history = build_history(sequence + 3, current_aux_rssi, 18, 5);
-    let peer_main_history = build_history(sequence + 9, peer_current_main_rssi, 18, 5);
-    let peer_aux_history = build_history(sequence + 12, peer_current_aux_rssi, 18, 4);
+    let main_history = build_history(sequence, current_main_rssi, HISTORY_POINTS, 6);
+    let aux_history = build_history(sequence + 3, current_aux_rssi, HISTORY_POINTS, 5);
+    let peer_main_history = build_history(sequence + 9, peer_current_main_rssi, HISTORY_POINTS, 5);
+    let peer_aux_history = build_history(sequence + 12, peer_current_aux_rssi, HISTORY_POINTS, 4);
 
     let receive_bytes = 3_965_000 + sequence * 18_400;
     let transmit_bytes = 10_085_000 + sequence * 24_900;
@@ -396,6 +425,17 @@ fn build_snapshot(sequence: u64) -> WirelessSnapshot {
             transmit_packets: 65_437 + sequence * 47,
         },
         connections: vec![ConnectionStatus {
+            link_slot: "SLOT 0".to_string(),
+            link_state: if sequence % 3 == 0 {
+                "Connect".to_string()
+            } else {
+                "Lock".to_string()
+            },
+            pair_state: if sequence % 5 == 0 {
+                "Pairing".to_string()
+            } else {
+                "Stable".to_string()
+            },
             mac_address: "00:0F:92:FA:37:C5".to_string(),
             tx_mod: if sequence % 2 == 0 {
                 "QPSK FEC 1/2".to_string()
@@ -439,6 +479,125 @@ fn build_snapshot(sequence: u64) -> WirelessSnapshot {
     }
 }
 
+fn build_hardware_snapshot(
+    sequence: u64,
+    status: &BbGetStatusSummary,
+    stats: &CommunicationStats,
+    previous: Option<&WirelessSnapshot>,
+) -> WirelessSnapshot {
+    let local_main_history = history_from_previous(
+        previous.map(|snapshot| snapshot.chart.primary_points.as_slice()),
+        RSSI_UNAVAILABLE_DBM,
+        HISTORY_POINTS,
+    );
+    let local_aux_history = history_from_previous(
+        previous.map(|snapshot| snapshot.chart.secondary_points.as_slice()),
+        RSSI_UNAVAILABLE_DBM,
+        HISTORY_POINTS,
+    );
+    let connections = status
+        .links
+        .iter()
+        .map(|link| ConnectionStatus {
+            link_slot: format!("SLOT {}", link.slot),
+            link_state: format_link_state(link.state).to_string(),
+            pair_state: if link.pair_state {
+                "Pairing".to_string()
+            } else {
+                "Stable".to_string()
+            },
+            mac_address: link
+                .peer_mac_hex
+                .clone()
+                .unwrap_or_else(|| format!("SLOT {} Peer Unknown", link.slot)),
+            tx_mod: status
+                .tx_mcs
+                .map(format_mcs)
+                .unwrap_or_else(|| "Unavailable".to_string()),
+            rx_mod: link
+                .rx_mcs
+                .map(format_mcs)
+                .unwrap_or_else(|| "Unavailable".to_string()),
+            snr_db: SNR_UNAVAILABLE_DB,
+            rssi_main_dbm: RSSI_UNAVAILABLE_DBM,
+            rssi_aux_dbm: RSSI_UNAVAILABLE_DBM,
+            signal_level_main: map_signal_level(RSSI_UNAVAILABLE_DBM),
+            signal_level_aux: map_signal_level(RSSI_UNAVAILABLE_DBM),
+            rssi_main_history: vec![RSSI_UNAVAILABLE_DBM; HISTORY_POINTS],
+            rssi_aux_history: vec![RSSI_UNAVAILABLE_DBM; HISTORY_POINTS],
+        })
+        .collect::<Vec<_>>();
+    let peer_mac = connections
+        .first()
+        .map(|connection| connection.mac_address.clone())
+        .unwrap_or_else(|| "Unavailable".to_string());
+
+    WirelessSnapshot {
+        sequence,
+        general: GeneralStatus {
+            mac_address: status.mac_hex.clone(),
+            operation_mode: format_operation_mode(status),
+            network_id: format!(
+                "Unavailable (cfg_sbmp=0x{:02X}, rt_sbmp=0x{:02X})",
+                status.cfg_sbmp, status.rt_sbmp
+            ),
+            compatibility_mode: format_baseband_mode(status.mode).to_string(),
+            bandwidth: status
+                .bandwidth
+                .map(format_bandwidth)
+                .unwrap_or_else(|| "Unavailable".to_string()),
+            frequency: status
+                .frequency_khz
+                .map(format_frequency_khz)
+                .unwrap_or_else(|| "Unavailable".to_string()),
+            tx_power: "Unavailable".to_string(),
+            encryption_type: "Unavailable".to_string(),
+        },
+        traffic: TrafficStatus {
+            receive_bytes: stats.recv_bytes,
+            receive_packets: stats.recv_packets as u64,
+            transmit_bytes: stats.send_bytes,
+            transmit_packets: stats.send_packets as u64,
+        },
+        connections,
+        chart: RssiChart {
+            target_mac_address: peer_mac,
+            primary_label: "RSSI Main".to_string(),
+            secondary_label: "RSSI Aux".to_string(),
+            current_primary_rssi_dbm: RSSI_UNAVAILABLE_DBM,
+            current_secondary_rssi_dbm: RSSI_UNAVAILABLE_DBM,
+            min_rssi_dbm: RSSI_UNAVAILABLE_DBM,
+            max_rssi_dbm: RSSI_UNAVAILABLE_DBM,
+            primary_points: local_main_history,
+            secondary_points: local_aux_history,
+        },
+    }
+}
+
+fn carry_forward_snapshot(mut previous: WirelessSnapshot, sequence: u64) -> WirelessSnapshot {
+    previous.sequence = sequence;
+    previous
+}
+
+fn history_from_previous(previous: Option<&[i32]>, next: i32, len: usize) -> Vec<i32> {
+    let mut history = previous.map(|values| values.to_vec()).unwrap_or_default();
+    history.push(next);
+
+    if history.len() > len {
+        let drain_count = history.len() - len;
+        history.drain(0..drain_count);
+    }
+
+    if history.is_empty() {
+        vec![next; len]
+    } else {
+        while history.len() < len {
+            history.insert(0, next);
+        }
+        history
+    }
+}
+
 fn build_history(sequence: u64, current: i32, len: usize, amplitude: i32) -> Vec<i32> {
     (0..len)
         .map(|offset| {
@@ -457,9 +616,100 @@ fn oscillate(step: u64, amplitude: i32, period: u64) -> i32 {
 
 fn map_signal_level(rssi_dbm: i32) -> u8 {
     match rssi_dbm {
+        i32::MIN..=-100 => 0,
         -58..=-1 => 4,
         -64..=-59 => 3,
         -70..=-65 => 2,
         _ => 1,
+    }
+}
+
+fn format_operation_mode(status: &BbGetStatusSummary) -> String {
+    let role = match status.role {
+        0 => "AP",
+        1 => "DEV",
+        _ => "Unknown",
+    };
+
+    let sync_role = if status.sync_mode == 1 {
+        if status.sync_master == 1 {
+            "Master"
+        } else {
+            "Slave"
+        }
+    } else {
+        "Async"
+    };
+
+    format!("{} ({})", role, sync_role)
+}
+
+fn format_link_state(state: u8) -> &'static str {
+    match state {
+        0 => "Idle",
+        1 => "Lock",
+        2 => "Connect",
+        _ => "Unknown",
+    }
+}
+
+fn format_baseband_mode(mode: u8) -> &'static str {
+    match mode {
+        0 => "Single User",
+        1 => "Multi User",
+        2 => "Relay",
+        3 => "Director",
+        _ => "Unknown",
+    }
+}
+
+fn format_bandwidth(bandwidth: u8) -> String {
+    match bandwidth {
+        0 => "1.25 MHz".to_string(),
+        1 => "2.5 MHz".to_string(),
+        2 => "5 MHz".to_string(),
+        3 => "10 MHz".to_string(),
+        4 => "20 MHz".to_string(),
+        5 => "40 MHz".to_string(),
+        value => format!("Unknown ({})", value),
+    }
+}
+
+fn format_frequency_khz(freq_khz: u32) -> String {
+    if freq_khz >= 1_000_000 {
+        format!("{:.3} GHz", freq_khz as f64 / 1_000_000.0)
+    } else {
+        format!("{:.3} MHz", freq_khz as f64 / 1_000.0)
+    }
+}
+
+fn format_mcs(mcs: u8) -> String {
+    match mcs {
+        0 => "MCS-2 BPSK 1/2 REP4".to_string(),
+        1 => "MCS-1 BPSK 1/2 REP2".to_string(),
+        2 => "MCS0 BPSK 1/2".to_string(),
+        3 => "MCS1 BPSK 2/3".to_string(),
+        4 => "MCS2 BPSK 3/4".to_string(),
+        5 => "MCS3 QPSK 1/2".to_string(),
+        6 => "MCS4 QPSK 2/3".to_string(),
+        7 => "MCS5 QPSK 3/4".to_string(),
+        8 => "MCS6 16QAM 1/2".to_string(),
+        9 => "MCS7 16QAM 2/3".to_string(),
+        10 => "MCS8 16QAM 3/4".to_string(),
+        11 => "MCS9 64QAM 1/2".to_string(),
+        12 => "MCS10 64QAM 2/3".to_string(),
+        13 => "MCS11 64QAM 3/4".to_string(),
+        14 => "MCS12 256QAM 1/2".to_string(),
+        15 => "MCS13 256QAM 2/3".to_string(),
+        16 => "MCS14 QPSK 1/2 Dual".to_string(),
+        17 => "MCS15 QPSK 2/3 Dual".to_string(),
+        18 => "MCS16 QPSK 3/4 Dual".to_string(),
+        19 => "MCS17 16QAM 1/2 Dual".to_string(),
+        20 => "MCS18 16QAM 2/3 Dual".to_string(),
+        21 => "MCS19 16QAM 3/4 Dual".to_string(),
+        22 => "MCS20 64QAM 1/2 Dual".to_string(),
+        23 => "MCS21 64QAM 2/3 Dual".to_string(),
+        24 => "MCS22 64QAM 3/4 Dual".to_string(),
+        value => format!("Unknown MCS ({})", value),
     }
 }

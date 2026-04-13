@@ -18,7 +18,14 @@ pub struct BasebandHostStatus {
     pub address: Option<String>,
     pub port: Option<i32>,
     pub connected: bool,
+    pub daemon_version: Option<String>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BasebandRuntimeStatus {
+    pub detected_device_count: Option<i32>,
+    pub status_snapshot: Option<ffi::BbGetStatusSummary>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -26,10 +33,12 @@ pub struct BasebandHealthStatus {
     pub configured_mode: String,
     pub effective_mode: String,
     pub host: BasebandHostStatus,
+    pub runtime: BasebandRuntimeStatus,
     pub sdk: ffi::FfiRuntimeDiagnostics,
     pub device_open: BasebandOperationStatus,
     pub init: BasebandOperationStatus,
     pub start: BasebandOperationStatus,
+    pub status_read: BasebandOperationStatus,
     pub socket_init: BasebandOperationStatus,
 }
 
@@ -53,11 +62,16 @@ impl BasebandHealthStatus {
                 address: host_address,
                 port: host_port,
                 connected: false,
+                daemon_version: None,
                 message: if configured {
                     "BB_HOST_ADDR detected; remote host mode configured".to_string()
                 } else {
                     "BB_HOST_ADDR not set; local SDK mode configured".to_string()
                 },
+            },
+            runtime: BasebandRuntimeStatus {
+                detected_device_count: None,
+                status_snapshot: None,
             },
             sdk: ffi::runtime_diagnostics(),
             device_open: BasebandOperationStatus {
@@ -71,6 +85,11 @@ impl BasebandHealthStatus {
                 message: "Not attempted".to_string(),
             },
             start: BasebandOperationStatus {
+                attempted: false,
+                success: false,
+                message: "Not attempted".to_string(),
+            },
+            status_read: BasebandOperationStatus {
                 attempted: false,
                 success: false,
                 message: "Not attempted".to_string(),
@@ -97,12 +116,33 @@ impl BasebandHealthStatus {
             }
         }
     }
+
+    pub fn primary_failure_message(&self) -> String {
+        if self.start.attempted && !self.start.success {
+            return self.start.message.clone();
+        }
+
+        if self.init.attempted && !self.init.success {
+            return self.init.message.clone();
+        }
+
+        if self.status_read.attempted && !self.status_read.success {
+            return self.status_read.message.clone();
+        }
+
+        if self.device_open.attempted && !self.device_open.success {
+            return self.device_open.message.clone();
+        }
+
+        self.host.message.clone()
+    }
 }
 
 /// 基带 API 管理器 - 线程安全的单例
 pub struct BasebandApi {
     initialized: bool,
     started: bool,
+    requires_start: bool,
     device_handle: usize,
     host_handle: usize,
 }
@@ -113,6 +153,7 @@ impl BasebandApi {
         let mut api = BasebandApi {
             initialized: false,
             started: false,
+            requires_start: true,
             device_handle: 0,
             host_handle: 0,
         };
@@ -125,41 +166,73 @@ impl BasebandApi {
                 .unwrap_or(0);
 
             tracing::info!("Using remote bb_host mode: {}:{}", host_addr, host_port);
+            api.requires_start = false;
+            health.init.message = "Skipped in remote bb_host mode".to_string();
+            health.start.message = "Skipped in remote bb_host mode".to_string();
 
             match ffi::connect_host(&host_addr, host_port) {
                 Ok(host) => {
                     api.host_handle = host as usize;
                     health.host.connected = true;
-                    health.host.message = format!("Connected to bb_host {}:{}", host_addr, host_port);
+                    health.host.daemon_version = ffi::get_daemon_version(host).ok().and_then(|value| {
+                        let trimmed = value.trim();
+
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(trimmed.to_string())
+                        }
+                    });
+                    health.host.message = if let Some(version) = health.host.daemon_version.as_ref() {
+                        format!("Connected to bb_host {}:{} (daemon_version={})", host_addr, host_port, version)
+                    } else {
+                        format!("Connected to bb_host {}:{} (daemon version unavailable)", host_addr, host_port)
+                    };
 
                     match ffi::open_first_device_on_host(host) {
-                        Ok(device) => {
+                        Ok((device, device_count)) => {
                             api.device_handle = device as usize;
+                            api.initialized = true;
+                            health.runtime.detected_device_count = Some(device_count);
                             health.device_open.attempted = true;
                             health.device_open.success = true;
-                            health.device_open.message = "Opened first baseband device from remote host".to_string();
+                            health.device_open.message = format!("Opened first baseband device from remote host, device_count={}", device_count);
+                            health.status_read.attempted = true;
+                            health.effective_mode = "hardware-remote-bb-host".to_string();
+
+                            match ffi::get_status(api.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP) {
+                                Ok(snapshot) => {
+                                    health.status_read.success = true;
+                                    health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
+                                    health.runtime.status_snapshot = Some(snapshot);
+                                }
+                                Err(err) => {
+                                    health.status_read.success = false;
+                                    health.status_read.message = err;
+                                }
+                            }
                         }
                         Err(e) => {
                             let _ = ffi::disconnect_host(host);
+                            api.host_handle = 0;
                             health.host.connected = false;
                             health.host.message = format!("Connected to host but failed to open device: {}", e);
                             health.device_open.attempted = true;
                             health.device_open.success = false;
                             health.device_open.message = e.clone();
-                            health.sdk = ffi::runtime_diagnostics();
                             tracing::error!("Failed to open baseband device from host {}:{}: {}", host_addr, host_port, e);
-                            return (api, health);
                         }
                     }
                 }
                 Err(e) => {
                     health.host.connected = false;
                     health.host.message = format!("Failed to connect bb_host {}:{}: {}", host_addr, host_port, e);
-                    health.sdk = ffi::runtime_diagnostics();
                     tracing::error!("Failed to connect bb_host {}:{}: {}", host_addr, host_port, e);
-                    return (api, health);
                 }
             }
+
+            health.sdk = ffi::runtime_diagnostics();
+            return (api, health);
         } else {
             tracing::info!("BB_HOST_ADDR not set; using local SDK mode");
             health.device_open.message = "Local SDK mode does not open a remote device handle".to_string();
@@ -174,6 +247,20 @@ impl BasebandApi {
                 api.initialized = true;
                 health.init.success = true;
                 health.init.message = "bb_init succeeded".to_string();
+                health.status_read.attempted = true;
+
+                match ffi::get_status(api.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP) {
+                    Ok(snapshot) => {
+                        health.status_read.success = true;
+                        health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
+                        health.runtime.status_snapshot = Some(snapshot);
+                    }
+                    Err(err) => {
+                        health.status_read.success = false;
+                        health.status_read.message = err;
+                    }
+                }
+
                 health.sdk = ffi::runtime_diagnostics();
                 (api, health)
             }
@@ -209,6 +296,10 @@ impl BasebandApi {
         self.initialized
     }
 
+    pub fn requires_start(&self) -> bool {
+        self.requires_start
+    }
+
     pub fn start(&mut self) -> Result<(), String> {
         if !self.initialized {
             return Err("Baseband API not initialized".to_string());
@@ -225,6 +316,14 @@ impl BasebandApi {
             return Err("Baseband API not initialized".to_string());
         }
         ffi::create_socket(self.handle_ptr(), socket_id, flags, max_size)
+    }
+
+    pub fn get_status_summary(&self) -> Result<ffi::BbGetStatusSummary, String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)
     }
 
     /// 获取通信统计信息
@@ -319,13 +418,23 @@ impl BasebandManager {
             return (None, health);
         }
 
+        if !api.requires_start() {
+            health.effective_mode = "hardware-remote-bb-host".to_string();
+            return (
+                Some(BasebandManager {
+                    api: Arc::new(Mutex::new(api)),
+                }),
+                health,
+            );
+        }
+
         health.start.attempted = true;
 
         match api.start() {
             Ok(()) => {
                 health.start.success = true;
                 health.start.message = "bb_start succeeded".to_string();
-                health.effective_mode = "hardware".to_string();
+                health.effective_mode = "hardware-local-sdk".to_string();
                 (
                     Some(BasebandManager {
                         api: Arc::new(Mutex::new(api)),
@@ -366,6 +475,11 @@ impl BasebandManager {
     pub fn get_communication_stats(&self) -> CommunicationStats {
         let api = self.api.lock().unwrap();
         api.get_stats()
+    }
+
+    pub fn get_status_snapshot(&self) -> Result<ffi::BbGetStatusSummary, String> {
+        let api = self.api.lock().unwrap();
+        api.get_status_summary()
     }
 
     /// 发送数据到 SOC

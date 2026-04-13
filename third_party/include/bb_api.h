@@ -15,6 +15,7 @@ extern "C" {
 /********************************Macro Definition********************************/
 /** \addtogroup      BB_API */
 /** @{ */  /** <!-- [BB_API] */
+
 #if defined(SWIG)
 #define PACK(...) __VA_ARGS__
 #elif defined(_MSC_VER)
@@ -37,7 +38,7 @@ extern "C" {
 #define BB_BLACK_LIST_SIZE          3                           /**<基带配对黑名单大小*/
 #define BB_RC_FREQ_NUM              4
 #define BB_SOCK_INFO_NUM            8
-#define BB_REMOTE_CMD_WAIT_MAX      8                          /**<远程基带同时配置最大数量*/
+#define BB_REMOTE_CMD_WAIT_MAX      8                           /**<远程基带同时配置最大数量*/
 
 // socket option flags
 #define BB_SOCK_FLAG_RX             (1 << 0)                    /**<@attention 指示socket传输方向为接收的bit位标志*/
@@ -81,7 +82,7 @@ extern "C" {
 #define BB_CFG_SLOT_RX_MCS                  BB_REQUEST(BB_REQ_CFG, 5)   /**<@attention 基于SLOT的MCS策略配置命令字*/
 #define BB_CFG_ANY_CHANNEL                  BB_REQUEST(BB_REQ_CFG, 6)   /**<@attention 任意工作信道配置命令字，依赖于功能宏BB_CONFIG_ENABLE_ANY_CHANNEL*/
 #define BB_CFG_DISTC                        BB_REQUEST(BB_REQ_CFG, 7)   /**<@attention 基带测距功能命令字*/
-#define BB_CFG_AP_SYNC_MODE                 BB_REQUEST(BB_REQ_CFG, 9)   /**<@attention 配置AP同步模式，默认为非同步模式*/
+#define BB_CFG_SYNC_MODE                    BB_REQUEST(BB_REQ_CFG, 9)   /**<@attention 配置同步模式，默认为非同步模式*/
 #define BB_CFG_BR_HOP_POLICY                BB_REQUEST(BB_REQ_CFG, 10)  /**<@attention 配置BR的跳频策略*/
 #define BB_CFG_PWR_BASIC                    BB_REQUEST(BB_REQ_CFG, 11)  /**<@attention 配置功率参数*/
 #define BB_CFG_RC_HOP_POLICY                BB_REQUEST(BB_REQ_CFG, 12)  /**<@attention 配置选择性跳频策略*/
@@ -89,7 +90,10 @@ extern "C" {
 #define BB_CFG_LNA                          BB_REQUEST(BB_REQ_CFG, 14)  /**<@attention 配置LNA策略*/
 #define BB_CFG_RF_POLICY                    BB_REQUEST(BB_REQ_CFG, 15)  /**<@attention 配置射频B路自适应策略*/
 #define BB_CFG_SHARE_SLOT                   BB_REQUEST(BB_REQ_CFG, 16)  /**<@attention 配置共享时隙机制*/
-#define BB_CFG_PWR_EXTEND                   BB_REQUEST(BB_REQ_CFG, 17)  /**<@attention 配置扩展功率参数*/
+#define BB_CFG_AGC                          BB_REQUEST(BB_REQ_CFG, 17)  /**<@attention 配置扫频校准参数*/
+#define BB_CFG_AGIN                         BB_REQUEST(BB_REQ_CFG, 18)  /**<@attention 配置RSSI校准参数*/
+#define BB_CFG_PWR_BASIC_EX                 BB_REQUEST(BB_REQ_CFG, 19)  /**<@attention 配置扩展功率参数*/
+#define BB_CFG_RF_CALI                      BB_REQUEST(BB_REQ_CFG, 20)  /**<@attention 配置RF校准增益>*/
 
 // bb ioctl request type - get
 #define BB_GET_STATUS                       BB_REQUEST(BB_REQ_GET, 0)   /**<@attention 读取基带工作状态命令字*/
@@ -125,10 +129,14 @@ extern "C" {
 #define BB_GET_POWER_SAVE                   BB_REQUEST(BB_REQ_GET, 111) /**<@note 1V1模式低功耗手动周期*/
 #define BB_GET_RUN_SYS                      BB_REQUEST(BB_REQ_GET, 112) /**<@note 获取系统当前运行app*/
 #define BB_GET_POWER_OFFSET2                BB_REQUEST(BB_REQ_GET, 113) /**<@note 获取功率补偿值*/
-#define BB_GET_POWER_RANGE                  BB_REQUEST(BB_REQ_GET, 114) /**<@note 获取power范围*/
+#define BB_GET_CUSTOMER_KEY                 BB_REQUEST(BB_REQ_GET, 114) /**<@note 获取customer key*/
 #define BB_GET_BOOT_REASON                  BB_REQUEST(BB_REQ_GET, 115) /**<@note 获取重启原因*/
 #define BB_GET_CLEAN_MODE_MSG_CHECK         BB_REQUEST(BB_REQ_GET, 116) /**<@note 检测msg在纯净模式下是否合法*/
-#define BB_GET_RECOVERY_MODE                BB_REQUEST(BB_REQ_GET, 117) /**<@note 当前是否为恢复模式*/
+#define BB_GET_MCS_MODE                     BB_REQUEST(BB_REQ_GET, 117) /**<@note 读取指定SLOT的MCS模式*/
+#define BB_GET_RECOVERY_MODE                BB_REQUEST(BB_REQ_GET, 118) /**<@note 当前是否为恢复模式*/
+#define BB_GET_TX_PATH                      BB_REQUEST(BB_REQ_GET, 119) /**<@note 获取无线发射通道*/
+#define BB_GET_FREQ_POWER_OFFSET            BB_REQUEST(BB_REQ_GET, 120) /**<@note 获取频率折线功率补偿配置*/
+#define BB_GET_FREQ_POWER_LIMIT             BB_REQUEST(BB_REQ_GET, 121) /**<@note 获取频率折线功率限制配置*/
 
 #define BB_GET_PRJ_DISPATCH                 BB_REQUEST(BB_REQ_GET, 200) /**<@note 二级GET命令分发*/
 
@@ -164,10 +172,14 @@ extern "C" {
 #define BB_SET_LNA_MODE                     BB_REQUEST(BB_REQ_SET, 28)  /**<@note 设置LNA策略模式*/
 #define BB_SET_LNA                          BB_REQUEST(BB_REQ_SET, 29)  /**<@note 设置LNA bypass状态*/
 #define BB_SET_POWER_RANGE                  BB_REQUEST(BB_REQ_SET, 30)  /**<@note 设置power范围*/
-#define BB_FORCE_CLS_SOCKET                 BB_REQUEST(BB_REQ_SET, 31) /**<@note 强制关闭一个socket 可能会造成socket信息不同步*/
+#define BB_FORCE_CLS_SOCKET                 BB_REQUEST(BB_REQ_SET, 31)  /**<@note 强制关闭一个socket 可能会造成socket信息不同步*/
+#define BB_SET_BANDWIDTH_MODE               BB_REQUEST(BB_REQ_SET, 32)  /**<@note 设置频宽控制模式*/
 #define BB_SET_LOCAL_MAC                    BB_REQUEST(BB_REQ_SET, 33)  /**<@note 设置本机运行时MAC*/
-#define BB_SET_RETX_COUNT                   BB_REQUEST(BB_REQ_SET, 50)  /**<@note 设置重传次数*/
-#define BB_SET_ENTER_RECOVERY_MODE          BB_REQUEST(BB_REQ_SET, 51)  /**<@note 重启并进入恢复模式*/
+#define BB_SET_CUSTOMER_KEY                 BB_REQUEST(BB_REQ_SET, 34)  /**<@note 写入customer key*/
+#define BB_SET_ENTER_RECOVERY_MODE          BB_REQUEST(BB_REQ_SET, 35)  /**<@note 重启并进入恢复模式*/
+#define BB_SET_FREQ_POWER_OFFSET            BB_REQUEST(BB_REQ_SET, 36)  /**<@note 设置频率折线功率补偿配置*/
+#define BB_SET_FREQ_POWER_LIMIT             BB_REQUEST(BB_REQ_SET, 37)  /**<@note 设置频率折线功率限制配置*/
+#define BB_SET_CHANNEL_TABLE                BB_REQUEST(BB_REQ_SET, 38)  /**<@note 设置频点表*/
 
 // 以下为调试诊断类命令字
 #define BB_SET_REG                          BB_REQUEST(BB_REQ_SET, 100) /**<@note 基带寄存器写入命令字，本类型用于调试诊断*/
@@ -187,6 +199,8 @@ extern "C" {
 #define BB_SET_SINGLE_TONE                  BB_REQUEST(BB_REQ_SET, 114) /**<@note 单音信号，需要先进入debug模式*/
 #define BB_SET_PURE_SLOT                    BB_REQUEST(BB_REQ_SET, 115) /**<@note 纯图传模式，注意暂不支持退出*/
 #define BB_SET_FACTORY_POWER_OFFSET_SAVE    BB_REQUEST(BB_REQ_SET, 116) /**<@note 产测功率校准保存指令*/
+#define BB_SET_FRAME_PLOT_START             BB_REQUEST(BB_REQ_SET, 117) /**<@note 开关帧帧上报参数*/
+#define BB_SET_TR_SWITCH                    BB_REQUEST(BB_REQ_SET, 150) /**<@note 项目注册tr switch回调钩子*/
 
 #define BB_SET_PRJ_DISPATCH                 BB_REQUEST(BB_REQ_SET, 200) /**<@note 二级SET命令分发*/
 #define BB_SET_PRJ_DISPATCH2                BB_REQUEST(BB_REQ_SET, 201) /**<@note 二级SET命令分发(USB),1K缓存*/
@@ -207,6 +221,7 @@ extern "C" {
 #define BB_RPC_GET_HOTPLUG_EVENT            BB_REQUEST(BB_REQ_RPC, 3) /**<@note 获取设备上下线通知*/
 #define BB_RPC_SOCK_BUF_STA                 BB_REQUEST(BB_REQ_RPC, 4) /**<@note 查询socket buff状态*/
 #define BB_RPC_TEST                         BB_REQUEST(BB_REQ_RPC, 5) /**<@note 测试服务器连通性*/
+#define BB_RPC_GET_VER                      BB_REQUEST(BB_REQ_RPC, 6) /**<@note 获取daemon版本号*/
 
 #define BB_RPC_SERIAL_LIST                  BB_REQUEST(BB_REQ_PLAT_CTL, 0) /**<@note 获取串口列表*/
 #define BB_RPC_SERIAL_SETUP                 BB_REQUEST(BB_REQ_PLAT_CTL, 1) /**<@note 设置串口*/
@@ -214,57 +229,11 @@ extern "C" {
 #define BB_RPC_GET_DEBUG_LV                 BB_REQUEST(BB_REQ_PLAT_CTL, 3) /**<@note 获取daemon 打印等级*/
 #define BB_RPC_HOST_EXEC                    BB_REQUEST(BB_REQ_PLAT_CTL, 4) /**<@note host 执行程序*/
 
-#define AR_NET_MAX_NET_NAME_LEN             32  /**<@note 网络设备名最长长度*/
-#define AR_NET_MAC_LEN                      6   /**<@note 网络mac地址长度*/
-
-#define AR_NET_NETIF_T_PORT                 0   /**<@note 网络设备类型port*/
-#define AR_NET_NETIF_T_VLAN                 1   /**<@note 网络设备类型vlan*/
-
-/** Define ioctl */
-#define AR_CMD_MAGIC 'A'
-
-#define AR_CHARDEV_IOCTL_NET_GET_VERSION        _IO(AR_CMD_MAGIC, 0)    /** Get the version of net dev */
-#define AR_CHARDEV_IOCTL_NET_HANDLE_NETIF       _IO(AR_CMD_MAGIC, 1)    /** Create/Destroy the net ddev */
-#define AR_CHARDEV_IOCTL_NET_RELEASE            _IO(AR_CMD_MAGIC, 2)    /** Release the char dev resource request by user */
-
-#define AR_CHARDEV_IOCTL_GET_VERSION            _IO(AR_CMD_MAGIC, 10)   /** Get the version of driver */
-#define VERSION_STR_LEN                         64
-
 /** @} */  /** <!-- ==== Macro Definition end ==== */
 
 /******************************* Structure Definition ***************************/
 /** \addtogroup      BB_API */
 /** @{ */  /** <!-- [BB_API] */
-
-/**网络设备创建数据结构*/
-PACK(typedef struct ar_netif_s
-{
-    unsigned char op_type;                          /** <@note Operations, refers to AR_NET_OP_xxx */
-    unsigned char netif_id;                         /** <@note (OUT)netif id (create or lookup) */
-    unsigned char type;                             /** <@note Port/Vlan, refers to AR_NET_NETIF_T_xxx */
-    unsigned char slot;                             /** <@note bb socket slot */
-    unsigned short vlan;                            /** <@note vlan when type is AR_NET_NETIF_T_VLAN */
-    unsigned short socket_port;                     /** <@note bb socket port */
-    unsigned char mac[AR_NET_MAC_LEN];              /** <@note mac of the net device */
-    unsigned char name[AR_NET_MAX_NET_NAME_LEN];    /** <@note name of the net device */
-    unsigned long tx_buf_size;                      /** <@note Tx buffer of the socket */
-    unsigned long rx_buf_size;                      /** <@note Rx buffer of the socket */
-}) ar_netif_t;
-
-/** Define dev type */
-PACK(typedef struct _ar_chrdev_get_version_s {
-    char version[VERSION_STR_LEN];
-}) ar_chrdev_get_version_t;
-
-/**网络设备命令*/
-enum ar_net_operate_code_e
-{
-    AR_NET_OP_CREATE,                               /**<@note 创建设备*/
-    AR_NET_OP_DESTORY,                              /**<@note 销毁设备*/
-    AR_NET_OP_GET,                                  /**<@note 获取设备信息*/
-    AR_NET_OP_BUF_RESIZE,                           /**<@note 调整设备socket buffer*/
-    AR_NET_OP_MAX,
-};
 
 /**定义基带MAC地址*/
 typedef struct {
@@ -297,6 +266,13 @@ typedef enum {
     BB_ROLE_DEV,                                                /**<@note 网络叶节点设备*/
     BB_ROLE_MAX
 } bb_role_e;
+
+/**定义基带主从角色*/
+typedef enum {
+    BB_SIDE_MASTER,                                             /**<@note 主设备*/
+    BB_SIDE_SLAVE,                                              /**<@note 从设备*/
+    BB_SIDE_MAX
+} bb_side_e;
 
 /**定义基带工作模式*/
 typedef enum {
@@ -400,6 +376,9 @@ typedef enum {
     BB_EVENT_MCS_CHANGE_END,                                    /**<@note MCS等级发生变化结束事件*/
     BB_EVENT_PRJ_DISPATCH2_UART,                                /**<@note 项目自定义事件分发2(用于UART RPC)*/
     BB_EVENT_PRJ_DISPATCH2_SDIO,                                /**<@note 项目自定义事件分发2(用于SDIO RPC)*/
+    BB_EVENT_BW_CHANGE,                                         /**<@note BW发生变化事件*/
+    BB_EVENT_FRAME_PLOT,                                        /**<@note 帧帧上报*/
+    BB_EVENT_FREQ_CHANGE,                                       /**<@note 工作频点发生变化事件*/
     BB_EVENT_MAX
 } bb_event_e;
 
@@ -513,12 +492,20 @@ typedef enum {
 } bb_phy_pwr_mode_e;
 
 /**定义8030 BR跳频模式*/
+#if BB_CONFIG_BR_HOP_FREQS_MAX_NUM > 0
+typedef enum {
+    BB_BR_HOP_MODE_MANU,                                        /**<@note 固定模式*/
+    BB_BR_HOP_MODE_AUTO,                                        /**<@note 自动跳频*/
+    BB_BR_HOP_MODE_MAX
+} bb_br_hop_mode_e;
+#else
 typedef enum {
     BB_BR_HOP_MODE_FIXED,                                       /**<@note 固定模式*/
     BB_BR_HOP_MODE_FOLLOW_UP_CHAN,                              /**<@note BR信道与AP的上行信道保持同步*/
     BB_BR_HOP_MODE_HOP_ON_IDLE,                                 /**<@note BR信道在无DEV连接时，周期性改变*/
     BB_BR_HOP_MODE_MAX
 } bb_br_hop_mode_e;
+#endif
 
 typedef enum {
     BB_BR_HOP_ON_IDLE_ROUND_HOP,                                /**<@note BR hop on idle循环跳频*/
@@ -552,17 +539,6 @@ typedef enum {
     BB_MCS_AUTO_MODE_POLICY_MAX
 } bb_mcs_auto_mode_policy_e;
 
-#if (BB_CONFIG_AUTH_MODE_CE == 1)
-/**定义CE认证模式*/
-typedef enum {
-    BB_CE_AUTH_MODE_INVALID,
-    BB_CE_AUTH_MODE_CHANGE_CHANNEL,                             // change channel safe
-    BB_CE_AUTH_MODE_CHANGE_CHANNEL_FORSE,                       // change as soon as possible
-    BB_CE_AUTH_MODE_CLOSE_PA,
-    BB_CE_AUTH_MODE_MAX,
-} bb_ce_auth_mode_e;
-#endif
-
 /**定义链路状态变化的事件结构体*/
 typedef struct {
     uint8_t         slot;                                       /**<@note 链路状态发生位置, 类型：bb_slot_e*/
@@ -577,6 +553,14 @@ typedef struct {
     uint8_t         cur_mcs;                                    /**<@note 当前MCS等级, 类型：bb_phy_mcs_e*/
     uint8_t         prev_mcs;                                   /**<@note 之前MCS等级, 类型：bb_phy_mcs_e*/
 } bb_event_mcs_change_t;
+
+/**定义频宽变化的事件结构体*/
+typedef struct {
+    uint8_t         slot;                                       /**<@note BW发生位置, 类型：bb_slot_e*/
+    uint8_t         dir;                                        /**<@note BW变化的方向, 类型：bb_dir_e*/
+    uint8_t         cur_bw;                                     /**<@note 当前BW, 类型：bb_bandwidth_e*/
+    uint8_t         prev_bw;                                    /**<@note 当前BW, 类型：bb_bandwidth_e*/
+} bb_event_bw_change_t;
 
 /**定义MCS等级变化的事件结构体*/
 typedef struct {
@@ -593,6 +577,15 @@ typedef struct {
     uint8_t         prev_chan;                                  /**<@note 之前信道, 类型：uint8_t 信道索引值*/
 } bb_event_chan_change_t;
 
+/**定义频点发生变化的事件结构体*/
+typedef struct {
+    uint8_t         slot;                                       /**<@attention 发生信道变化的位置，类型：bb_slot_e。如果dir参数为RX，则本字段无意义，即当前SDK，RX侧信道改变时，对所有SLOT同步改变*/
+    uint8_t         dir;                                        /**<@note 信道变化的方向, 类型：bb_dir_e*/
+    uint8_t         padding[2];
+    uint32_t        cur_freq_khz;                               /**<@note 当前频点*/
+    uint32_t        prev_freq_khz;                              /**<@note 之前频点*/
+} bb_event_freq_change_t;
+
 typedef struct {
     uint16_t        snr;                                        /**<@note 信噪比*/
     uint16_t        ldpc_err;                                   /**<@note LDPC错误数*/
@@ -601,7 +594,10 @@ typedef struct {
     uint8_t         gain_b;                                     /**<@note B路天线GAIN*/
     uint8_t         mcs_rx : 5;                                 /**<@note RX MCS*/
     uint8_t         fch_lock : 1;                               /**<@note FCH LOCK状态*/
-    uint8_t         padding[23];                                /**<@note padding to 32 Bytes*/
+    uint8_t         br_power;                                   /**<@note br发射功率*/
+    uint8_t         power;                                      /**<@note slot本地发射功率*/
+    uint8_t         peer_power;                                 /**<@note slot对端发射功率*/
+    uint8_t         padding[20];                                /**<@note padding to 32 Bytes*/
 } bb_plot_data_t;
 
 /**定义异步Plot Data数据结构*/
@@ -667,6 +663,8 @@ typedef enum {
 typedef struct bb_sock_opt_t {
     uint32_t tx_buf_size;                                       /**<@attention 用于指定发送buffer的大小，创建的socket具备TX属性时有效*/
     uint32_t rx_buf_size;                                       /**<@attention 用于指定接收buffer的大小，创建的socket具备RX属性时有效*/
+    void*    tx_buf;                                            /**<@attention 仅芯片侧有效 由8030侧应用指定tx buffer的内存地址 20250205*/
+    void*    rx_buf;                                            /**<@attention 仅芯片侧有效 由8030侧应用指定rx buffer的内存地址 20250205*/
 } bb_sock_opt_t;
 
 /**定义基本内存块*/
@@ -744,22 +742,39 @@ typedef struct {
     bb_mac_t        dev_mac;                                    /**<@note DEV自己的MAC*/
 } bb_conf_dev_t;
 
-/**定义配置命令BB_CFG_AP_SYNC_MODE的输入参数结构*/
+/**定义配置命令BB_CFG_SYNC_MODE的输入参数结构*/
 typedef struct {
-    uint8_t         enable;                                     /**<@note 使能AP同步模式*/
-    uint8_t         master;                                     /**<@note AP同步模式中Master或Slave*/
-    uint8_t         pin_group;                                  /**<@note PIN GROUP 类型：AR_PIN_GROUP*/
-    uint8_t         pin_port;                                   /**<@note pin port，PIN GROUP中的port位置*/
-} bb_conf_ap_sync_mode_t;
+    uint8_t         enable;                                     /**<@note 使能同步模式*/
+    uint8_t         master;                                     /**<@note 同步模式中Master或Slave*/
+    uint8_t         pin_group;                                  /**<@note PIN GROUP 类型：AR_PIN_GROUP 注：仅AP侧有效*/
+    uint8_t         pin_port;                                   /**<@note pin port，PIN GROUP中的port位置 注：仅AP侧有效*/
+} bb_conf_sync_mode_t;
 
+#if BB_CONFIG_BR_HOP_FREQS_MAX_NUM > 0
+/**定义配置命令BB_CFG_BR_HOP_POLICY的输入参数结构*/
+typedef struct {
+    uint16_t        time;                                           /**<@note 几毫秒跳一次频点*/
+    uint8_t         hop_mode;                                       /**<@note BR跳频模式 bb_br_hop_mode_e*/
+    uint8_t         chan_num;                                       /**<@note 指定chan_freq中的频点数量*/
+    uint32_t        chan_freq[BB_CONFIG_BR_HOP_FREQS_MAX_NUM];  /**<@note 频点表 单位：KHz*/
+} bb_conf_br_hop_policy_t;
+
+typedef struct {
+    bb_conf_br_hop_policy_t info;
+    uint8_t  rsv[128];
+} bb_conf_br_hop_policy_api_t;
+#else
 /**定义配置命令BB_CFG_BR_HOP_POLICY的输入参数结构*/
 typedef struct {
     uint8_t         hop_mode;                                   /**<@note BR跳频模式 */
     uint8_t         hop_on_idle_dir_bmp;                        /**<@note BR跳频(IDLE)方向BMP*/
     uint8_t         hop_on_idle_cnt;                            /**<@note BR跳频(IDLE)帧计数*/
     uint8_t         hop_on_idle_policy;                         /**<@note BR跳频(IDLE)依据*/
-    uint8_t         hop_on_idle_pause;                          /**<@note BR跳频FEM休眠帧计数*/
+    uint8_t         chan_num;                                   /**<@note 指定chan_freq中的频点数量*/
+    uint8_t         chan_id;                                    /**<@note 指定chan_freq中生效的频点*/
+    uint32_t        chan_freq[BB_CONFIG_MAX_CHAN_NUM];          /**<@note 频点表 单位：KHz*/
 } bb_conf_br_hop_policy_t;
+#endif
 
 /**定义自适应跳频的触发条件项*/
 typedef struct {
@@ -769,22 +784,17 @@ typedef struct {
 
 /**定义自适应跳频触发参数*/
 typedef struct {
-    uint8_t         item_num;
-    uint8_t         blind_hop_count;
-    uint16_t        blind_hop_period;
+    uint16_t        blind_hop_period;                           /**<@note 盲跳限制时间长度*/
+    uint8_t         blind_hop_count;                            /**<@note 触发盲跳额错误次数*/
+    uint8_t         hop_stat_win_err : 1;                       /**<@note 是否把FCH错误当成LDPC错误处理*/
+    uint8_t         item_num         : 7;
     bb_chan_hop_item_t items[BB_CONFIG_MAX_CHAN_HOP_ITEM_NUM];
 } bb_chan_hop_para_t;
-
-typedef struct {
-    uint8_t         gain;
-    uint8_t         retx_cnt;
-} bb_chan_hop_multi_item_t;
 
 typedef struct {
     uint8_t         retx_cnt;
     uint8_t         power_diff;
     uint8_t         chan_inr;
-    bb_chan_hop_multi_item_t hop_tab[3];
 } bb_chan_hop_multi_para_t;
 
 typedef struct {
@@ -814,7 +824,8 @@ typedef struct {
 
 /**定义配置命令BB_CFG_RC_POLICY的输入参数结构*/
 typedef struct {
-    uint8_t         enable;                                     /**<@note 使能选择性跳频策略*/
+    uint8_t         enable  : 1;                                /**<@note 使能选择性跳频策略*/
+    uint8_t         rx_role : 2;                                /**<@note 接受角色*/
     uint8_t         max_freq_num;                               /**<@note 最大的循环跳频数量 最多4个*/
     uint8_t         stat_period;                                /**<@note 信号质量统计周期*/
     uint8_t         remove_percent;                             /**<@note 删除信道的错误百分比*/
@@ -826,6 +837,7 @@ typedef struct {
     uint8_t         init_band;                                  /**<@note 初始band，如果为BB_BAND_MAX，则尝试自动选频段*/
     int8_t          init_chan;                                  /**<@note 初始信道，如果<0，则启动ACS起机自动选频功能*/
     int8_t          bonus_low_band;                             /**<@note 初始化选择频段时低频段底噪bonus db*/
+    int8_t          bonus_edge_chan;                            /**<@note 初始化选择频点时边缘信道底噪bonus db*/
     uint8_t         flags;                                      /**<@note 信道策略标志位*/
     uint8_t         fs_bw;                                      /**<@note 扫频频宽     类型：bb_bandwidth_e*/
     uint8_t         chan_num;                                   /**<@note 指定chan_freq中的频点数量*/
@@ -924,12 +936,13 @@ typedef struct {
     uint8_t pwr_max;                                            /**<@note 功率自适应打开时，功率区间最大值，当功率自适应关闭时，为系统功率初始值*/
 }bb_phy_pwr_basic_t;
 
-// power basic cfg expansion
+/**定义配置命令BB_CFG_PWR_BASIC_EX的输入参数结构*/
 typedef struct {
-    uint8_t link_auto;
-    uint8_t auto_reset;
-    uint8_t manu_init;
-    uint8_t manu_reset;
+    uint8_t link_auto           : 1;                            /**<@note 自动连接模式*/
+    uint8_t auto_reset          : 5;                            /**<@note 功率自适应打开时，基带reset时功率*/
+    uint8_t manu_init           : 5;                            /**<@note 功率自适应关闭时，基带初始功率*/
+    uint8_t manu_reset          : 5;                            /**<@note 功率自适应关闭时，基带重置功率*/
+    uint8_t csma_offset         : 4;                            /**<@note csma功率偏移*/
 } bb_phy_pwr_basic_ex_t;
 
 typedef struct {
@@ -941,6 +954,7 @@ typedef struct {
 
 /**定义配置命令BB_CFG_POWER_SAVE的输入参数结构*/
 typedef struct {
+    uint8_t         master;                                     /**<@note 节能主控端 类型：bb_role_e*/
     uint8_t         flags;                                      /**<@note 1=自动模式 0=手动模式*/
     uint8_t         period_fix;                                 /**<@note 手动模式固定周期*/
     bb_auto_power_save_t auto_policy;                           /**<@note 自动模式策略*/
@@ -990,18 +1004,44 @@ typedef struct {
 } bb_conf_share_slot_t;
 #endif
 
-#if (BB_CONFIG_AUTH_MODE_CE == 1)
+#if BB_CONFIG_AUTH_MODE_CE
 /**定义配置命令BB_CFG_AUTH_MODE的输入参数结构*/
 typedef struct {
+    uint8_t         timeout;                                    /**<@note 频点禁用时长，单位秒, -1代表永不恢复*/
     uint8_t         en : 1;                                     /**<@note 使能ce认证*/
-    uint8_t         anti_interference : 3;                      /**<@note 抗干扰数*/
     uint8_t         mode : 4;                                   /**<@note ce认证模式, bb_ce_auth_mode_e*/
-    int8_t          thres;                                      /**<@note 跳频阈值，单位：db*/
-    int8_t          thres_5g;                                   /**<@note 5G跳频阈值，单位：db*/
-    uint8_t         timeout : 6;                                /**<@note 频点禁用时长，单位秒*/
-    uint8_t         enter_dbg_time : 2;                         /**<@note 连接成功后多长时间进入dbg模式，0代表不进入debug模式，单位秒*/
+    uint8_t         start_time : 3;                             /**<@note 连接成功后几秒进入认证模式*/
+    uint8_t         anti_interference : 2;                      /**<@note 抗干扰数*/
+    uint8_t         pa_close : 3;                               /**<@note 关pa几帧*/
+    uint8_t         pa_t : 3;                                   /**<@note pa_t=pa_close+pa_open*/
+    uint8_t         disconn : 1;                                /**<@note 是否允许断联*/
+    uint8_t         autojump : 1;                               /**<@note 是否自动跳频*/
+    uint8_t         fs_idx : 3;                                 /**<@note 第几个短扫频用于扫ce，0表全部，7表自动检测*/
+    uint8_t         add_fs;                                     /**<@note 是否新增短扫频,0xff表默认*/
+    uint8_t         rsv;
+    int8_t          thres[BB_BAND_MAX][BB_BW_MAX];              /**<@note 跳频阈值，单位：db*/
 } bb_conf_ce_t;
 #endif
+
+/**定义配置命令BB_CFG_AGC的输入参数结构*/
+typedef struct {
+    uint8_t agc_gain;
+    int8_t agc_gain_offset;
+    int8_t gain_offset;
+} bb_conf_agc_t;
+
+/**定义配置命令BB_CFG_GAIN的输入参数结构*/
+typedef struct {
+    int8_t gain_a_offset_low;
+    int8_t gain_b_offset_low;
+    int8_t gain_a_offset_high;
+    int8_t gain_b_offset_high;
+    int8_t gain_a_thres;
+    int8_t gain_b_thres;
+} bb_conf_gain_t;
+
+/**定义配置命令BB_CFG_RF_CALI的输入参数结构*/
+typedef uint8_t bb_conf_rf_cali_t[BB_BAND_MAX];
 
 // ################# get struct definition #####################
 
@@ -1019,7 +1059,9 @@ typedef struct {
 /**定义链路状态*/
 typedef struct {
     uint8_t         state;                                      /**<@note 链路层状态 类型：bb_link_state_e*/
-    uint8_t         rx_mcs;                                     /**<@note 链路层接收MCS      类型：bb_phy_mcs_e*/
+    uint8_t         rx_mcs     : 5;                             /**<@note 链路层接收MCS      类型：bb_phy_mcs_e*/
+    uint8_t         pair_state : 1;                             /**<@note 处于配对状态*/
+    uint8_t         padding    : 2;
     bb_mac_t        peer_mac;                                   /**<@note 对端MAC*/
 } bb_link_status_t;
 
@@ -1106,26 +1148,37 @@ typedef struct {
     int32_t         distance[BB_SLOT_MAX];                      /**<@note 测距结果，无测距结果时为-1，>=为测距结果，用户未指定slot位置的值未知*/
 } bb_get_distc_result_out_t;
 
-/**定义读取命令BB_GET_TX_MCS的输入参数结构*/
+/**定义读取命令BB_GET_MCS的输入参数结构*/
 typedef struct {
     uint8_t         dir;                                        /**<@note 获取MCS的方向 类型：bb_dir_e*/
     uint8_t         slot;                                       /**<@note 获取MCS的slot 类型：bb_slot_e*/
 } bb_get_mcs_in_t;
 
-/**定义读取命令BB_GET_TX_MCS的输出参数结构*/
+/**定义读取命令BB_GET_MCS的输出参数结构*/
 typedef struct {
     uint8_t         mcs;                                        /**<@note 当前slot的MCS，类型：bb_phy_mcs_e*/
     uint32_t        throughput;                                 /**<@note 当前slot的理论吞吐率（数据发送能力）单位：kbps*/
 } bb_get_mcs_out_t;
 
+/**定义设置命令BB_GET_MCS_MODE的输入参数结构*/
+typedef struct {
+    uint8_t         slot;                                       /**<@attention MCS模式控制的SLOT位置 类型：bb_slot_e*/
+} bb_get_mcs_mode_in_t;
+
+/**定义设置命令BB_GET_MCS_MODE的输出参数结构*/
+typedef struct {
+    uint8_t         auto_mode;                                  /**<@note MCS控制模式 1：MCS自适应，0：MCS手工模式，只有在手工模式才支持设置MCS挡位*/
+} bb_get_mcs_mode_out_t;
+
 /**定义读取命令BB_GET_CHAN_INFO的输出参数结构*/
 typedef struct {
     uint8_t         chan_num;                                   /**<@note 信道数量*/
     uint8_t         auto_mode;                                  /**<@note 信道自适应 1：自适应 0：手动*/
-    uint8_t         acs_chan;                                   /**<@note ACS信道，启动选频时的信道*/
+    uint8_t         acs_chan;                                   /** depreted*/
     uint8_t         work_chan;                                  /**<@attention 工作信道，不同基带模式及不同角色对工作信道定义有区别，一般来说，work_chan指示当前设备收信号的工作信道*/
-    uint32_t        freq[BB_CONFIG_MAX_CHAN_NUM];               /**<@note 信道频点 单位：KHz*/
-    int32_t         power[BB_CONFIG_MAX_CHAN_NUM];              /**<@note 扫频均化能量 单位：dbm*/
+    uint8_t         padding[220];
+    uint32_t        freq[100];                                  /**<@note 信道频点 单位：KHz*/
+    int32_t         power[100];                                 /**<@note 扫频均化能量 单位：dbm*/
 } bb_get_chan_info_out_t;
 
 /**定义读取命令BB_GET_REG的输入参数结构*/
@@ -1264,9 +1317,7 @@ typedef struct {
     uint32_t    tx_freq_khz;             /**<@note TX freq khz*/
     bb_lfs_quality_t lfs_low_band;       /**<@note 2G长扫频质量*/
     bb_lfs_quality_t lfs_high_band;      /**<@note 5G长扫频质量*/
-    uint8_t     main_loc;                /**<@note 接收主径*/
-    uint8_t     sync_num;                /**<@note 同步设备数量*/
-    uint8_t     rev[46];
+    uint8_t     rev[48];
 } bb_info_t;
 
 /**定义读取命令BB_GET_1V1_INFO的输出参数*/
@@ -1327,20 +1378,18 @@ typedef enum {
     BB_REMOTE_TYPE_COMPLIANCE_MODE,
     BB_REMOTE_TYPE_PWR_AUTO2,
     BB_REMOTE_TYPE_TARGET_PWR,
-    BB_REMOTE_TYPE_AUTO_MCS,
     BB_REMOTE_TYPE_MAX
 } bb_remote_type_e;
 
 typedef struct {
     uint8_t auto_band;                                          /**<@note 1=频段自适应，0=频段手动控制*/
     uint8_t target_band;                                        /**<@note 设置的目标band*/
-    uint8_t auto_chan;                                          /**<@note 1=信道自适应，0=信道手动控制*/
+    uint8_t chan_mode;                                          /**<@note 1=信道自适应，0=信道手动控制*/
     uint8_t target_chan;                                        /**<@note 设置的目标信道*/
     uint8_t compliance_mode;                                    /**<@note 1=合规模式，0=自由模式*/
     uint8_t pwr_auto2;                                           /**<@note 1=功率自适应，0=功率手动模式*/
     uint8_t target_pwr;                                         /**<@note 设置目标功率*/
-    uint8_t auto_mcs;
-    uint8_t padding[120];                                       /***/
+    uint8_t padding[121];                                       /***/
 } bb_remote_setting_t;
 
 typedef struct {
@@ -1427,6 +1476,14 @@ typedef struct {
 /**定义设置命令BB_SET_CANDIDATES的输入参数结构*/
 typedef bb_conf_candidates_t bb_set_candidate_t;                /**<@note 复用配置候选人输入结构*/
 
+/**定义设置命令BB_SET_CUSTOMER_KEY的输出参数结构*/
+#define BB_CUSTOMER_KEY_LEN 8                                   /**<@note customer key可用空间8个字节*/
+typedef struct {
+    uint8_t         addr;                                       /**<@note customer key的写入地址,共8个字节,按照4个字节倍数写入:0-从地址0开始写入, 1-从地址4开始写入*/
+    uint8_t         len;                                        /**<@note customer key的写入长度*/
+    uint8_t         data[BB_CUSTOMER_KEY_LEN];                  /**<@note customer key*/
+} bb_set_customer_key_in_t;
+
 /**定义设置命令BB_SET_REG的输入参数结构*/
 typedef struct {
     uint16_t        offset;                                     /**<@note 设置基带寄存器偏移量，应<BB_REG_PAGE_NUM*BB_REG_PAGE_SIZE*/
@@ -1492,6 +1549,9 @@ typedef struct  {
     uint8_t         path_bmp;                                   /**<@attention 射频通道的bitmap*/
 } bb_set_tx_path_t;
 
+/**定义读取命令BB_GET_TX_PATH的输入参数结构*/
+typedef bb_set_tx_path_t bb_get_tx_path_t;
+
 /**定义设置命令BB_SET_RX_PATH的输入参数结构*/
 typedef bb_set_tx_path_t bb_set_rx_path_t;                      /**<@attention 射频通道的bitmap*/
 
@@ -1505,6 +1565,78 @@ typedef struct {
     uint8_t         dir;                                        /**<@attention 射频收发方向 类型：bb_dir_e*/
     uint8_t         state;                                      /**<@attention RF目标状态 0：关 1：开*/
 } bb_set_rf_t;
+
+#if BB_CONFIG_FRAME_PLOT_MAX_CACHE > 0
+typedef struct {
+    uint32_t        timestamp;                                  /**<@note 帧帧上报发生的时间*/
+    int             freq_off;                                   /**<@note 频偏*/
+
+    uint16_t        frame_no;                                   /**<@note DEV自己的帧号，只dev生效*/
+    uint16_t        frame_no_peer;                              /**<@note DEV收到ap的帧号，只dev生效*/
+    uint16_t        frame_no_sync;                              /**<@note 同步的帧号*/
+
+    uint8_t         gain_a;                                     /**<@note A路天线GAIN*/
+    uint8_t         gain_b;                                     /**<@note B路天线GAIN*/
+
+    uint16_t        snr;                                        /**<@note 信噪比*/
+    uint16_t        pre_snr;
+    uint16_t        ldpc_err;                                   /**<@note LDPC错误数*/
+    uint16_t        ldpc_num;                                   /**<@note LDPC总数*/
+
+    uint32_t        work_ch;
+    uint32_t        br_ch;
+
+    uint8_t         work_bw : 3;
+    uint8_t         br_bw : 3;
+    uint8_t         fch_lock : 2;                               /**<@note FCH LOCK状态*/
+
+    uint8_t         loc;                                        /**<@note 主径*/
+
+    int8_t          fs_power;                                   /**<@note 上次扫频的结果*/
+    uint8_t         fs_ch : 5;                                  /**<@note 上次扫频的频点*/
+    uint8_t         fs_bw : 3;                                  /**<@note 上次扫频的带宽*/
+
+    uint8_t         mcs_tx   : 5;                               /**<@note TX MCS*/
+    uint8_t         mcs_rx   : 5;                               /**<@note RX MCS*/
+    uint8_t         power_tx : 5;                               /**<@note 发送功率*/
+    uint8_t         power_rx : 5;                               /**<@note 接收功率*/
+
+    uint16_t        priv_state;
+    uint16_t        priv_state_err;
+    uint8_t         priv_id[4];
+    uint8_t         priv_8[8];                                  /**<@note 私有，需要全部上报*/
+    uint16_t        priv_16[4];
+    uint32_t        priv_32[2];
+
+#if 0
+    uint8_t         lfs_result : 3;                             /**<@note 长扫频结果的可靠度，bb_exrf_result_e*/
+    uint8_t         lfs_bw;                                     /**<@note 长扫频的带宽*/
+    uint8_t         lfs_ch;                                     /**<@note 长扫频的信道*/
+    uint16_t        lfs_frame_no;                               /**<@note 长扫频的帧号*/
+    int8_t          lfs_rsrp[BB_MAX_SNR_CHAN_SIZE];             /**<@note 2*2 的剔除噪声后的信号能量*/
+    uint16_t        lfs_snr[BB_MAX_SNR_CHAN_SIZE];              /**<@note 2*2 的 SNR，TX1->RX1,TX1->RX2,TX2->RX1,TX2->RX2*/
+    uint8_t         lfs_gain_a;                                 /**<@note 长扫频结果*/
+    uint8_t         lfs_gain_b;                                 /**<@note 长扫频结果*/
+    uint8_t         lfs_group_id;                               /**<@note 长扫频的天线组合，如果大于等于组数目，说明是autoband*/
+    uint16_t        mcs_tx_real : 5;                            /**<@note ERAL TX MCS*/
+#endif
+} bb_frame_plot_t;
+
+typedef struct {
+    bb_frame_plot_t base;
+    uint8_t         rsv[184];
+} bb_frame_plot_api_t;
+
+typedef struct {
+    uint8_t  cache;                                             /**<@note 缓存多少帧一起上报，0代表不上报*/
+    uint8_t  limit;                                             /**<@note 隔几帧记录一次，0代表每帧记录*/
+} bb_frame_cfg_t;
+
+typedef struct {
+    bb_frame_cfg_t base;
+    uint8_t         rsv[200];
+} bb_frame_cfg_api_t;
+#endif
 
 /**定义设置命令BB_SET_POWER_OFFSET的输入参数结构*/
 typedef struct  {
@@ -1539,17 +1671,10 @@ typedef struct  {
     uint8_t         rsv[2];                                     /**<@note 保留字段*/
 } bb_get_power_offset2_out_t;
 
-/**定义设置命令BB_GET_POWER_RANGE的输入参数结构*/
-typedef struct  {
-    uint8_t         rsv[32];                                    /**<@note 保留字段*/
-} bb_get_power_range_in_t;
-
-/**定义设置命令BB_GET_POWER_RANGE的输出参数结构*/
-typedef struct  {
-    uint8_t         pwr_min;                                    /**<@note 最小power, 范围[5,32]*/
-    uint8_t         pwr_max;                                    /**<@note 最大power, 范围[5,32]*/
-    uint8_t         rsv[30];                                    /**<@note 保留字段*/
-} bb_get_power_range_out_t;
+/**定义设置命令BB_GET_CUSTOMER_KEY的输出参数结构*/
+typedef struct {
+    uint8_t         data[BB_CUSTOMER_KEY_LEN];                  /**<@note customer key*/
+} bb_get_customer_key_out_t;
 
 /**定义设置命令BB_SET_HOT_UPGRADE_WRITE的输入参数结构*/
 typedef struct {
@@ -1584,7 +1709,7 @@ typedef struct {
 
 /**定义设置命令BB_SET_FRAME_CHANGE的输入参数结构*/
 typedef struct {
-    uint8_t mode;                                               /**<@note mode=1执行交换，mode=0恢复原始帧结构*/
+    uint8_t mode;                                               /**<@note mode=1执行交换(40M), mode=2(20M)，mode=3(10M), mode=0恢复原始帧结构*/
 } bb_set_frame_change_t;
 
 /**定义设置命令BB_SET_COMPLIANCE_MODE的输入参数结构*/
@@ -1613,18 +1738,17 @@ typedef struct  {
     bb_remote_setting_t setting;                                /**<@note 设置结构体*/
 } bb_set_remote_t;
 
-typedef struct {
-    uint8_t             slot;
-    uint8_t             padding;
-    int16_t             retx_count;
-} bb_set_retx_count_t;
-
 /**定义设置命令BB_SET_BANDWIDTH的输入参数结构*/
 typedef struct {
     uint8_t             slot;                                   /**<@note 预留参数*/
     uint8_t             dir;                                    /**<@note 切换bandwidth的方向 类型：bb_dir_e*/
     uint8_t             bandwidth;                              /**<@note 目标bandwidth 类型：bb_bandwidth_e*/
 } bb_set_bandwidth_t;
+
+typedef struct {
+    uint8_t             slot;                                   /**<@note 目标slot 类型：bb_slot_e*/
+    uint8_t             mode;                                   /**<@note 1=频宽自适应 0=频宽手动控制*/
+} bb_set_bandwidth_mode_t;
 
 /**定义设置命令BB_SET_POWER_SAVE_MODE的输入参数结构*/
 typedef struct {
@@ -1668,6 +1792,58 @@ typedef struct {
     uint8_t refresh;                                            /**<@note 是否刷新当前功率*/
     uint8_t rsv[28];
 } bb_set_power_range_in_t;
+
+/**定义tr switch hook的参数结构*/
+typedef struct {
+    uint8_t     user;                                           /**<@note 基带用户 类型：bb_user_e*/
+    uint8_t     dir;                                            /**<@note 收发方向 类型：bb_dir_e*/
+    uint8_t     padding[2];
+    uint32_t    freq_khz;                                       /**<@note 收发频点*/
+} bb_tr_switch_t;
+
+#if (BB_CONFIG_FREQ_PWR_OFFSET == 1)
+/**定义频率功率补偿结构体*/
+typedef struct {
+    uint32_t freq_khz;                                          /**<@note 频率（kHz） */
+    int8_t   path_a_offset;                                     /**<@note A路补偿值 */
+    int8_t   path_b_offset;                                     /**<@note B路补偿值 */
+} bb_freq_pwr_offset_t;
+
+/**定义BB_SET_FREQ_POWER_OFFSET设置频率功率补偿输入结构体*/
+typedef struct {
+    bb_freq_pwr_offset_t               offset_list[96];         /**<@note 频率功率补偿列表*/
+    uint8_t                            size;                    /**<@note 列表大小*/
+    uint8_t                            reserved[3];             /**<@note 保留空间*/
+} bb_set_freq_power_offset_in_t;
+
+/**定义BB_GET_FREQ_POWER_OFFSET获取频率功率补偿输出结构体*/
+typedef bb_set_freq_power_offset_in_t bb_get_freq_power_offset_out_t;
+#endif /* BB_CONFIG_FREQ_PWR_OFFSET == 1 */
+
+#if (BB_CONFIG_FREQ_PWR_LIMIT == 1)
+/**定义频率功率限制结构体*/
+typedef struct {
+    uint32_t freq_khz;                                          /**<@note 频率（kHz） */
+    uint8_t  max_pwr;                                           /**<@note 最大功率值 */
+} bb_freq_pwr_limit_t;
+
+/**定义BB_SET_FREQ_POWER_LIMIT设置频率功率限制输入结构体*/
+typedef struct {
+    bb_freq_pwr_limit_t limit_list[BB_CONFIG_FREQ_POWER_LIMIT_NUM]; /**<@note 频率功率限制列表*/
+    uint8_t             size;                                       /**<@note 列表大小*/
+    uint8_t             reserved[3];                                /**<@note 保留空间*/
+} bb_set_freq_power_limit_in_t;
+
+/**定义BB_GET_FREQ_POWER_LIMIT获取频率功率限制输出结构体*/
+typedef bb_set_freq_power_limit_in_t bb_get_freq_power_limit_out_t;
+#endif /* BB_CONFIG_FREQ_PWR_LIMIT == 1 */
+
+/**定义设置命令BB_SET_CHANNEL_TABLE的输入参数结构*/
+typedef struct {
+    uint8_t     chan_num;                                       /**<@note 信道数量 不能超过BB_CONFIG_MAX_CHAN_NUM的定义*/
+    uint8_t     padding[3];
+    uint32_t    chan_table[100];                                /**<@note 单位为khz的频点定义*/
+} bb_set_channel_table_t;
 
 /**BB_SET_DFS*/
 typedef struct {
@@ -1946,6 +2122,16 @@ N/A
 */
 AR8030_API int bb_dev_getinfo(bb_dev_t* pdev, bb_dev_info_t* dev_info);
 
+/**
+\brief 测试远程bb_host服务器是否可连接
+\param[in] addr             :   host的ip
+\param[in] addr             :   host端口号
+\retval ::<0                :   失败，其值为错误码
+\retval ::0                 :   成功
+\see \n
+N/A
+*/
+AR8030_API int bb_host_connect_test(const char* addr, int port);
 
 /**
 \brief 基带统一控制接口
@@ -2089,6 +2275,23 @@ N/A
 */
 AR8030_API int bb_socket_ioctl_tx_len_rst(int sockfd, void* ipt, int ipt_size, void* opt, int opt_size);
 
+/**
+\brief 获取API库版本号，仅host支持
+\retval                     :   版本字符串
+\see \n
+N/A
+*/
+AR8030_API char* bb_get_api_lib_ver(void);
+
+/**
+\brief 获取daemon版本号，仅host支持
+\param      phost           :   host设备句柄
+\retval                     :   版本字符串
+\see \n
+N/A
+*/
+AR8030_API char* bb_get_daemon_ver(bb_host_t* phost);
+
 // debug channel
 AR8030_API void bb_debug_cmd(const void* data, uint32_t size);
 
@@ -2107,13 +2310,6 @@ AR8030_API int bb_daemon_exec(bb_host_t* phost, const char* cmd, int cmdlen, cha
 
 AR8030_API int bb_ioctl_set_hook2(bb_cb_type_e type, void* f);
 AR8030_API void *bb_ioctl_get_hook2(bb_cb_type_e type);
-
-AR8030_API int bb_net_dev_open(bb_dev_handle_t* dev);
-AR8030_API int bb_net_dev_close(int net_dev_fd);
-AR8030_API int bb_net_dev_create(int net_dev_fd, ar_netif_t *ar_netif);
-AR8030_API int bb_net_dev_destroy(int net_dev_fd, unsigned char slot, unsigned short socket_port);
-AR8030_API int bb_net_dev_buf_resize(int net_dev_fd, ar_netif_t *ar_netif);
-
 /** @} */  /** <!-- ==== API Definition end ==== */
 
 #ifdef __cplusplus
