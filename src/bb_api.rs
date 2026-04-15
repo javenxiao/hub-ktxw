@@ -467,14 +467,6 @@ impl BasebandApi {
         ffi::set_pair_mode(self.handle_ptr(), start, slot_bmp)
     }
 
-    pub fn set_local_mac(&self, mac: [u8; ffi::BB_MAC_LEN]) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_local_mac(self.handle_ptr(), mac)
-    }
-
     pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
         if !self.initialized {
             return Err("Baseband API not initialized".to_string());
@@ -604,36 +596,6 @@ pub struct CommunicationStats {
     pub send_bytes: u64,
 }
 
-/// 基带状态数据 - 用于存储从 SOC 获取的原始数据
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct BasebandStatus {
-    /// 运行状态标志
-    pub state_flags: u32,
-    /// 信道频率 (MHz)
-    pub frequency: u32,
-    /// 带宽 (MHz)
-    pub bandwidth: u16,
-    /// 发射功率 (dBm)
-    pub tx_power: i16,
-    /// 接收信号强度 (dBm)
-    pub rssi: i16,
-}
-
-/// 连接统计信息
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct ConnectionStats {
-    /// 连接状态
-    pub is_connected: bool,
-    /// 远程 MAC 地址
-    pub remote_mac: String,
-    /// 信噪比 (dB)
-    pub snr: i32,
-    /// 主天线 RSSI (dBm)
-    pub rssi_main: i32,
-    /// 副天线 RSSI (dBm)
-    pub rssi_aux: i32,
-}
-
 /// 管理基带通信的核心模块
 pub struct BasebandManager {
     api: Arc<Mutex<BasebandApi>>,
@@ -736,11 +698,6 @@ impl BasebandManager {
         api.set_pair_mode(start, slot_bmp)
     }
 
-    pub fn set_local_mac(&self, mac: [u8; ffi::BB_MAC_LEN]) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
-        api.set_local_mac(mac)
-    }
-
     pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
         let api = self.api.lock().unwrap();
         api.set_channel_mode(auto_mode)
@@ -808,42 +765,6 @@ impl BasebandManager {
         }
     }
 
-    /// 接收来自 SOC 的数据
-    pub fn receive_data(&self, socket_id: u32, buffer: &mut [u8]) -> Result<usize, String> {
-        if buffer.is_empty() {
-            return Err("Buffer is empty".to_string());
-        }
-
-        let bytes_read = unsafe {
-            ffi::bb_socket_read(
-                socket_id as std::os::raw::c_int,
-                buffer.as_mut_ptr() as *mut std::os::raw::c_void,
-                buffer.len() as std::os::raw::c_uint,
-                -1,
-            )
-        };
-
-        if bytes_read < 0 {
-            Err(format!("Failed to receive data: error code {}", bytes_read))
-        } else {
-            Ok(bytes_read as usize)
-        }
-    }
-
-    /// 检查是否有数据可读
-    pub fn has_data_available(&self, socket_id: u32) -> bool {
-        let mut dummy = [0u8; 1];
-        // 尝试非阻塞读取 - 这是一个简化的检查方法
-        let _result = unsafe {
-            ffi::bb_socket_read(
-                socket_id as std::os::raw::c_int,
-                dummy.as_mut_ptr() as *mut std::os::raw::c_void,
-                1 as std::os::raw::c_uint,
-                0,
-            )
-        };
-        false // 实际实现需要扩展
-    }
 }
 
 impl Default for BasebandManager {

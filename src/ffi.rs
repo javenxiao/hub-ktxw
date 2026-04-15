@@ -10,13 +10,24 @@
 use std::{
     collections::VecDeque,
     env,
-    ffi::CStr,
+    ffi::{CStr, CString},
     os::raw::{c_char, c_int, c_uint, c_void},
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
 
 use libloading::Library;
+
+#[cfg(target_os = "windows")]
+const O_RDWR: c_int = 0x0002;
+
+#[cfg(target_os = "windows")]
+extern "C" {
+    fn _dup(fd: c_int) -> c_int;
+    fn _dup2(fd_src: c_int, fd_dst: c_int) -> c_int;
+    fn _open(path: *const c_char, oflag: c_int, ...) -> c_int;
+    fn _close(fd: c_int) -> c_int;
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RuntimeFileStatus {
@@ -1085,22 +1096,66 @@ unsafe extern "C" fn handle_plot_event(arg: *mut c_void, _user: *mut c_void) {
     }
 }
 
+fn suppress_sdk_console_output<T, F: FnOnce() -> T>(action: F) -> T {
+    #[cfg(target_os = "windows")]
+    {
+        let null_path = match CString::new("NUL") {
+            Ok(path) => path,
+            Err(_) => return action(),
+        };
+
+        unsafe {
+            let stdout_dup = _dup(1);
+            let stderr_dup = _dup(2);
+            let null_fd = _open(null_path.as_ptr(), O_RDWR);
+
+            if stdout_dup < 0 || stderr_dup < 0 || null_fd < 0 {
+                if stdout_dup >= 0 {
+                    let _ = _close(stdout_dup);
+                }
+                if stderr_dup >= 0 {
+                    let _ = _close(stderr_dup);
+                }
+                if null_fd >= 0 {
+                    let _ = _close(null_fd);
+                }
+                return action();
+            }
+
+            let _ = _dup2(null_fd, 1);
+            let _ = _dup2(null_fd, 2);
+            let result = action();
+            let _ = _dup2(stdout_dup, 1);
+            let _ = _dup2(stderr_dup, 2);
+            let _ = _close(stdout_dup);
+            let _ = _close(stderr_dup);
+            let _ = _close(null_fd);
+            result
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        action()
+    }
+}
+
 // ============ 安全的 Rust 包装函数 ============
 
 /// 初始化基带 SDK
 pub fn connect_host(addr: &str, port: i32) -> Result<*mut bb_host_t, String> {
     let sdk = sdk()?;
-    let address = std::ffi::CString::new(addr)
+    let address = CString::new(addr)
         .map_err(|_| format!("Invalid host address: {}", addr))?;
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         let mut host: *mut bb_host_t = std::ptr::null_mut();
         match (sdk.bb_host_connect)(&mut host, address.as_ptr(), port as c_int) {
             0 if !host.is_null() => Ok(host),
             0 => Err("bb_host_connect succeeded but returned null host handle".to_string()),
             e => Err(format!("bb_host_connect failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_daemon_version(host: *mut bb_host_t) -> Result<String, String> {
@@ -1110,7 +1165,7 @@ pub fn get_daemon_version(host: *mut bb_host_t) -> Result<String, String> {
         return Err("bb_get_daemon_ver requires a valid host handle".to_string());
     }
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         let version_ptr = (sdk.bb_get_daemon_ver)(host);
 
         if version_ptr.is_null() {
@@ -1118,7 +1173,7 @@ pub fn get_daemon_version(host: *mut bb_host_t) -> Result<String, String> {
         } else {
             Ok(CStr::from_ptr(version_ptr).to_string_lossy().into_owned())
         }
-    }
+    })
 }
 
 pub fn disconnect_host(host: *mut bb_host_t) -> Result<(), String> {
@@ -1139,7 +1194,7 @@ pub fn disconnect_host(host: *mut bb_host_t) -> Result<(), String> {
 pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<(*mut bb_dev_handle_t, i32), String> {
     let sdk = sdk()?;
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         let mut device_list: *mut *mut bb_dev_t = std::ptr::null_mut();
         let device_count = (sdk.bb_dev_getlist)(host, &mut device_list);
 
@@ -1165,7 +1220,7 @@ pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<(*mut bb_dev_ha
         } else {
             Ok((handle, device_count))
         }
-    }
+    })
 }
 
 pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetStatusSummary, String> {
