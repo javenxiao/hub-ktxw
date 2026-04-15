@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>无线状态面板</title>
+    <title>wireless web</title>
     <meta name="description" content="仿设备管理后台的无线状态页面。">
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <div class="console-frame">
         <div class="tab-state">
-            <input class="tab-input" type="radio" name="primary-tab" id="tab-system">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-system" checked>
             <input class="tab-input" type="radio" name="primary-tab" id="tab-network">
-            <input class="tab-input" type="radio" name="primary-tab" id="tab-wireless" checked>
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-wireless">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-firewall">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-serial">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-diag">
@@ -183,9 +183,20 @@
                 </div>
             </section>
     <script>
+        function isSystemSummaryVisible() {
+            const systemTab = document.getElementById('tab-system');
+            const summaryTab = document.querySelector('.sys-subnav-item[data-tab="summary"]');
+            const summaryPanel = document.getElementById('sys-tab-summary');
+            return Boolean(
+                systemTab && systemTab.checked
+                && summaryTab && summaryTab.classList.contains('active')
+                && summaryPanel && summaryPanel.style.display !== 'none'
+            );
+        }
+
         // System 信息加载（完全仿照图片结构）
         function loadSystemInfo() {
-            fetch('/api/system/info')
+            fetch('/api/system/info', { cache: 'no-store' })
                 .then(res => res.json())
                 .then(data => {
                     // 系统信息
@@ -213,6 +224,9 @@
                     document.getElementById('wan-mask').textContent = data.wan_subnet_mask || '--';
                     document.getElementById('wan-dns').textContent = data.wan_primary_dns || '--';
                     document.getElementById('wan-dns2').textContent = data.wan_secondary_dns || '--';
+                })
+                .catch((error) => {
+                    console.error('Failed to load system info:', error);
                 });
         }
         // 监听 system 二级导航切换
@@ -246,6 +260,14 @@
             document.getElementById('sys-tab-summary').style.display = '';
             loadSystemInfo();
         }
+
+        loadSystemInfo();
+
+        window.setInterval(() => {
+            if (isSystemSummaryVisible()) {
+                loadSystemInfo();
+            }
+        }, 3000);
     </script>
 
             <section class="content-panel panel-network">
@@ -336,8 +358,8 @@
                                         <th>Tx Mod</th>
                                         <th>Rx Mod</th>
                                         <th>SNR (dB)</th>
-                                        <th>RSSI Main (dBm)</th>
-                                        <th>RSSI Aux (dBm)</th>
+                                        <th>Signal A</th>
+                                        <th>Signal B</th>
                                         <th>Signal Level</th>
                                         <th>RSSI Graph</th>
                                     </tr>
@@ -352,34 +374,148 @@
                     </section>
 
                     <section class="chart-panel">
-                        <h2 id="chart-title">RSSI Graph</h2>
+                        <h2 id="chart-title">AP Plot Data</h2>
                         <div class="chart-box">
                             <div class="chart-notes">
-                                <p class="rssi-reading" id="chart-current-rssi-main">RSSI Main -- dBm</p>
-                                <p class="rssi-reading secondary" id="chart-current-rssi-aux">RSSI Aux -- dBm</p>
-                                <p id="chart-history-range">History: Min -- Max --</p>
+                                <p id="chart-target-device">Target: --</p>
+                                <p id="chart-series-count">Series: --</p>
                             </div>
-
-                            <div class="chart-legend" aria-label="RSSI 曲线图例">
-                                <span><i class="legend-swatch primary"></i><span id="legend-primary-label">RSSI Main</span></span>
-                                <span><i class="legend-swatch secondary"></i><span id="legend-secondary-label">RSSI Aux</span></span>
-                            </div>
-
-                            <div class="graph-area">
-                                <div class="graph-label top">-25 dBm</div>
-                                <div class="graph-label middle">-50 dBm</div>
-                                <div class="graph-label bottom">-75 dBm</div>
-                                <svg class="graph-svg" viewBox="0 0 640 250" preserveAspectRatio="none" role="img" aria-label="RSSI 走势">
-                                    <line x1="72" y1="20" x2="72" y2="210"></line>
-                                    <line x1="72" y1="70" x2="600" y2="70"></line>
-                                    <line x1="72" y1="130" x2="600" y2="130"></line>
-                                    <line x1="72" y1="190" x2="600" y2="190"></line>
-                                    <line x1="72" y1="210" x2="600" y2="210"></line>
-                                    <polyline class="main-rssi-line" id="main-chart-line" points="72,190 108,186 144,182 180,186 216,180 252,176 288,170 324,174 360,168 396,164 432,166 468,162 504,158 540,154 576,150 600,146"></polyline>
-                                    <polyline class="aux-rssi-line" id="aux-chart-line" points="72,196 108,194 144,190 180,194 216,188 252,184 288,180 324,184 360,178 396,176 432,178 468,174 504,170 540,168 576,164 600,162"></polyline>
-                                </svg>
+                            <div class="plot-series-grid" id="plot-series-grid">
+                                <div class="plot-series-empty">等待 Plot 数据...</div>
                             </div>
                         </div>
+                    </section>
+
+                    <section class="panel-box runtime-panel">
+                        <h2>Wireless Runtime Details</h2>
+                        <div class="table-block compact">
+                            <h3>Real Parameters</h3>
+                            <table class="runtime-table">
+                                <tbody>
+                                    <tr><td>Local MAC</td><td id="runtime-mac">--</td><td>Work Band</td><td id="runtime-band">--</td></tr>
+                                    <tr><td>Channel Mode</td><td id="runtime-channel-mode">--</td><td>Work Channel</td><td id="runtime-channel">--</td></tr>
+                                    <tr><td>Current Power</td><td id="runtime-power">--</td><td>Power Mode</td><td id="runtime-power-mode">--</td></tr>
+                                    <tr><td>Power Auto</td><td id="runtime-power-auto">--</td><td>Current MCS</td><td id="runtime-mcs">--</td></tr>
+                                    <tr><td>MCS Throughput</td><td id="runtime-throughput">--</td><td>Compile Time</td><td id="runtime-compile-time">--</td></tr>
+                                    <tr><td>Software Version</td><td id="runtime-software-version">--</td><td>Firmware Version</td><td id="runtime-firmware-version">--</td></tr>
+                                    <tr><td>Hardware Version</td><td id="runtime-hardware-version">--</td><td>System Uptime</td><td id="runtime-uptime">--</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="wireless-runtime-status" id="wireless-runtime-status">等待真实无线运行时数据...</p>
+                    </section>
+
+                    <section class="panel-box runtime-panel">
+                        <h2>Wireless Control</h2>
+                        <div class="control-grid">
+                            <div class="control-card">
+                                <h3>Channel</h3>
+                                <div class="control-row">
+                                    <label for="control-channel-auto">Mode</label>
+                                    <select id="control-channel-auto" class="sys-input">
+                                        <option value="true">Auto</option>
+                                        <option value="false">Manual</option>
+                                    </select>
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-channel-direction">Direction</label>
+                                    <select id="control-channel-direction" class="sys-input">
+                                        <option value="rx">RX</option>
+                                        <option value="tx">TX</option>
+                                    </select>
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-channel-index">Channel</label>
+                                    <select id="control-channel-index" class="sys-input"></select>
+                                </div>
+                                <div class="control-actions">
+                                    <button id="btn-set-channel-mode" class="sys-button-default" type="button">Apply Mode</button>
+                                    <button id="btn-set-channel" class="sys-button-primary" type="button">Apply Channel</button>
+                                </div>
+                            </div>
+
+                            <div class="control-card">
+                                <h3>Power</h3>
+                                <div class="control-row">
+                                    <label for="control-power-mode">Mode</label>
+                                    <select id="control-power-mode" class="sys-input">
+                                        <option value="openloop">Open Loop</option>
+                                        <option value="closeloop">Close Loop</option>
+                                    </select>
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-power-auto">Auto</label>
+                                    <select id="control-power-auto" class="sys-input">
+                                        <option value="true">Enable</option>
+                                        <option value="false">Disable</option>
+                                    </select>
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-power-user">User</label>
+                                    <input id="control-power-user" class="sys-input" type="number" min="0" max="9" value="0">
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-power-db">Power</label>
+                                    <input id="control-power-db" class="sys-input" type="number" min="0" max="31" value="20">
+                                </div>
+                                <div class="control-actions">
+                                    <button id="btn-set-power-mode" class="sys-button-default" type="button">Apply Mode</button>
+                                    <button id="btn-set-power-auto" class="sys-button-default" type="button">Apply Auto</button>
+                                    <button id="btn-set-power" class="sys-button-primary" type="button">Apply Power</button>
+                                </div>
+                            </div>
+
+                            <div class="control-card">
+                                <h3>MCS</h3>
+                                <div class="control-row">
+                                    <label for="control-mcs-slot">Slot</label>
+                                    <input id="control-mcs-slot" class="sys-input" type="number" min="0" max="7" value="0">
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-mcs-auto">Mode</label>
+                                    <select id="control-mcs-auto" class="sys-input">
+                                        <option value="true">Auto</option>
+                                        <option value="false">Manual</option>
+                                    </select>
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-mcs-value">MCS</label>
+                                    <input id="control-mcs-value" class="sys-input" type="number" min="0" max="24" value="0">
+                                </div>
+                                <div class="control-actions">
+                                    <button id="btn-set-mcs-mode" class="sys-button-default" type="button">Apply Mode</button>
+                                    <button id="btn-set-mcs" class="sys-button-primary" type="button">Apply MCS</button>
+                                </div>
+                            </div>
+
+                            <div class="control-card">
+                                <h3>Bandwidth</h3>
+                                <div class="control-row">
+                                    <label for="control-bandwidth-slot">Slot</label>
+                                    <input id="control-bandwidth-slot" class="sys-input" type="number" min="0" max="7" value="0">
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-bandwidth-direction">Direction</label>
+                                    <select id="control-bandwidth-direction" class="sys-input">
+                                        <option value="rx">RX</option>
+                                        <option value="tx">TX</option>
+                                    </select>
+                                </div>
+                                <div class="control-row">
+                                    <label for="control-bandwidth-value">Bandwidth</label>
+                                    <select id="control-bandwidth-value" class="sys-input">
+                                        <option value="0">1.25 MHz</option>
+                                        <option value="1">2.5 MHz</option>
+                                        <option value="2">5 MHz</option>
+                                        <option value="3">10 MHz</option>
+                                        <option value="4">20 MHz</option>
+                                        <option value="5">40 MHz</option>
+                                    </select>
+                                </div>
+                                <button id="btn-set-bandwidth" class="sys-button-primary" type="button">Apply Bandwidth</button>
+                            </div>
+                        </div>
+                        <p class="wireless-control-status" id="wireless-control-status">尚未执行设置操作</p>
                     </section>
                 </div>
             </section>
@@ -422,6 +558,8 @@
         const liveState = document.getElementById('live-state');
         const connectionTableBody = document.getElementById('connection-table-body');
         let socket = null;
+        let wirelessRuntimeCurrent = null;
+        let controlDefaultsInitialized = false;
 
         function setText(id, value) {
             document.getElementById(id).textContent = value;
@@ -453,8 +591,9 @@
         }
 
         function buildMiniChart(mainHistory, auxHistory) {
-            const mainPoints = toPolylinePoints(mainHistory, 44, 28, -82, -48, 2, 2, 41, 25);
-            const auxPoints = toPolylinePoints(auxHistory, 44, 28, -82, -48, 2, 2, 41, 25);
+            const [minValue, maxValue] = normalizeRange(...resolveRange(mainHistory, auxHistory));
+            const mainPoints = toPolylinePoints(mainHistory, 44, 28, minValue, maxValue, 2, 2, 41, 25);
+            const auxPoints = toPolylinePoints(auxHistory, 44, 28, minValue, maxValue, 2, 2, 41, 25);
             return `<span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="双路 RSSI 缩略图"><polyline class="mini-line-main" points="${mainPoints}"></polyline><polyline class="mini-line-aux" points="${auxPoints}"></polyline></svg></span>`;
         }
 
@@ -486,6 +625,198 @@
             }).join(' ');
         }
 
+        function resolveRange(primary, secondary) {
+            const values = [...(Array.isArray(primary) ? primary : []), ...(Array.isArray(secondary) ? secondary : [])]
+                .filter((value) => Number.isFinite(value));
+            if (values.length === 0) {
+                return [0, 1];
+            }
+            return [Math.min(...values), Math.max(...values)];
+        }
+
+        function normalizeRange(minValue, maxValue) {
+            if (minValue === maxValue) {
+                return [minValue - 1, maxValue + 1];
+            }
+            return [minValue, maxValue];
+        }
+
+        function formatChartValue(value, unit) {
+            if (value === null || value === undefined) {
+                return '--';
+            }
+            return unit ? `${value} ${unit}` : `${value}`;
+        }
+
+        function buildPlotSeriesCard(series, index) {
+            const points = Array.isArray(series.points)
+                ? series.points.filter((value) => Number.isFinite(value))
+                : [];
+            const seriesLabel = series.label || series.key || `series_${index + 1}`;
+            const unit = series.unit || '';
+            const safeMin = Number.isFinite(series.min_value)
+                ? series.min_value
+                : (points.length > 0 ? Math.min(...points) : 0);
+            const safeMax = Number.isFinite(series.max_value)
+                ? series.max_value
+                : (points.length > 0 ? Math.max(...points) : 1);
+            const [rangeMin, rangeMax] = normalizeRange(safeMin, safeMax);
+            const polylinePoints = points.length > 0
+                ? toPolylinePoints(points, 260, 92, rangeMin, rangeMax, 8, 12, 252, 80)
+                : '8,80 252,80';
+            const currentValue = formatChartValue(series.current_value, unit);
+            const rangeText = points.length > 0
+                ? `History: Min ${formatChartValue(series.min_value, unit)} Max ${formatChartValue(series.max_value, unit)}`
+                : 'History: --';
+
+            return `
+                <article class="plot-series-card">
+                    <div class="plot-series-header">
+                        <div>
+                            <h3>${escapeHtml(seriesLabel)}</h3>
+                            <p>${escapeHtml(unit || 'plot metric')}</p>
+                        </div>
+                        <div class="plot-series-value">${escapeHtml(currentValue)}</div>
+                    </div>
+                    <p class="plot-series-range">${escapeHtml(rangeText)}</p>
+                    <svg class="plot-series-chart" viewBox="0 0 260 92" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(seriesLabel)} trend">
+                        <line x1="8" y1="12" x2="252" y2="12"></line>
+                        <line x1="8" y1="46" x2="252" y2="46"></line>
+                        <line x1="8" y1="80" x2="252" y2="80"></line>
+                        <polyline class="plot-line plot-line-${index % 7}" points="${polylinePoints}"></polyline>
+                    </svg>
+                </article>
+            `;
+        }
+
+        function populateChannelOptions(channels, currentIndex) {
+            const select = document.getElementById('control-channel-index');
+            if (!select) {
+                return;
+            }
+
+            const previousValue = select.value;
+            const safeChannels = Array.isArray(channels) ? channels : [];
+            select.innerHTML = safeChannels.map((channel) => `
+                <option value="${channel.index}">${channel.index} - ${channel.frequency} (${channel.power_dbm} dBm)</option>
+            `).join('');
+
+            if (!controlDefaultsInitialized) {
+                select.value = String(currentIndex ?? 0);
+            } else if (previousValue && safeChannels.some((channel) => String(channel.index) === previousValue)) {
+                select.value = previousValue;
+            }
+        }
+
+        function formatBooleanState(value, trueLabel, falseLabel) {
+            if (value === null || value === undefined) {
+                return '--';
+            }
+            return value ? trueLabel : falseLabel;
+        }
+
+        function renderWirelessRuntime(payload) {
+            const statusElement = document.getElementById('wireless-runtime-status');
+            if (!payload || !payload.available || !payload.current) {
+                wirelessRuntimeCurrent = null;
+                statusElement.textContent = payload?.message || '真实无线运行时数据不可用';
+                document.getElementById('runtime-mac').textContent = '--';
+                document.getElementById('runtime-band').textContent = '--';
+                document.getElementById('runtime-channel-mode').textContent = '--';
+                document.getElementById('runtime-channel').textContent = '--';
+                document.getElementById('runtime-power').textContent = '--';
+                document.getElementById('runtime-power-mode').textContent = '--';
+                document.getElementById('runtime-power-auto').textContent = '--';
+                document.getElementById('runtime-mcs').textContent = '--';
+                document.getElementById('runtime-throughput').textContent = '--';
+                document.getElementById('runtime-compile-time').textContent = '--';
+                document.getElementById('runtime-software-version').textContent = '--';
+                document.getElementById('runtime-firmware-version').textContent = '--';
+                document.getElementById('runtime-hardware-version').textContent = '--';
+                document.getElementById('runtime-uptime').textContent = '--';
+                return;
+            }
+
+            const current = payload.current;
+            wirelessRuntimeCurrent = current;
+            const warningText = Array.isArray(current.warnings) && current.warnings.length > 0
+                ? ` | Partial warnings: ${current.warnings.join(' ; ')}`
+                : '';
+
+            document.getElementById('runtime-mac').textContent = current.local_mac_address;
+            document.getElementById('runtime-band').textContent = `${current.work_band} · ${formatBooleanState(current.band_auto, 'Auto', 'Manual')}`;
+            document.getElementById('runtime-channel-mode').textContent = formatBooleanState(current.channel_auto, 'Auto', 'Manual');
+            document.getElementById('runtime-channel').textContent = `${current.work_channel_index ?? '--'} · ${current.work_channel_frequency}`;
+            document.getElementById('runtime-power').textContent = current.current_power_dbm === null || current.current_power_dbm === undefined
+                ? '--'
+                : `${current.current_power_dbm} dBm (User ${current.current_power_user ?? '--'})`;
+            document.getElementById('runtime-power-mode').textContent = current.current_power_mode;
+            document.getElementById('runtime-power-auto').textContent = formatBooleanState(current.current_power_auto, 'Enabled', 'Disabled');
+            document.getElementById('runtime-mcs').textContent = `${current.current_mcs_label} (${current.current_mcs_direction}, Slot ${current.current_slot ?? '--'})`;
+            document.getElementById('runtime-throughput').textContent = current.current_mcs_throughput_kbps === null || current.current_mcs_throughput_kbps === undefined
+                ? '--'
+                : `${current.current_mcs_throughput_kbps} kbps`;
+            document.getElementById('runtime-compile-time').textContent = current.compile_time || '--';
+            document.getElementById('runtime-software-version').textContent = current.software_version || '--';
+            document.getElementById('runtime-firmware-version').textContent = current.firmware_version || '--';
+            document.getElementById('runtime-hardware-version').textContent = current.hardware_version || '--';
+            document.getElementById('runtime-uptime').textContent = current.system_uptime || '--';
+            statusElement.textContent = `${payload.message || '真实无线运行时数据已刷新'}${warningText}`;
+
+            populateChannelOptions(current.channels, current.work_channel_index);
+
+            if (!controlDefaultsInitialized) {
+                document.getElementById('control-channel-auto').value = String(current.channel_auto ?? true);
+                document.getElementById('control-channel-direction').value = 'rx';
+                document.getElementById('control-power-mode').value = current.current_power_mode.toLowerCase().startsWith('open') ? 'openloop' : 'closeloop';
+                document.getElementById('control-power-auto').value = String(current.current_power_auto ?? true);
+                document.getElementById('control-power-user').value = current.current_power_user ?? 0;
+                document.getElementById('control-power-db').value = current.current_power_dbm ?? 20;
+                document.getElementById('control-mcs-slot').value = current.current_slot ?? 0;
+                document.getElementById('control-mcs-auto').value = String(current.current_mcs_auto ?? true);
+                document.getElementById('control-mcs-value').value = current.current_mcs_value ?? 0;
+                document.getElementById('control-bandwidth-slot').value = current.current_slot ?? 0;
+                document.getElementById('control-bandwidth-direction').value = 'rx';
+                if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
+                    document.getElementById('control-bandwidth-value').value = String(current.bandwidth_code);
+                }
+                controlDefaultsInitialized = true;
+            }
+        }
+
+        async function loadWirelessRuntimeDetails() {
+            const response = await fetch('/api/wireless/runtime', { cache: 'no-store' });
+            const payload = await response.json();
+            renderWirelessRuntime(payload);
+        }
+
+        async function applyWirelessSetting(action, payload) {
+            const statusElement = document.getElementById('wireless-control-status');
+            statusElement.textContent = `正在执行 ${action} ...`;
+
+            const response = await fetch('/api/wireless/runtime/apply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ action, ...payload }),
+            });
+            const result = await response.json();
+
+            statusElement.textContent = result.message || '设置请求已返回';
+            if (result.current) {
+                controlDefaultsInitialized = false;
+                renderWirelessRuntime({
+                    available: result.success,
+                    message: result.message,
+                    current: result.current,
+                });
+            }
+
+            await loadInitialSnapshot().catch(() => {});
+            return result;
+        }
+
         function renderConnections(connections) {
             if (!Array.isArray(connections) || connections.length === 0) {
                 connectionTableBody.innerHTML = '<tr><td colspan="11">暂无连接数据</td></tr>';
@@ -512,20 +843,23 @@
         }
 
         function renderChart(chart) {
-            setText('chart-title', `RSSI Graph - ${chart.target_mac_address}`);
-            setText('legend-primary-label', chart.primary_label);
-            setText('legend-secondary-label', chart.secondary_label);
-            setText('chart-current-rssi-main', `${chart.primary_label} ${chart.current_primary_rssi_dbm} dBm`);
-            setText('chart-current-rssi-aux', `${chart.secondary_label} ${chart.current_secondary_rssi_dbm} dBm`);
-            setText('chart-history-range', `History: Min ${chart.min_rssi_dbm} Max ${chart.max_rssi_dbm}`);
-            document.getElementById('main-chart-line').setAttribute(
-                'points',
-                toPolylinePoints(chart.primary_points, 640, 250, -82, -48, 72, 20, 600, 210)
-            );
-            document.getElementById('aux-chart-line').setAttribute(
-                'points',
-                toPolylinePoints(chart.secondary_points, 640, 250, -82, -48, 72, 20, 600, 210)
-            );
+            const title = chart && chart.title ? chart.title : 'AP Plot Data';
+            const target = chart && chart.target_mac_address ? chart.target_mac_address : '--';
+            const series = Array.isArray(chart && chart.series) ? chart.series : [];
+
+            setText('chart-title', `${title} - ${target}`);
+            setText('chart-target-device', `Target: ${target}`);
+            setText('chart-series-count', `Series: ${series.length}`);
+
+            const container = document.getElementById('plot-series-grid');
+            if (series.length === 0) {
+                container.innerHTML = '<div class="plot-series-empty">等待 Plot 数据...</div>';
+                return;
+            }
+
+            container.innerHTML = series
+                .map((seriesItem, index) => buildPlotSeriesCard(seriesItem, index))
+                .join('');
         }
 
         function renderSnapshot(snapshot) {
@@ -535,9 +869,13 @@
             setText('general-compatibility', snapshot.general.compatibility_mode);
             setText('general-bandwidth', snapshot.general.bandwidth);
             setText('general-frequency', snapshot.general.frequency);
-            setText('general-tx-power', snapshot.general.tx_power);
+            setText(
+                'general-tx-power',
+                wirelessRuntimeCurrent && wirelessRuntimeCurrent.current_power_dbm !== null && wirelessRuntimeCurrent.current_power_dbm !== undefined
+                    ? `${wirelessRuntimeCurrent.current_power_dbm} dBm`
+                    : snapshot.general.tx_power
+            );
             setText('general-encryption', snapshot.general.encryption_type);
-
             setText('traffic-rx-bytes', formatBytes(snapshot.traffic.receive_bytes));
             setText('traffic-rx-packets', snapshot.traffic.receive_packets.toLocaleString());
             setText('traffic-tx-bytes', formatBytes(snapshot.traffic.transmit_bytes));
@@ -584,11 +922,89 @@
             });
         }
 
+        document.getElementById('btn-set-channel-mode').addEventListener('click', () => {
+            applyWirelessSetting('set_channel_mode', {
+                auto_mode: document.getElementById('control-channel-auto').value === 'true',
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
+        document.getElementById('btn-set-channel').addEventListener('click', () => {
+            applyWirelessSetting('set_channel', {
+                direction: document.getElementById('control-channel-direction').value,
+                channel_index: Number(document.getElementById('control-channel-index').value),
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
+        document.getElementById('btn-set-power-mode').addEventListener('click', () => {
+            applyWirelessSetting('set_power_mode', {
+                power_mode: document.getElementById('control-power-mode').value,
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
+        document.getElementById('btn-set-power-auto').addEventListener('click', () => {
+            applyWirelessSetting('set_power_auto', {
+                auto_mode: document.getElementById('control-power-auto').value === 'true',
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
+        document.getElementById('btn-set-power').addEventListener('click', () => {
+            applyWirelessSetting('set_power', {
+                user: Number(document.getElementById('control-power-user').value),
+                power_dbm: Number(document.getElementById('control-power-db').value),
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
+        document.getElementById('btn-set-mcs-mode').addEventListener('click', () => {
+            applyWirelessSetting('set_mcs_mode', {
+                slot: Number(document.getElementById('control-mcs-slot').value),
+                auto_mode: document.getElementById('control-mcs-auto').value === 'true',
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
+        document.getElementById('btn-set-mcs').addEventListener('click', () => {
+            applyWirelessSetting('set_mcs', {
+                slot: Number(document.getElementById('control-mcs-slot').value),
+                mcs: Number(document.getElementById('control-mcs-value').value),
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
+        document.getElementById('btn-set-bandwidth').addEventListener('click', () => {
+            applyWirelessSetting('set_bandwidth', {
+                slot: Number(document.getElementById('control-bandwidth-slot').value),
+                direction: document.getElementById('control-bandwidth-direction').value,
+                bandwidth: Number(document.getElementById('control-bandwidth-value').value),
+            }).catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            });
+        });
+
         loadInitialSnapshot().catch((error) => {
             liveState.textContent = `初始数据加载失败: ${error.message}`;
         }).finally(() => {
             connectWebSocket();
         });
+
+        loadWirelessRuntimeDetails().catch((error) => {
+            document.getElementById('wireless-runtime-status').textContent = `运行时数据加载失败: ${error.message}`;
+        });
+
+        window.setInterval(() => {
+            loadWirelessRuntimeDetails().catch(() => {});
+        }, 5000);
     </script>
 </body>
 </html>

@@ -42,6 +42,20 @@ pub struct BasebandHealthStatus {
     pub socket_init: BasebandOperationStatus,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WirelessRuntimeDetails {
+    pub status: ffi::BbGetStatusSummary,
+    pub system_info: Option<ffi::BbSystemInfoSummary>,
+    pub band_info: Option<ffi::BbBandInfoSummary>,
+    pub channel_info: Option<ffi::BbChannelInfoSummary>,
+    pub mcs_mode: Option<ffi::BbMcsModeSummary>,
+    pub mcs_value: Option<ffi::BbMcsValueSummary>,
+    pub power_mode: Option<ffi::BbPowerModeSummary>,
+    pub current_power: Option<ffi::BbCurrentPowerSummary>,
+    pub power_auto: Option<ffi::BbPowerAutoSummary>,
+    pub warnings: Vec<String>,
+}
+
 impl BasebandHealthStatus {
     fn new() -> Self {
         let host_address = std::env::var("BB_HOST_ADDR").ok();
@@ -145,6 +159,8 @@ pub struct BasebandApi {
     requires_start: bool,
     device_handle: usize,
     host_handle: usize,
+    plot_subscription_active: bool,
+    plot_user: Option<u8>,
 }
 
 impl BasebandApi {
@@ -156,6 +172,8 @@ impl BasebandApi {
             requires_start: true,
             device_handle: 0,
             host_handle: 0,
+            plot_subscription_active: false,
+            plot_user: None,
         };
         let mut health = BasebandHealthStatus::new();
 
@@ -204,6 +222,9 @@ impl BasebandApi {
                                 Ok(snapshot) => {
                                     health.status_read.success = true;
                                     health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
+                                    if let Err(err) = api.enable_plot_stream(snapshot.active_user.unwrap_or(0)) {
+                                        tracing::warn!("Failed to enable plot stream in remote bb_host mode: {}", err);
+                                    }
                                     health.runtime.status_snapshot = Some(snapshot);
                                 }
                                 Err(err) => {
@@ -310,6 +331,29 @@ impl BasebandApi {
         Ok(())
     }
 
+    pub fn enable_plot_stream(&mut self, user: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        if self.plot_subscription_active && self.plot_user == Some(user) {
+            return Ok(());
+        }
+
+        if self.plot_subscription_active {
+            if let Some(previous_user) = self.plot_user {
+                let _ = ffi::unsubscribe_plot_stream(self.handle_ptr(), previous_user);
+            }
+            self.plot_subscription_active = false;
+            self.plot_user = None;
+        }
+
+        ffi::subscribe_plot_stream(self.handle_ptr(), user, ffi::BB_PLOT_POINT_MAX as u8)?;
+        self.plot_subscription_active = true;
+        self.plot_user = Some(user);
+        Ok(())
+    }
+
     /// 创建数据传输 socket
     pub fn create_socket(&self, socket_id: u32, flags: u32, max_size: u32) -> Result<(), String> {
         if !self.initialized {
@@ -326,6 +370,183 @@ impl BasebandApi {
         ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)
     }
 
+    pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        let status = ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)?;
+        let slot = status.links.first().map(|link| link.slot as u8).unwrap_or(0);
+        let user = status.active_user.unwrap_or(0);
+        let mut warnings = Vec::new();
+
+        let system_info = match ffi::get_system_info(self.handle_ptr()) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let band_info = match ffi::get_band_info(self.handle_ptr()) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let channel_info = match ffi::get_channel_info(self.handle_ptr()) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let mcs_mode = match ffi::get_mcs_mode(self.handle_ptr(), slot) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let mcs_value = match ffi::get_mcs(self.handle_ptr(), ffi::BB_DIR_TX, slot) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let power_mode = match ffi::get_power_mode(self.handle_ptr()) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let current_power = match ffi::get_current_power(self.handle_ptr(), user) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let power_auto = match ffi::get_power_auto(self.handle_ptr()) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+
+        Ok(WirelessRuntimeDetails {
+            status,
+            system_info,
+            band_info,
+            channel_info,
+            mcs_mode,
+            mcs_value,
+            power_mode,
+            current_power,
+            power_auto,
+            warnings,
+        })
+    }
+
+    pub fn get_plot_snapshot(&self) -> Option<ffi::BbPlotSnapshotSummary> {
+        if !self.initialized {
+            return None;
+        }
+
+        ffi::latest_plot_snapshot()
+    }
+
+    pub fn set_pair_mode(&self, start: bool, slot_bmp: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_pair_mode(self.handle_ptr(), start, slot_bmp)
+    }
+
+    pub fn set_local_mac(&self, mac: [u8; ffi::BB_MAC_LEN]) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_local_mac(self.handle_ptr(), mac)
+    }
+
+    pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_channel_mode(self.handle_ptr(), auto_mode)
+    }
+
+    pub fn set_channel(&self, dir: u8, chan_index: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_channel(self.handle_ptr(), dir, chan_index)
+    }
+
+    pub fn set_mcs_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_mcs_mode(self.handle_ptr(), slot, auto_mode)
+    }
+
+    pub fn set_mcs(&self, slot: u8, mcs: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_mcs(self.handle_ptr(), slot, mcs)
+    }
+
+    pub fn set_power_mode(&self, pwr_mode: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_power_mode(self.handle_ptr(), pwr_mode)
+    }
+
+    pub fn set_power(&self, user: u8, power_dbm: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_power(self.handle_ptr(), user, power_dbm)
+    }
+
+    pub fn set_power_auto(&self, enabled: bool) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_power_auto(self.handle_ptr(), enabled)
+    }
+
+    pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_bandwidth(self.handle_ptr(), slot, dir, bandwidth)
+    }
+
+    pub fn set_bandwidth_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_bandwidth_mode(self.handle_ptr(), slot, auto_mode)
+    }
+
     /// 获取通信统计信息
     pub fn get_stats(&self) -> CommunicationStats {
         CommunicationStats {
@@ -339,6 +560,14 @@ impl BasebandApi {
 
 impl Drop for BasebandApi {
     fn drop(&mut self) {
+        if self.plot_subscription_active {
+            if let Some(user) = self.plot_user {
+                let _ = ffi::unsubscribe_plot_stream(self.handle_ptr(), user);
+            }
+            self.plot_subscription_active = false;
+            self.plot_user = None;
+        }
+
         if self.started {
             let _ = ffi::stop(self.handle_ptr());
             self.started = false;
@@ -432,6 +661,16 @@ impl BasebandManager {
 
         match api.start() {
             Ok(()) => {
+                let plot_user = api
+                    .get_status_summary()
+                    .ok()
+                    .and_then(|status| status.active_user)
+                    .unwrap_or(0);
+
+                if let Err(err) = api.enable_plot_stream(plot_user) {
+                    tracing::warn!("Failed to enable plot stream in local SDK mode: {}", err);
+                }
+
                 health.start.success = true;
                 health.start.message = "bb_start succeeded".to_string();
                 health.effective_mode = "hardware-local-sdk".to_string();
@@ -480,6 +719,71 @@ impl BasebandManager {
     pub fn get_status_snapshot(&self) -> Result<ffi::BbGetStatusSummary, String> {
         let api = self.api.lock().unwrap();
         api.get_status_summary()
+    }
+
+    pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
+        let api = self.api.lock().unwrap();
+        api.get_wireless_runtime_details()
+    }
+
+    pub fn get_plot_snapshot(&self) -> Option<ffi::BbPlotSnapshotSummary> {
+        let api = self.api.lock().unwrap();
+        api.get_plot_snapshot()
+    }
+
+    pub fn set_pair_mode(&self, start: bool, slot_bmp: u8) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_pair_mode(start, slot_bmp)
+    }
+
+    pub fn set_local_mac(&self, mac: [u8; ffi::BB_MAC_LEN]) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_local_mac(mac)
+    }
+
+    pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_channel_mode(auto_mode)
+    }
+
+    pub fn set_channel(&self, dir: u8, chan_index: u8) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_channel(dir, chan_index)
+    }
+
+    pub fn set_mcs_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_mcs_mode(slot, auto_mode)
+    }
+
+    pub fn set_mcs(&self, slot: u8, mcs: u8) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_mcs(slot, mcs)
+    }
+
+    pub fn set_power_mode(&self, pwr_mode: u8) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_power_mode(pwr_mode)
+    }
+
+    pub fn set_power(&self, user: u8, power_dbm: u8) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_power(user, power_dbm)
+    }
+
+    pub fn set_power_auto(&self, enabled: bool) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_power_auto(enabled)
+    }
+
+    pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_bandwidth(slot, dir, bandwidth)
+    }
+
+    pub fn set_bandwidth_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_bandwidth_mode(slot, auto_mode)
     }
 
     /// 发送数据到 SOC

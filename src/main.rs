@@ -8,18 +8,26 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
+    http::{
+        header::{CACHE_CONTROL, EXPIRES, PRAGMA},
+        HeaderValue,
+    },
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, RwLock};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::{
+    cors::CorsLayer,
+    services::ServeDir,
+    set_header::SetResponseHeaderLayer,
+};
 use tracing::{error, info, warn};
 
-use bb_api::{BasebandHealthStatus, BasebandManager, CommunicationStats};
-use ffi::BbGetStatusSummary;
+use bb_api::{BasebandHealthStatus, BasebandManager, CommunicationStats, WirelessRuntimeDetails};
+use ffi::{BbGetStatusSummary, BbPlotSnapshotSummary};
 
 #[derive(Debug, Clone, Serialize)]
 struct SystemInfo {
@@ -65,6 +73,89 @@ struct BasebandTestResponse {
     socket_initialized: bool,
     bytes_sent: Option<usize>,
     message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct BasebandLinkExerciseResponse {
+    available: bool,
+    success: bool,
+    message: String,
+    initial_link_state: String,
+    final_link_state: String,
+    states_seen: Vec<String>,
+    final_peer_mac: Option<String>,
+    socket_initialized: bool,
+    total_bytes_sent: usize,
+    total_send_attempts: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessRuntimeResponse {
+    available: bool,
+    message: String,
+    current: Option<WirelessRuntimeView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessRuntimeView {
+    local_mac_address: String,
+    operation_mode: String,
+    compatibility_mode: String,
+    bandwidth_code: Option<u8>,
+    bandwidth: String,
+    frequency_khz: Option<u32>,
+    frequency: String,
+    system_uptime: String,
+    compile_time: String,
+    software_version: String,
+    hardware_version: String,
+    firmware_version: String,
+    band_auto: Option<bool>,
+    work_band: String,
+    channel_auto: Option<bool>,
+    channel_count: Option<u8>,
+    work_channel_index: Option<u8>,
+    work_channel_frequency: String,
+    channels: Vec<WirelessChannelOption>,
+    current_slot: Option<u8>,
+    current_mcs_direction: String,
+    current_mcs_auto: Option<bool>,
+    current_mcs_value: Option<u8>,
+    current_mcs_label: String,
+    current_mcs_throughput_kbps: Option<u32>,
+    current_power_user: Option<u8>,
+    current_power_mode: String,
+    current_power_auto: Option<bool>,
+    current_power_dbm: Option<u8>,
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessChannelOption {
+    index: u8,
+    frequency: String,
+    power_dbm: i32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WirelessSettingRequest {
+    action: String,
+    auto_mode: Option<bool>,
+    slot: Option<u8>,
+    user: Option<u8>,
+    direction: Option<String>,
+    channel_index: Option<u8>,
+    mcs: Option<u8>,
+    power_dbm: Option<u8>,
+    bandwidth: Option<u8>,
+    power_mode: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessSettingResponse {
+    success: bool,
+    message: String,
+    current: Option<WirelessRuntimeView>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -114,16 +205,21 @@ struct ConnectionStatus {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct ChartSeries {
+    key: String,
+    label: String,
+    unit: String,
+    current_value: Option<i32>,
+    min_value: Option<i32>,
+    max_value: Option<i32>,
+    points: Vec<i32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct RssiChart {
+    title: String,
     target_mac_address: String,
-    primary_label: String,
-    secondary_label: String,
-    current_primary_rssi_dbm: i32,
-    current_secondary_rssi_dbm: i32,
-    min_rssi_dbm: i32,
-    max_rssi_dbm: i32,
-    primary_points: Vec<i32>,
-    secondary_points: Vec<i32>,
+    series: Vec<ChartSeries>,
 }
 
 const HISTORY_POINTS: usize = 18;
@@ -194,7 +290,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let initial = match (baseband.as_ref(), baseband_health.runtime.status_snapshot.as_ref()) {
         (Some(baseband), Some(status)) => {
-            build_hardware_snapshot(0, status, &baseband.get_communication_stats(), None)
+            let plot_snapshot = baseband.get_plot_snapshot();
+            build_hardware_snapshot(0, status, &baseband.get_communication_stats(), plot_snapshot.as_ref(), None)
         }
         _ => build_simulated_snapshot(0),
     };
@@ -204,12 +301,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .route("/api/wireless/status", get(get_wireless_status))
+        .route("/api/wireless/runtime", get(get_wireless_runtime))
+        .route("/api/wireless/runtime/apply", post(apply_wireless_setting))
         .route("/api/system/info", get(get_system_info))
         .route("/api/baseband/health", get(get_baseband_health))
         .route("/api/baseband/stats", get(get_baseband_stats))
         .route("/api/baseband/test", get(test_baseband_communication))
+        .route("/api/baseband/link/exercise", post(exercise_baseband_link))
         .route("/ws", get(ws_handler))
         .nest_service("/", ServeDir::new("static").append_index_html_on_directories(true))
+        .layer(SetResponseHeaderLayer::overriding(
+            CACHE_CONTROL,
+            HeaderValue::from_static("no-store, no-cache, must-revalidate"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            PRAGMA,
+            HeaderValue::from_static("no-cache"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            EXPIRES,
+            HeaderValue::from_static("0"),
+        ))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -227,8 +339,141 @@ async fn get_wireless_status(State(state): State<Arc<AppState>>) -> Json<Wireles
     Json(state.snapshot.read().await.clone())
 }
 
+async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<WirelessRuntimeResponse> {
+    match state.baseband.as_ref() {
+        Some(baseband) => match baseband.get_wireless_runtime_details() {
+            Ok(details) => Json(WirelessRuntimeResponse {
+                available: true,
+                message: "Wireless runtime details fetched successfully".to_string(),
+                current: Some(build_wireless_runtime_view(&details)),
+            }),
+            Err(err) => Json(WirelessRuntimeResponse {
+                available: false,
+                message: format!("Failed to fetch wireless runtime details: {}", err),
+                current: None,
+            }),
+        },
+        None => Json(WirelessRuntimeResponse {
+            available: false,
+            message: "Baseband SDK not available; runtime controls require real hardware mode".to_string(),
+            current: None,
+        }),
+    }
+}
+
+async fn apply_wireless_setting(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<WirelessSettingRequest>,
+) -> Json<WirelessSettingResponse> {
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(WirelessSettingResponse {
+            success: false,
+            message: "Baseband SDK not available; cannot apply wireless settings in simulator mode".to_string(),
+            current: None,
+        });
+    };
+
+    let baseband = Arc::clone(baseband);
+    let current = match baseband.get_wireless_runtime_details() {
+        Ok(details) => details,
+        Err(err) => {
+            return Json(WirelessSettingResponse {
+                success: false,
+                message: format!("Failed to read current wireless runtime before applying setting: {}", err),
+                current: None,
+            });
+        }
+    };
+
+    let default_slot = current
+        .mcs_value
+        .as_ref()
+        .map(|value| value.slot)
+        .or_else(|| current.status.links.first().map(|link| link.slot as u8))
+        .unwrap_or(0);
+    let default_user = current
+        .current_power
+        .as_ref()
+        .map(|value| value.user)
+        .or(current.status.active_user)
+        .unwrap_or(0);
+
+    let result = match request.action.as_str() {
+        "set_channel_mode" => request
+            .auto_mode
+            .ok_or_else(|| "auto_mode is required".to_string())
+            .and_then(|auto_mode| baseband.set_channel_mode(auto_mode)),
+        "set_channel" => request
+            .channel_index
+            .ok_or_else(|| "channel_index is required".to_string())
+            .and_then(|chan_index| {
+                let dir = parse_direction(request.direction.as_deref().unwrap_or("rx"))?;
+                baseband.set_channel(dir, chan_index)
+            }),
+        "set_mcs_mode" => request
+            .auto_mode
+            .ok_or_else(|| "auto_mode is required".to_string())
+            .and_then(|auto_mode| baseband.set_mcs_mode(request.slot.unwrap_or(default_slot), auto_mode)),
+        "set_mcs" => request
+            .mcs
+            .ok_or_else(|| "mcs is required".to_string())
+            .and_then(|mcs| baseband.set_mcs(request.slot.unwrap_or(default_slot), mcs)),
+        "set_power_mode" => request
+            .power_mode
+            .as_deref()
+            .ok_or_else(|| "power_mode is required".to_string())
+            .and_then(parse_power_mode)
+            .and_then(|mode| baseband.set_power_mode(mode)),
+        "set_power" => request
+            .power_dbm
+            .ok_or_else(|| "power_dbm is required".to_string())
+            .and_then(|power_dbm| baseband.set_power(request.user.unwrap_or(default_user), power_dbm)),
+        "set_power_auto" => request
+            .auto_mode
+            .ok_or_else(|| "auto_mode is required".to_string())
+            .and_then(|enabled| baseband.set_power_auto(enabled)),
+        "set_bandwidth_mode" => request
+            .auto_mode
+            .ok_or_else(|| "auto_mode is required".to_string())
+            .and_then(|auto_mode| baseband.set_bandwidth_mode(request.slot.unwrap_or(default_slot), auto_mode)),
+        "set_bandwidth" => request
+            .bandwidth
+            .ok_or_else(|| "bandwidth is required".to_string())
+            .and_then(|bandwidth| {
+                let dir = parse_direction(request.direction.as_deref().unwrap_or("rx"))?;
+                baseband.set_bandwidth(request.slot.unwrap_or(default_slot), dir, bandwidth)
+            }),
+        _ => Err(format!("Unsupported wireless setting action: {}", request.action)),
+    };
+
+    match result {
+        Ok(()) => {
+            refresh_snapshot_from_baseband(&state, &baseband).await;
+            let current = baseband
+                .get_wireless_runtime_details()
+                .ok()
+                .map(|details| build_wireless_runtime_view(&details));
+
+            Json(WirelessSettingResponse {
+                success: true,
+                message: format!("Wireless setting action '{}' applied successfully", request.action),
+                current,
+            })
+        }
+        Err(err) => Json(WirelessSettingResponse {
+            success: false,
+            message: err,
+            current: Some(build_wireless_runtime_view(&current)),
+        }),
+    }
+}
+
 async fn get_system_info() -> Json<SystemInfo> {
-    Json(SystemInfo {
+    Json(build_system_info())
+}
+
+fn build_system_info() -> SystemInfo {
+    SystemInfo {
         host_name: "UserDevice".to_string(),
         product_name: "MIMO Wireless Bridge".to_string(),
         description: "mypDDL-MIMO".to_string(),
@@ -256,7 +501,7 @@ async fn get_system_info() -> Json<SystemInfo> {
         wan_gateway: "10.10.10.1".to_string(),
         wan_primary_dns: "8.8.8.8".to_string(),
         wan_secondary_dns: "8.8.4.4".to_string(),
-    })
+    }
 }
 
 async fn get_baseband_health(State(state): State<Arc<AppState>>) -> Json<BasebandHealthStatus> {
@@ -307,6 +552,159 @@ async fn test_baseband_communication(
     };
 
     Json(response)
+}
+
+async fn exercise_baseband_link(
+    State(state): State<Arc<AppState>>,
+) -> Json<BasebandLinkExerciseResponse> {
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(BasebandLinkExerciseResponse {
+            available: false,
+            success: false,
+            message: "Baseband SDK not available; cannot exercise link in simulator mode".to_string(),
+            initial_link_state: "Unavailable".to_string(),
+            final_link_state: "Unavailable".to_string(),
+            states_seen: Vec::new(),
+            final_peer_mac: None,
+            socket_initialized: false,
+            total_bytes_sent: 0,
+            total_send_attempts: 0,
+        });
+    };
+
+    let baseband = Arc::clone(baseband);
+    let initial_status = match baseband.get_status_snapshot() {
+        Ok(status) => status,
+        Err(err) => {
+            return Json(BasebandLinkExerciseResponse {
+                available: true,
+                success: false,
+                message: format!("Failed to read initial link status: {}", err),
+                initial_link_state: "Unavailable".to_string(),
+                final_link_state: "Unavailable".to_string(),
+                states_seen: Vec::new(),
+                final_peer_mac: None,
+                socket_initialized: false,
+                total_bytes_sent: 0,
+                total_send_attempts: 0,
+            });
+        }
+    };
+
+    let initial_link_state = initial_status
+        .links
+        .first()
+        .map(|link| format_link_state(link.state).to_string())
+        .unwrap_or_else(|| "Unavailable".to_string());
+    let mut final_status = initial_status.clone();
+    let mut states_seen = vec![initial_link_state.clone()];
+    let mut notes = Vec::new();
+    let mut total_bytes_sent = 0usize;
+    let mut total_send_attempts = 0usize;
+
+    if let Err(err) = baseband.set_pair_mode(true, 0x01) {
+        return Json(BasebandLinkExerciseResponse {
+            available: true,
+            success: false,
+            message: format!("Failed to enable pair mode on slot bitmap 0x01: {}", err),
+            initial_link_state,
+            final_link_state: "Unavailable".to_string(),
+            states_seen,
+            final_peer_mac: None,
+            socket_initialized: false,
+            total_bytes_sent,
+            total_send_attempts,
+        });
+    }
+    notes.push("Enabled pair mode on slot bitmap 0x01".to_string());
+
+    let socket_initialized = match baseband.initialize_socket(0) {
+        Ok(()) => {
+            notes.push("Initialized socket 0 for traffic exercise".to_string());
+            true
+        }
+        Err(err) => {
+            notes.push(format!("Socket 0 initialization failed or was already unavailable: {}", err));
+            false
+        }
+    };
+
+    for poll_index in 0..20 {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        match baseband.get_status_snapshot() {
+            Ok(status) => {
+                final_status = status.clone();
+
+                let state_name = status
+                    .links
+                    .first()
+                    .map(|link| format_link_state(link.state).to_string())
+                    .unwrap_or_else(|| "Unavailable".to_string());
+                if states_seen.last().map(String::as_str) != Some(state_name.as_str()) {
+                    states_seen.push(state_name.clone());
+                }
+
+                if status.links.first().map(|link| link.state >= 1).unwrap_or(false) && socket_initialized {
+                    total_send_attempts = total_send_attempts.saturating_add(1);
+
+                    match baseband.send_data(0, b"plot-probe") {
+                        Ok(bytes) => {
+                            total_bytes_sent = total_bytes_sent.saturating_add(bytes);
+                            notes.push(format!(
+                                "Poll {} sent {} bytes on socket 0 while link state was {}",
+                                poll_index + 1,
+                                bytes,
+                                state_name
+                            ));
+                        }
+                        Err(err) => {
+                            notes.push(format!(
+                                "Poll {} failed to send traffic on socket 0 while link state was {}: {}",
+                                poll_index + 1,
+                                state_name,
+                                err
+                            ));
+                        }
+                    }
+                }
+            }
+            Err(err) => notes.push(format!("Poll {} failed to read link status: {}", poll_index + 1, err)),
+        }
+    }
+
+    if let Err(err) = baseband.set_pair_mode(false, 0x01) {
+        notes.push(format!("Failed to disable pair mode after exercise: {}", err));
+    } else {
+        notes.push("Disabled pair mode after exercise".to_string());
+    }
+
+    refresh_snapshot_from_baseband(&state, &baseband).await;
+
+    let final_link_state = final_status
+        .links
+        .first()
+        .map(|link| format_link_state(link.state).to_string())
+        .unwrap_or_else(|| "Unavailable".to_string());
+    let success = final_status
+        .links
+        .first()
+        .map(|link| link.state >= 1)
+        .unwrap_or(false);
+    let final_peer_mac = final_status.links.first().and_then(|link| link.peer_mac_hex.clone());
+
+    Json(BasebandLinkExerciseResponse {
+        available: true,
+        success,
+        message: notes.join(" | "),
+        initial_link_state,
+        final_link_state,
+        states_seen,
+        final_peer_mac,
+        socket_initialized,
+        total_bytes_sent,
+        total_send_attempts,
+    })
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -366,7 +764,8 @@ fn spawn_data_feeder(state: Arc<AppState>) {
                 Some(baseband) => match baseband.get_status_snapshot() {
                     Ok(status) => {
                         let stats = baseband.get_communication_stats();
-                        build_hardware_snapshot(tick, &status, &stats, Some(&previous))
+                        let plot_snapshot = baseband.get_plot_snapshot();
+                        build_hardware_snapshot(tick, &status, &stats, plot_snapshot.as_ref(), Some(&previous))
                     }
                     Err(err) => {
                         if tick % 30 == 1 {
@@ -389,19 +788,20 @@ fn spawn_data_feeder(state: Arc<AppState>) {
 }
 
 fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
-    let main_rssi = -72 + oscillate(sequence, 5, 17) - oscillate(sequence / 3, 3, 11);
-    let aux_rssi = -76 + oscillate(sequence + 5, 4, 19) - oscillate(sequence / 2, 2, 7);
     let peer_main_rssi = -65 + oscillate(sequence + 4, 4, 13);
     let peer_aux_rssi = -69 + oscillate(sequence + 7, 5, 15);
-    let current_main_rssi = main_rssi.clamp(-79, -58);
-    let current_aux_rssi = aux_rssi.clamp(-83, -60);
     let peer_current_main_rssi = peer_main_rssi.clamp(-74, -52);
     let peer_current_aux_rssi = peer_aux_rssi.clamp(-78, -56);
 
-    let main_history = build_history(sequence, current_main_rssi, HISTORY_POINTS, 6);
-    let aux_history = build_history(sequence + 3, current_aux_rssi, HISTORY_POINTS, 5);
     let peer_main_history = build_history(sequence + 9, peer_current_main_rssi, HISTORY_POINTS, 5);
     let peer_aux_history = build_history(sequence + 12, peer_current_aux_rssi, HISTORY_POINTS, 4);
+    let ap_snr = 118 + oscillate(sequence, 9, 13);
+    let ap_ldpc_err = (sequence % 7) as i32 + oscillate(sequence + 2, 2, 5).max(0);
+    let ap_ldpc_num = 360 + oscillate(sequence + 5, 24, 17);
+    let ap_gain_a = 72 + oscillate(sequence + 1, 7, 9);
+    let ap_gain_b = 68 + oscillate(sequence + 4, 6, 11);
+    let ap_mcs_rx = 6 + ((sequence % 6) as i32);
+    let ap_fch_lock = if sequence % 9 == 0 { 0 } else { 1 };
 
     let receive_bytes = 3_965_000 + sequence * 18_400;
     let transmit_bytes = 10_085_000 + sequence * 24_900;
@@ -456,25 +856,59 @@ fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
             rssi_aux_history: peer_aux_history,
         }],
         chart: RssiChart {
-            target_mac_address: "00:0F:92:FA:37:C5".to_string(),
-            primary_label: "RSSI Main".to_string(),
-            secondary_label: "RSSI Aux".to_string(),
-            current_primary_rssi_dbm: current_main_rssi,
-            current_secondary_rssi_dbm: current_aux_rssi,
-            min_rssi_dbm: main_history
-                .iter()
-                .chain(aux_history.iter())
-                .copied()
-                .min()
-                .unwrap_or(current_main_rssi.min(current_aux_rssi)),
-            max_rssi_dbm: main_history
-                .iter()
-                .chain(aux_history.iter())
-                .copied()
-                .max()
-                .unwrap_or(current_main_rssi.max(current_aux_rssi)),
-            primary_points: main_history,
-            secondary_points: aux_history,
+            title: "AP Plot Data".to_string(),
+            target_mac_address: "00:0F:92:FA:37:CE".to_string(),
+            series: vec![
+                build_chart_series(
+                    "ap_snr",
+                    "ap_snr",
+                    "",
+                    Some(ap_snr),
+                    build_metric_history(sequence, ap_snr, HISTORY_POINTS, 8, 60, 180),
+                ),
+                build_chart_series(
+                    "ap_ldpc_err",
+                    "ap_ldpc_err",
+                    "",
+                    Some(ap_ldpc_err),
+                    build_metric_history(sequence + 1, ap_ldpc_err, HISTORY_POINTS, 2, 0, 20),
+                ),
+                build_chart_series(
+                    "ap_ldpc_num",
+                    "ap_ldpc_num",
+                    "",
+                    Some(ap_ldpc_num),
+                    build_metric_history(sequence + 2, ap_ldpc_num, HISTORY_POINTS, 18, 250, 420),
+                ),
+                build_chart_series(
+                    "ap_gain_a",
+                    "ap_gain_a",
+                    "",
+                    Some(ap_gain_a),
+                    build_metric_history(sequence + 3, ap_gain_a, HISTORY_POINTS, 6, 40, 100),
+                ),
+                build_chart_series(
+                    "ap_gain_b",
+                    "ap_gain_b",
+                    "",
+                    Some(ap_gain_b),
+                    build_metric_history(sequence + 4, ap_gain_b, HISTORY_POINTS, 6, 40, 100),
+                ),
+                build_chart_series(
+                    "ap_mcs_rx",
+                    "ap_mcs_rx",
+                    "",
+                    Some(ap_mcs_rx),
+                    build_metric_history(sequence + 5, ap_mcs_rx, HISTORY_POINTS, 2, 0, 24),
+                ),
+                build_chart_series(
+                    "ap_fch_lock",
+                    "ap_fch_lock",
+                    "",
+                    Some(ap_fch_lock),
+                    build_metric_history(sequence + 6, ap_fch_lock, HISTORY_POINTS, 1, 0, 1),
+                ),
+            ],
         },
     }
 }
@@ -483,54 +917,102 @@ fn build_hardware_snapshot(
     sequence: u64,
     status: &BbGetStatusSummary,
     stats: &CommunicationStats,
+    plot_snapshot: Option<&BbPlotSnapshotSummary>,
     previous: Option<&WirelessSnapshot>,
 ) -> WirelessSnapshot {
-    let local_main_history = history_from_previous(
-        previous.map(|snapshot| snapshot.chart.primary_points.as_slice()),
-        RSSI_UNAVAILABLE_DBM,
-        HISTORY_POINTS,
-    );
-    let local_aux_history = history_from_previous(
-        previous.map(|snapshot| snapshot.chart.secondary_points.as_slice()),
-        RSSI_UNAVAILABLE_DBM,
-        HISTORY_POINTS,
-    );
     let connections = status
         .links
         .iter()
-        .map(|link| ConnectionStatus {
-            link_slot: format!("SLOT {}", link.slot),
-            link_state: format_link_state(link.state).to_string(),
-            pair_state: if link.pair_state {
-                "Pairing".to_string()
-            } else {
-                "Stable".to_string()
-            },
-            mac_address: link
-                .peer_mac_hex
-                .clone()
-                .unwrap_or_else(|| format!("SLOT {} Peer Unknown", link.slot)),
-            tx_mod: status
-                .tx_mcs
-                .map(format_mcs)
-                .unwrap_or_else(|| "Unavailable".to_string()),
-            rx_mod: link
-                .rx_mcs
-                .map(format_mcs)
-                .unwrap_or_else(|| "Unavailable".to_string()),
-            snr_db: SNR_UNAVAILABLE_DB,
-            rssi_main_dbm: RSSI_UNAVAILABLE_DBM,
-            rssi_aux_dbm: RSSI_UNAVAILABLE_DBM,
-            signal_level_main: map_signal_level(RSSI_UNAVAILABLE_DBM),
-            signal_level_aux: map_signal_level(RSSI_UNAVAILABLE_DBM),
-            rssi_main_history: vec![RSSI_UNAVAILABLE_DBM; HISTORY_POINTS],
-            rssi_aux_history: vec![RSSI_UNAVAILABLE_DBM; HISTORY_POINTS],
+        .map(|link| {
+            let current_main = link.signal_main.unwrap_or(RSSI_UNAVAILABLE_DBM);
+            let current_aux = link.signal_aux.unwrap_or(RSSI_UNAVAILABLE_DBM);
+
+            ConnectionStatus {
+                link_slot: format!("SLOT {}", link.slot),
+                link_state: format_link_state(link.state).to_string(),
+                pair_state: format_pair_state(link),
+                mac_address: link
+                    .peer_mac_hex
+                    .clone()
+                    .unwrap_or_else(|| format!("SLOT {} Peer Unknown", link.slot)),
+                tx_mod: status
+                    .tx_mcs
+                    .map(format_mcs)
+                    .unwrap_or_else(|| "Unavailable".to_string()),
+                rx_mod: link
+                    .rx_mcs
+                    .map(format_mcs)
+                    .unwrap_or_else(|| "Unavailable".to_string()),
+                snr_db: link.snr_db.unwrap_or(SNR_UNAVAILABLE_DB),
+                rssi_main_dbm: current_main,
+                rssi_aux_dbm: current_aux,
+                signal_level_main: map_signal_level(current_main),
+                signal_level_aux: map_signal_level(current_aux),
+                rssi_main_history: history_from_previous(
+                    previous_connection_history(previous, link.slot, true),
+                    current_main,
+                    HISTORY_POINTS,
+                ),
+                rssi_aux_history: history_from_previous(
+                    previous_connection_history(previous, link.slot, false),
+                    current_aux,
+                    HISTORY_POINTS,
+                ),
+            }
         })
         .collect::<Vec<_>>();
-    let peer_mac = connections
-        .first()
-        .map(|connection| connection.mac_address.clone())
-        .unwrap_or_else(|| "Unavailable".to_string());
+    let chart_target = status.mac_hex.clone();
+    let chart_series = vec![
+        build_chart_series_from_source(
+            "ap_snr",
+            "ap_snr",
+            "",
+            plot_snapshot.map(|plot| plot.snr.as_slice()),
+            previous,
+        ),
+        build_chart_series_from_source(
+            "ap_ldpc_err",
+            "ap_ldpc_err",
+            "",
+            plot_snapshot.map(|plot| plot.ldpc_err.as_slice()),
+            previous,
+        ),
+        build_chart_series_from_source(
+            "ap_ldpc_num",
+            "ap_ldpc_num",
+            "",
+            plot_snapshot.map(|plot| plot.ldpc_num.as_slice()),
+            previous,
+        ),
+        build_chart_series_from_source(
+            "ap_gain_a",
+            "ap_gain_a",
+            "",
+            plot_snapshot.map(|plot| plot.gain_a.as_slice()),
+            previous,
+        ),
+        build_chart_series_from_source(
+            "ap_gain_b",
+            "ap_gain_b",
+            "",
+            plot_snapshot.map(|plot| plot.gain_b.as_slice()),
+            previous,
+        ),
+        build_chart_series_from_source(
+            "ap_mcs_rx",
+            "ap_mcs_rx",
+            "",
+            plot_snapshot.map(|plot| plot.mcs_rx.as_slice()),
+            previous,
+        ),
+        build_chart_series_from_source(
+            "ap_fch_lock",
+            "ap_fch_lock",
+            "",
+            plot_snapshot.map(|plot| plot.fch_lock.as_slice()),
+            previous,
+        ),
+    ];
 
     WirelessSnapshot {
         sequence,
@@ -561,22 +1043,247 @@ fn build_hardware_snapshot(
         },
         connections,
         chart: RssiChart {
-            target_mac_address: peer_mac,
-            primary_label: "RSSI Main".to_string(),
-            secondary_label: "RSSI Aux".to_string(),
-            current_primary_rssi_dbm: RSSI_UNAVAILABLE_DBM,
-            current_secondary_rssi_dbm: RSSI_UNAVAILABLE_DBM,
-            min_rssi_dbm: RSSI_UNAVAILABLE_DBM,
-            max_rssi_dbm: RSSI_UNAVAILABLE_DBM,
-            primary_points: local_main_history,
-            secondary_points: local_aux_history,
+            title: "AP Plot Data".to_string(),
+            target_mac_address: chart_target,
+            series: chart_series,
         },
     }
+}
+
+fn previous_connection_history(
+    previous: Option<&WirelessSnapshot>,
+    slot: usize,
+    primary: bool,
+) -> Option<&[i32]> {
+    previous
+        .and_then(|snapshot| {
+            snapshot
+                .connections
+                .iter()
+                .find(|connection| connection.link_slot == format!("SLOT {}", slot))
+        })
+        .map(|connection| {
+            if primary {
+                connection.rssi_main_history.as_slice()
+            } else {
+                connection.rssi_aux_history.as_slice()
+            }
+        })
+}
+
+fn build_chart_series(
+    key: &str,
+    label: &str,
+    unit: &str,
+    current_value: Option<i32>,
+    mut points: Vec<i32>,
+) -> ChartSeries {
+    if points.is_empty() {
+        if let Some(value) = current_value {
+            points.push(value);
+        }
+    }
+
+    let (min_value, max_value) = chart_range(&points);
+
+    ChartSeries {
+        key: key.to_string(),
+        label: label.to_string(),
+        unit: unit.to_string(),
+        current_value: current_value.or_else(|| points.last().copied()),
+        min_value,
+        max_value,
+        points,
+    }
+}
+
+fn build_chart_series_from_source(
+    key: &str,
+    label: &str,
+    unit: &str,
+    source: Option<&[i32]>,
+    previous: Option<&WirelessSnapshot>,
+) -> ChartSeries {
+    let points = source
+        .map(|values| take_tail_points(values, HISTORY_POINTS))
+        .or_else(|| previous_chart_points(previous, key))
+        .unwrap_or_default();
+    let current_value = points.last().copied();
+
+    build_chart_series(key, label, unit, current_value, points)
+}
+
+fn previous_chart_points(previous: Option<&WirelessSnapshot>, key: &str) -> Option<Vec<i32>> {
+    previous.and_then(|snapshot| {
+        snapshot
+            .chart
+            .series
+            .iter()
+            .find(|series| series.key == key)
+            .map(|series| series.points.clone())
+    })
+}
+
+fn take_tail_points(values: &[i32], limit: usize) -> Vec<i32> {
+    let start = values.len().saturating_sub(limit);
+    values[start..].to_vec()
+}
+
+fn chart_range(points: &[i32]) -> (Option<i32>, Option<i32>) {
+    let min_value = points.iter().copied().min();
+    let max_value = points.iter().copied().max();
+
+    (min_value, max_value)
 }
 
 fn carry_forward_snapshot(mut previous: WirelessSnapshot, sequence: u64) -> WirelessSnapshot {
     previous.sequence = sequence;
     previous
+}
+
+fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRuntimeView {
+    let channels = details
+        .channel_info
+        .as_ref()
+        .map(|info| info.channels.as_slice())
+        .unwrap_or(&[])
+        .iter()
+        .map(|entry| WirelessChannelOption {
+            index: entry.index,
+            frequency: format_frequency_khz(entry.frequency_khz),
+            power_dbm: entry.power_dbm,
+        })
+        .collect::<Vec<_>>();
+
+    WirelessRuntimeView {
+        local_mac_address: details.status.mac_hex.clone(),
+        operation_mode: format_operation_mode(&details.status),
+        compatibility_mode: format_baseband_mode(details.status.mode).to_string(),
+        bandwidth_code: details.status.bandwidth,
+        bandwidth: details
+            .status
+            .bandwidth
+            .map(format_bandwidth)
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        frequency_khz: details.status.frequency_khz,
+        frequency: details
+            .status
+            .frequency_khz
+            .map(format_frequency_khz)
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        system_uptime: details
+            .system_info
+            .as_ref()
+            .map(|info| format_uptime_ms(info.uptime))
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        compile_time: details
+            .system_info
+            .as_ref()
+            .map(|info| info.compile_time.clone())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        software_version: details
+            .system_info
+            .as_ref()
+            .map(|info| info.software_version.clone())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        hardware_version: details
+            .system_info
+            .as_ref()
+            .map(|info| info.hardware_version.clone())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        firmware_version: details
+            .system_info
+            .as_ref()
+            .map(|info| info.firmware_version.clone())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        band_auto: details.band_info.as_ref().map(|info| info.band_auto),
+        work_band: details
+            .band_info
+            .as_ref()
+            .map(|info| format_band_name(info.work_band).to_string())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        channel_auto: details.channel_info.as_ref().map(|info| info.auto_mode),
+        channel_count: details.channel_info.as_ref().map(|info| info.chan_num),
+        work_channel_index: details.channel_info.as_ref().map(|info| info.work_chan),
+        work_channel_frequency: details
+            .channel_info
+            .as_ref()
+            .and_then(|info| info.work_frequency_khz)
+            .map(format_frequency_khz)
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        channels,
+        current_slot: details.mcs_value.as_ref().map(|info| info.slot),
+        current_mcs_direction: details
+            .mcs_value
+            .as_ref()
+            .map(|info| format_direction(info.dir).to_string())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        current_mcs_auto: details.mcs_mode.as_ref().map(|info| info.auto_mode),
+        current_mcs_value: details.mcs_value.as_ref().map(|info| info.mcs),
+        current_mcs_label: details
+            .mcs_value
+            .as_ref()
+            .map(|info| format_mcs(info.mcs))
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        current_mcs_throughput_kbps: details.mcs_value.as_ref().map(|info| info.throughput_kbps),
+        current_power_user: details.current_power.as_ref().map(|info| info.user),
+        current_power_mode: details
+            .power_mode
+            .as_ref()
+            .map(|info| format_power_mode(info.pwr_mode).to_string())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        current_power_auto: details.power_auto.as_ref().map(|info| info.enabled),
+        current_power_dbm: details.current_power.as_ref().map(|info| info.power_dbm),
+        warnings: details.warnings.clone(),
+    }
+}
+
+async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<BasebandManager>) {
+    if let Ok(status) = baseband.get_status_snapshot() {
+        let previous = state.snapshot.read().await.clone();
+        let next_sequence = previous.sequence.wrapping_add(1);
+        let plot_snapshot = baseband.get_plot_snapshot();
+        let snapshot = build_hardware_snapshot(
+            next_sequence,
+            &status,
+            &baseband.get_communication_stats(),
+            plot_snapshot.as_ref(),
+            Some(&previous),
+        );
+
+        {
+            let mut guard = state.snapshot.write().await;
+            *guard = snapshot.clone();
+        }
+
+        let _ = state.tx.send(snapshot);
+    }
+}
+
+fn parse_direction(value: &str) -> Result<u8, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "tx" | "0" => Ok(ffi::BB_DIR_TX),
+        "rx" | "1" => Ok(ffi::BB_DIR_RX),
+        other => Err(format!("Unsupported direction '{}'; expected tx or rx", other)),
+    }
+}
+
+fn parse_power_mode(value: &str) -> Result<u8, String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "openloop" | "open" | "0" => Ok(0),
+        "closeloop" | "close" | "closed" | "1" => Ok(1),
+        other => Err(format!("Unsupported power_mode '{}'; expected openloop or closeloop", other)),
+    }
+}
+
+fn format_uptime_ms(uptime_ms: u64) -> String {
+    let total_seconds = uptime_ms / 1000;
+    let days = total_seconds / 86_400;
+    let hours = (total_seconds % 86_400) / 3_600;
+    let minutes = (total_seconds % 3_600) / 60;
+    let seconds = total_seconds % 60;
+
+    format!("{}d {:02}:{:02}:{:02}", days, hours, minutes, seconds)
 }
 
 fn history_from_previous(previous: Option<&[i32]>, next: i32, len: usize) -> Vec<i32> {
@@ -607,6 +1314,25 @@ fn build_history(sequence: u64, current: i32, len: usize, amplitude: i32) -> Vec
         .collect()
 }
 
+fn build_metric_history(
+    sequence: u64,
+    current: i32,
+    len: usize,
+    amplitude: i32,
+    min_value: i32,
+    max_value: i32,
+) -> Vec<i32> {
+    let drift_amplitude = (amplitude / 3).max(1);
+
+    (0..len)
+        .map(|offset| {
+            let step = sequence.saturating_sub((len - offset) as u64);
+            (current + oscillate(step, amplitude.max(1), 9) - oscillate(step / 2 + 3, drift_amplitude, 5))
+                .clamp(min_value, max_value)
+        })
+        .collect()
+}
+
 fn oscillate(step: u64, amplitude: i32, period: u64) -> i32 {
     let cycle = (step % period) as i32;
     let pivot = (period as i32) / 2;
@@ -617,10 +1343,24 @@ fn oscillate(step: u64, amplitude: i32, period: u64) -> i32 {
 fn map_signal_level(rssi_dbm: i32) -> u8 {
     match rssi_dbm {
         i32::MIN..=-100 => 0,
+        96..=i32::MAX => 4,
+        64..=95 => 3,
+        32..=63 => 2,
+        1..=31 => 1,
         -58..=-1 => 4,
         -64..=-59 => 3,
         -70..=-65 => 2,
         _ => 1,
+    }
+}
+
+fn format_pair_state(link: &ffi::BbLinkStatusSummary) -> String {
+    if link.pair_state {
+        "Pairing".to_string()
+    } else if link.peer_mac_hex.is_some() {
+        "Paired".to_string()
+    } else {
+        "Stable".to_string()
     }
 }
 
@@ -659,6 +1399,31 @@ fn format_baseband_mode(mode: u8) -> &'static str {
         1 => "Multi User",
         2 => "Relay",
         3 => "Director",
+        _ => "Unknown",
+    }
+}
+
+fn format_band_name(band: u8) -> &'static str {
+    match band {
+        0 => "1G",
+        1 => "2G",
+        2 => "5G",
+        _ => "Unknown",
+    }
+}
+
+fn format_direction(dir: u8) -> &'static str {
+    match dir {
+        0 => "TX",
+        1 => "RX",
+        _ => "Unknown",
+    }
+}
+
+fn format_power_mode(mode: u8) -> &'static str {
+    match mode {
+        0 => "Open Loop",
+        1 => "Close Loop",
         _ => "Unknown",
     }
 }

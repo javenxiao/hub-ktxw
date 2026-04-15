@@ -491,6 +491,10 @@ body {
     padding: 10px 12px 12px;
 }
 
+.chart-box {
+    padding: 0 12px 12px;
+}
+
 .panel-box h2,
 .chart-panel h2 {
     margin: 0 0 10px;
@@ -658,14 +662,17 @@ tbody td {
 }
 
 .chart-notes {
-    margin-left: 145px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    margin-left: 0;
     color: var(--note);
     font-size: 12px;
     font-weight: 700;
 }
 
 .chart-notes p {
-    margin: 6px 0;
+    margin: 0;
 }
 
 .rssi-reading {
@@ -755,6 +762,177 @@ tbody td {
     stroke: #3152cb;
 }
 
+.plot-series-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.plot-series-card {
+    border: 1px solid #d7dde3;
+    background: #fbfcfe;
+    padding: 10px;
+}
+
+.plot-series-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.plot-series-header h3 {
+    margin: 0;
+    font-size: 13px;
+    color: #1d3557;
+}
+
+.plot-series-header p {
+    margin: 3px 0 0;
+    color: #6b7280;
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.plot-series-value {
+    color: #0b3954;
+    font-size: 18px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.plot-series-range {
+    margin: 8px 0 6px;
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.plot-series-chart {
+    display: block;
+    width: 100%;
+    height: 92px;
+}
+
+.plot-series-chart line {
+    stroke: #dde3ea;
+    stroke-width: 1;
+}
+
+.plot-line {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.plot-line-0 {
+    stroke: #1677b3;
+}
+
+.plot-line-1 {
+    stroke: #e76f51;
+}
+
+.plot-line-2 {
+    stroke: #2a9d8f;
+}
+
+.plot-line-3 {
+    stroke: #7b2cbf;
+}
+
+.plot-line-4 {
+    stroke: #f4a261;
+}
+
+.plot-line-5 {
+    stroke: #d62828;
+}
+
+.plot-line-6 {
+    stroke: #4d908e;
+}
+
+.plot-series-empty {
+    padding: 18px;
+    border: 1px dashed #cfd8e3;
+    background: #f8fafc;
+    color: #5b6776;
+    font-weight: 700;
+    text-align: center;
+}
+
+.runtime-panel {
+    padding-bottom: 14px;
+}
+
+.runtime-table td:nth-child(2),
+.runtime-table td:nth-child(4) {
+    font-weight: 700;
+    color: #1d3557;
+}
+
+.wireless-runtime-status,
+.wireless-control-status {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border: 1px solid #d7dde3;
+    background: #f8fafc;
+    color: #455468;
+    font-weight: 700;
+}
+
+.control-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.control-card {
+    border: 1px solid #d7dde3;
+    background: #fbfcfe;
+    padding: 10px;
+}
+
+.control-card h3 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #1d3557;
+}
+
+.control-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.control-row label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #4b5968;
+}
+
+.control-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.control-actions .sys-button-primary,
+.control-actions .sys-button-default,
+.control-card > .sys-button-primary {
+    width: 100%;
+}
+
+@media (min-width: 761px) {
+    .control-actions .sys-button-primary,
+    .control-actions .sys-button-default {
+        width: auto;
+    }
+}
+
 @media (max-width: 760px) {
     body {
         padding: 8px;
@@ -783,7 +961,7 @@ tbody td {
     }
 
     .chart-notes {
-        margin-left: 90px;
+        margin-left: 0;
     }
 
     .chart-legend {
