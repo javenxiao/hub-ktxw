@@ -523,6 +523,22 @@ impl BasebandApi {
         ffi::set_power_auto(self.handle_ptr(), enabled)
     }
 
+    pub fn set_band_mode(&self, auto_mode: bool) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_band_mode(self.handle_ptr(), auto_mode)
+    }
+
+    pub fn set_band(&self, target_band: u8) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        ffi::set_band(self.handle_ptr(), target_band)
+    }
+
     pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
         if !self.initialized {
             return Err("Baseband API not initialized".to_string());
@@ -731,6 +747,16 @@ impl BasebandManager {
     pub fn set_power_auto(&self, enabled: bool) -> Result<(), String> {
         let api = self.api.lock().unwrap();
         api.set_power_auto(enabled)
+    }
+
+    pub fn set_band_mode(&self, auto_mode: bool) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_band_mode(auto_mode)
+    }
+
+    pub fn set_band(&self, target_band: u8) -> Result<(), String> {
+        let api = self.api.lock().unwrap();
+        api.set_band(target_band)
     }
 
     pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {

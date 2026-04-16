@@ -42,11 +42,8 @@
                         <div class="sys-section">
                             <h3 class="sys-section-title">System Information</h3>
                             <table class="sys-table">
-                                <tr><td>Host Name</td><td id="sys-host-name">--</td><td>Description</td><td id="sys-description">--</td></tr>
-                                <tr><td>Product Name</td><td id="sys-product-name">--</td><td>System Date</td><td id="sys-system-date">--</td></tr>
-                                <tr><td>Hardware Version</td><td id="sys-hw-version">--</td><td>System Uptime</td><td id="sys-uptime">--</td></tr>
-                                <tr><td>Software Version</td><td id="sys-sw-version">--</td><td>Build Date</td><td id="sys-build-date">--</td></tr>
-                                <tr><td>Software Build</td><td id="sys-sw-build">--</td><td>Build Time</td><td id="sys-build-time">--</td></tr>
+                                <tr><td>Local MAC</td><td id="runtime-mac">--</td><td>Compile Time</td><td id="runtime-compile-time">--</td></tr>
+                                <tr><td>Software Version</td><td id="runtime-software-version">--</td><td>Firmware Version</td><td id="runtime-firmware-version">--</td></tr>
                             </table>
                         </div>
                         <hr class="sys-divider">
@@ -199,17 +196,6 @@
             fetch('/api/system/info', { cache: 'no-store' })
                 .then(res => res.json())
                 .then(data => {
-                    // 系统信息
-                    document.getElementById('sys-host-name').textContent = data.host_name || '--';
-                    document.getElementById('sys-description').textContent = data.description || '--';
-                    document.getElementById('sys-product-name').textContent = data.product_name || '--';
-                    document.getElementById('sys-system-date').textContent = data.system_date || '--';
-                    document.getElementById('sys-hw-version').textContent = data.hardware_version || 'Rev A';
-                    document.getElementById('sys-uptime').textContent = data.system_uptime || '--';
-                    document.getElementById('sys-sw-version').textContent = data.software_version || 'v1.4.0';
-                    document.getElementById('sys-build-date').textContent = data.build_date || '--';
-                    document.getElementById('sys-sw-build').textContent = data.software_build || '1005';
-                    document.getElementById('sys-build-time').textContent = data.build_time || '--';
                     // LAN
                     document.getElementById('lan-mac').textContent = data.lan_mac_address || data.mac_address || '--';
                     document.getElementById('lan-conn-type').textContent = data.lan_connection_type || data.connection_type || '--';
@@ -281,9 +267,9 @@
             <section class="content-panel panel-wireless">
                 <div class="section-strip"></div>
                 <div class="panel-body wireless-page">
-                    <div class="sub-tabs" aria-label="无线二级栏目">
-                        <span class="sub-tab active">Status</span>
-                        <span class="sub-tab">RF</span>
+                    <div class="sub-tabs" aria-label="无线二级栏目" role="tablist">
+                        <button class="sub-tab active" type="button" data-wireless-tab="status" role="tab" aria-selected="true" aria-controls="wireless-panel-status">Status</button>
+                        <button class="sub-tab" type="button" data-wireless-tab="rf" role="tab" aria-selected="false" aria-controls="wireless-panel-rf">RF</button>
                     </div>
 
                     <div class="page-header">
@@ -291,232 +277,351 @@
                         <div class="live-state" id="live-state">等待服务器数据</div>
                     </div>
 
-                    <section class="panel-box">
-                        <h2>RF Status</h2>
+                    <div class="wireless-subpage active" id="wireless-panel-status" data-wireless-panel="status" role="tabpanel">
+                        <section class="panel-box">
+                            <h2>RF Status</h2>
 
-                        <div class="table-block">
-                            <h3>General Status</h3>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>MAC Address</th>
-                                        <th>Operation Mode</th>
-                                        <th>Network ID</th>
-                                        <th>Compatibility Mode</th>
-                                        <th>Bandwidth</th>
-                                        <th>Frequency</th>
-                                        <th>Tx Power</th>
-                                        <th>Encryption Type</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td id="general-mac">--</td>
-                                        <td id="general-mode">--</td>
-                                        <td id="general-network">--</td>
-                                        <td id="general-compatibility">--</td>
-                                        <td id="general-bandwidth">--</td>
-                                        <td id="general-frequency">--</td>
-                                        <td id="general-tx-power">--</td>
-                                        <td id="general-encryption">--</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="table-block compact">
-                            <h3>Traffic Status</h3>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Receive Bytes</th>
-                                        <th>Receive Packets</th>
-                                        <th>Transmit Bytes</th>
-                                        <th>Transmit Packets</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td id="traffic-rx-bytes">--</td>
-                                        <td id="traffic-rx-packets">--</td>
-                                        <td id="traffic-tx-bytes">--</td>
-                                        <td id="traffic-tx-packets">--</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="table-block compact">
-                            <h3>Connection Info (<span id="connection-count">0</span>)</h3>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Link Slot</th>
-                                        <th>Link State</th>
-                                        <th>Pair State</th>
-                                        <th>MAC Address</th>
-                                        <th>Tx Mod</th>
-                                        <th>Rx Mod</th>
-                                        <th>SNR (dB)</th>
-                                        <th>Signal A</th>
-                                        <th>Signal B</th>
-                                        <th>Signal Level</th>
-                                        <th>RSSI Graph</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="connection-table-body">
-                                    <tr>
-                                        <td colspan="11">等待连接数据...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <section class="chart-panel">
-                        <h2 id="chart-title">AP Plot Data</h2>
-                        <div class="chart-box">
-                            <div class="chart-notes">
-                                <p id="chart-target-device">Target: --</p>
-                                <p id="chart-series-count">Series: --</p>
-                            </div>
-                            <div class="plot-series-grid" id="plot-series-grid">
-                                <div class="plot-series-empty">等待 Plot 数据...</div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="panel-box runtime-panel">
-                        <h2>Wireless Runtime Details</h2>
-                        <div class="table-block compact">
-                            <h3>Real Parameters</h3>
-                            <table class="runtime-table">
-                                <tbody>
-                                    <tr><td>Local MAC</td><td id="runtime-mac">--</td><td>Work Band</td><td id="runtime-band">--</td></tr>
-                                    <tr><td>Channel Mode</td><td id="runtime-channel-mode">--</td><td>Work Channel</td><td id="runtime-channel">--</td></tr>
-                                    <tr><td>Current Power</td><td id="runtime-power">--</td><td>Power Mode</td><td id="runtime-power-mode">--</td></tr>
-                                    <tr><td>Power Auto</td><td id="runtime-power-auto">--</td><td>Current MCS</td><td id="runtime-mcs">--</td></tr>
-                                    <tr><td>MCS Throughput</td><td id="runtime-throughput">--</td><td>Compile Time</td><td id="runtime-compile-time">--</td></tr>
-                                    <tr><td>Software Version</td><td id="runtime-software-version">--</td><td>Firmware Version</td><td id="runtime-firmware-version">--</td></tr>
-                                    <tr><td>Hardware Version</td><td id="runtime-hardware-version">--</td><td>System Uptime</td><td id="runtime-uptime">--</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p class="wireless-runtime-status" id="wireless-runtime-status">等待真实无线运行时数据...</p>
-                    </section>
-
-                    <section class="panel-box runtime-panel">
-                        <h2>Wireless Control</h2>
-                        <div class="control-grid">
-                            <div class="control-card">
-                                <h3>Channel</h3>
-                                <div class="control-row">
-                                    <label for="control-channel-auto">Mode</label>
-                                    <select id="control-channel-auto" class="sys-input">
-                                        <option value="true">Auto</option>
-                                        <option value="false">Manual</option>
-                                    </select>
-                                </div>
-                                <div class="control-row">
-                                    <label for="control-channel-direction">Direction</label>
-                                    <select id="control-channel-direction" class="sys-input">
-                                        <option value="rx">RX</option>
-                                        <option value="tx">TX</option>
-                                    </select>
-                                </div>
-                                <div class="control-row">
-                                    <label for="control-channel-index">Channel</label>
-                                    <select id="control-channel-index" class="sys-input"></select>
-                                </div>
-                                <div class="control-actions">
-                                    <button id="btn-set-channel-mode" class="sys-button-default" type="button">Apply Mode</button>
-                                    <button id="btn-set-channel" class="sys-button-primary" type="button">Apply Channel</button>
-                                </div>
+                            <div class="table-block">
+                                <h3>General Status</h3>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>MAC Address</th>
+                                            <th>Operation Mode</th>
+                                            <th>Network ID</th>
+                                            <th>Compatibility Mode</th>
+                                            <th>Bandwidth</th>
+                                            <th>Frequency</th>
+                                            <th>Tx Power</th>
+                                            <th>Encryption Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td id="general-mac">--</td>
+                                            <td id="general-mode">--</td>
+                                            <td id="general-network">--</td>
+                                            <td id="general-compatibility">--</td>
+                                            <td id="general-bandwidth">--</td>
+                                            <td id="general-frequency">--</td>
+                                            <td id="general-tx-power">--</td>
+                                            <td id="general-encryption">--</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
 
-                            <div class="control-card">
-                                <h3>Power</h3>
-                                <div class="control-row">
-                                    <label for="control-power-mode">Mode</label>
-                                    <select id="control-power-mode" class="sys-input">
-                                        <option value="openloop">Open Loop</option>
-                                        <option value="closeloop">Close Loop</option>
-                                    </select>
-                                </div>
-                                <div class="control-row">
-                                    <label for="control-power-auto">Auto</label>
-                                    <select id="control-power-auto" class="sys-input">
-                                        <option value="true">Enable</option>
-                                        <option value="false">Disable</option>
-                                    </select>
-                                </div>
-                                <div class="control-row">
-                                    <label for="control-power-user">User</label>
-                                    <input id="control-power-user" class="sys-input" type="number" min="0" max="9" value="0">
-                                </div>
-                                <div class="control-row">
-                                    <label for="control-power-db">Power</label>
-                                    <input id="control-power-db" class="sys-input" type="number" min="0" max="31" value="20">
-                                </div>
-                                <div class="control-actions">
-                                    <button id="btn-set-power-mode" class="sys-button-default" type="button">Apply Mode</button>
-                                    <button id="btn-set-power-auto" class="sys-button-default" type="button">Apply Auto</button>
-                                    <button id="btn-set-power" class="sys-button-primary" type="button">Apply Power</button>
-                                </div>
+                            <div class="table-block compact">
+                                <h3>Traffic Status</h3>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Receive Bytes</th>
+                                            <th>Receive Packets</th>
+                                            <th>Transmit Bytes</th>
+                                            <th>Transmit Packets</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td id="traffic-rx-bytes">--</td>
+                                            <td id="traffic-rx-packets">--</td>
+                                            <td id="traffic-tx-bytes">--</td>
+                                            <td id="traffic-tx-packets">--</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
 
-                            <div class="control-card">
-                                <h3>MCS</h3>
-                                <div class="control-row">
-                                    <label for="control-mcs-slot">Slot</label>
-                                    <input id="control-mcs-slot" class="sys-input" type="number" min="0" max="7" value="0">
-                                </div>
-                                <div class="control-row">
-                                    <label for="control-mcs-auto">Mode</label>
-                                    <select id="control-mcs-auto" class="sys-input">
-                                        <option value="true">Auto</option>
-                                        <option value="false">Manual</option>
-                                    </select>
-                                </div>
-                                <div class="control-row">
-                                    <label for="control-mcs-value">MCS</label>
-                                    <input id="control-mcs-value" class="sys-input" type="number" min="0" max="24" value="0">
-                                </div>
-                                <div class="control-actions">
-                                    <button id="btn-set-mcs-mode" class="sys-button-default" type="button">Apply Mode</button>
-                                    <button id="btn-set-mcs" class="sys-button-primary" type="button">Apply MCS</button>
-                                </div>
+                            <div class="table-block compact">
+                                <h3>Connection Info (<span id="connection-count">0</span>)</h3>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Link Slot</th>
+                                            <th>Link State</th>
+                                            <th>Pair State</th>
+                                            <th>MAC Address</th>
+                                            <th>Tx Mod</th>
+                                            <th>Rx Mod</th>
+                                            <th>SNR (dB)</th>
+                                            <th>Signal A</th>
+                                            <th>Signal B</th>
+                                            <th>Signal Level</th>
+                                            <th>RSSI Graph</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="connection-table-body">
+                                        <tr>
+                                            <td colspan="11">等待连接数据...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
+                        </section>
 
-                            <div class="control-card">
-                                <h3>Bandwidth</h3>
-                                <div class="control-row">
-                                    <label for="control-bandwidth-slot">Slot</label>
-                                    <input id="control-bandwidth-slot" class="sys-input" type="number" min="0" max="7" value="0">
+                        <section class="chart-panel">
+                            <h2 id="chart-title">AP Plot Data</h2>
+                            <div class="chart-box">
+                                <div class="chart-notes">
+                                    <p id="chart-target-device">Target: --</p>
+                                    <p id="chart-series-count">Series: --</p>
                                 </div>
-                                <div class="control-row">
-                                    <label for="control-bandwidth-direction">Direction</label>
-                                    <select id="control-bandwidth-direction" class="sys-input">
-                                        <option value="rx">RX</option>
-                                        <option value="tx">TX</option>
-                                    </select>
+                                <div class="plot-series-grid" id="plot-series-grid">
+                                    <div class="plot-series-empty">等待 Plot 数据...</div>
                                 </div>
-                                <div class="control-row">
-                                    <label for="control-bandwidth-value">Bandwidth</label>
-                                    <select id="control-bandwidth-value" class="sys-input">
-                                        <option value="0">1.25 MHz</option>
-                                        <option value="1">2.5 MHz</option>
-                                        <option value="2">5 MHz</option>
-                                        <option value="3">10 MHz</option>
-                                        <option value="4">20 MHz</option>
-                                        <option value="5">40 MHz</option>
-                                    </select>
-                                </div>
-                                <button id="btn-set-bandwidth" class="sys-button-primary" type="button">Apply Bandwidth</button>
                             </div>
-                        </div>
-                        <p class="wireless-control-status" id="wireless-control-status">尚未执行设置操作</p>
-                    </section>
+                        </section>
+
+                    </div>
+
+                    <div class="wireless-subpage" id="wireless-panel-rf" data-wireless-panel="rf" role="tabpanel" hidden>
+                        <section class="panel-box rf-config-panel">
+                            <div class="rf-config-box">
+                                <div class="sys-section rf-summary-section rf-config-group-basic">
+                                    <h3 class="sys-section-title">Basic Infomation</h3>
+                                    <table class="sys-table rf-summary-table">
+                                        <tbody>
+                                            <tr>
+                                                <td>Radio</td>
+                                                <td>
+                                                    <div class="rf-toggle-display" aria-label="Radio state">
+                                                        <span class="rf-toggle-option rf-toggle-option-on active" id="rf-radio-state-on">On</span>
+                                                        <span class="rf-toggle-option rf-toggle-option-off" id="rf-radio-state-off">Off</span>
+                                                    </div>
+                                                </td>
+                                                <td>Operation Mode</td>
+                                                <td><span id="rf-operation-mode" class="rf-mode-display">--</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="sys-section rf-summary-section rf-config-group-band">
+                                    <h3 class="sys-section-title">Frequency Band</h3>
+                                    <table class="sys-table rf-summary-table">
+                                        <tbody>
+                                            <tr>
+                                                <td>Band Mode</td>
+                                                <td>
+                                                    <div class="rf-boolean-group rf-band-group" role="radiogroup" aria-label="Band selection">
+                                                        <label class="rf-boolean-option" for="control-band-2g">
+                                                            <input id="control-band-2g" type="radio" name="control-band-select" value="1">
+                                                            <span>2.4G</span>
+                                                        </label>
+                                                        <label class="rf-boolean-option" for="control-band-5g">
+                                                            <input id="control-band-5g" type="radio" name="control-band-select" value="2">
+                                                            <span>5.8G</span>
+                                                        </label>
+                                                        <label class="rf-boolean-option" for="control-band-1g">
+                                                            <input id="control-band-1g" type="radio" name="control-band-select" value="0">
+                                                            <span>600M</span>
+                                                        </label>
+                                                        <label class="rf-boolean-option" for="control-band-auto">
+                                                            <input id="control-band-auto" type="radio" name="control-band-select" value="auto">
+                                                            <span>Auto</span>
+                                                        </label>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="rf-summary-pair">
+                                    <div class="sys-section rf-summary-section rf-config-group-channel">
+                                        <h3 class="sys-section-title">Channel</h3>
+                                        <table class="sys-table rf-summary-table">
+                                            <tbody>
+                                                <tr>
+                                                    <td>Auto Mode</td>
+                                                    <td>
+                                                        <div class="rf-boolean-group" role="radiogroup" aria-label="Channel automatic selection">
+                                                            <label class="rf-boolean-option" for="control-channel-auto-on">
+                                                                <input id="control-channel-auto-on" type="radio" name="control-channel-auto" value="true">
+                                                                <span>On</span>
+                                                            </label>
+                                                            <label class="rf-boolean-option" for="control-channel-auto-off">
+                                                                <input id="control-channel-auto-off" type="radio" name="control-channel-auto" value="false">
+                                                                <span>Off</span>
+                                                            </label>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Chan Direction</td>
+                                                    <td>
+                                                        <select id="control-channel-direction" class="sys-input rf-input-short">
+                                                            <option value="tx">TX</option>
+                                                            <option value="rx">RX</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Chan Index</td>
+                                                    <td>
+                                                        <select id="control-channel-index" class="sys-input rf-input-wide"></select>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="sys-section rf-summary-section rf-config-group-bandwidth">
+                                        <h3 class="sys-section-title">Bandwidth</h3>
+                                        <table class="sys-table rf-summary-table">
+                                            <tbody>
+                                                <tr>
+                                                    <td>Slot</td>
+                                                    <td>
+                                                        <input id="control-bandwidth-slot" class="sys-input rf-input-mini" type="number" min="0" max="7" value="0">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Direction</td>
+                                                    <td>
+                                                        <select id="control-bandwidth-direction" class="sys-input rf-input-short">
+                                                            <option value="tx">TX</option>
+                                                            <option value="rx">RX</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Target BW</td>
+                                                    <td>
+                                                        <select id="control-bandwidth-value" class="sys-input rf-input-medium">
+                                                            <option value="0">1.25 MHz</option>
+                                                            <option value="1">2.5 MHz</option>
+                                                            <option value="2">5 MHz</option>
+                                                            <option value="3">10 MHz</option>
+                                                            <option value="4">20 MHz</option>
+                                                            <option value="5">40 MHz</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="rf-summary-pair">
+                                    <div class="sys-section rf-summary-section rf-config-group-power">
+                                        <h3 class="sys-section-title">Power Control</h3>
+                                        <table class="sys-table rf-summary-table">
+                                            <tbody>
+                                                <tr>
+                                                    <td>Adaptive Power</td>
+                                                    <td>
+                                                        <div class="rf-boolean-group" role="radiogroup" aria-label="Adaptive power">
+                                                            <label class="rf-boolean-option" for="control-power-auto-on">
+                                                                <input id="control-power-auto-on" type="radio" name="control-power-auto" value="true">
+                                                                <span>On</span>
+                                                            </label>
+                                                            <label class="rf-boolean-option" for="control-power-auto-off">
+                                                                <input id="control-power-auto-off" type="radio" name="control-power-auto" value="false">
+                                                                <span>Off</span>
+                                                            </label>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Power Mode</td>
+                                                    <td>
+                                                        <select id="control-power-mode" class="sys-input rf-input-medium">
+                                                            <option value="openloop">Open Loop</option>
+                                                            <option value="closeloop">Closed Loop</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Power (dB)</td>
+                                                    <td>
+                                                        <input id="control-power-db" class="sys-input rf-input-mini" type="number" min="0" max="31" value="20">
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="sys-section rf-summary-section rf-config-group-rate">
+                                        <h3 class="sys-section-title">MCS</h3>
+                                        <table class="sys-table rf-summary-table">
+                                            <tbody>
+                                                <tr>
+                                                <td>Auto Mode</td>
+                                                    <td>
+                                                    <div class="rf-boolean-group" role="radiogroup" aria-label="MCS automatic mode">
+                                                        <label class="rf-boolean-option" for="control-mcs-auto-auto">
+                                                            <input id="control-mcs-auto-auto" type="radio" name="control-mcs-auto" value="true">
+                                                            <span>Auto</span>
+                                                        </label>
+                                                        <label class="rf-boolean-option" for="control-mcs-auto-manual">
+                                                            <input id="control-mcs-auto-manual" type="radio" name="control-mcs-auto" value="false">
+                                                            <span>Manual</span>
+                                                        </label>
+                                                    </div>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                <td>QAM</td>
+                                                    <td>
+                                                    <select id="control-mcs-value" class="sys-input rf-input-wide">
+                                                        <option value="0">-1,BPSK CR_1/2 REP_2 dual</option>
+                                                        <option value="1">-1,BPSK CR_1/2 REP_2 single</option>
+                                                        <option value="2">0,BPSK CR_1/2 REP_1 single</option>
+                                                        <option value="3">1,QPSK CR_2/3 REP_1 single</option>
+                                                        <option value="4">2,QPSK CR_3/4 REP_1 single</option>
+                                                        <option value="5">3,QPSK CR_1/2 REP_1 single</option>
+                                                        <option value="6">4,16QAM CR_2/3 REP_1 single</option>
+                                                        <option value="7">5,16QAM CR_3/4 REP_1 single</option>
+                                                        <option value="8">6,16QAM CR_1/2 REP_1 single</option>
+                                                        <option value="9">7,64QAM CR_2/3 REP_1 single</option>
+                                                        <option value="10">8,64QAM CR_3/4 REP_1 single</option>
+                                                        <option value="11">9,64QAM CR_1/2 REP_1 single</option>
+                                                        <option value="12">10,64QAM CR_2/3 REP_1 dual</option>
+                                                        <option value="13">11,64QAM CR_3/4 REP_1 dual</option>
+                                                        <option value="14">12,256QAM CR_1/2 REP_1 single</option>
+                                                        <option value="15">13,256QAM CR_2/3 REP_1 single</option>
+                                                        <option value="16">14,QPSK CR_1/2 REP_1 dual</option>
+                                                        <option value="17">15,QPSK CR_2/3 REP_1 dual</option>
+                                                        <option value="18">16,QPSK CR_3/4 REP_1 dual</option>
+                                                        <option value="19">17,16QAM CR_1/2 REP_1 dual</option>
+                                                        <option value="20">18,16QAM CR_2/3 REP_1 dual</option>
+                                                        <option value="21">19,16QAM CR_3/4 REP_1 dual</option>
+                                                        <option value="22">20,64QAM CR_1/2 REP_1 dual</option>
+                                                        <option value="23">21,64QAM CR_2/3 REP_1 dual</option>
+                                                        <option value="24">22,64QAM CR_3/4 REP_1 dual</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                <td>Slot</td>
+                                                    <td>
+                                                    <select id="control-mcs-slot" class="sys-input rf-input-short">
+                                                        <option value="0">Slot0</option>
+                                                        <option value="1">Slot1</option>
+                                                        <option value="2">Slot2</option>
+                                                        <option value="3">Slot3</option>
+                                                        <option value="4">Slot4</option>
+                                                        <option value="5">Slot5</option>
+                                                        <option value="6">Slot6</option>
+                                                        <option value="7">Slot7</option>
+                                                    </select>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="sys-section rf-summary-section rf-pair-section">
+                                    <h3 class="sys-section-title">Pair</h3>
+                                    <div class="rf-pair-list" id="rf-pair-list"></div>
+                                </div>
+                            </div>
+                            <p class="wireless-control-status" id="wireless-control-status">RF settings apply automatically when values change.</p>
+                        </section>
+                    </div>
                 </div>
             </section>
 
@@ -557,12 +662,32 @@
     <script>
         const liveState = document.getElementById('live-state');
         const connectionTableBody = document.getElementById('connection-table-body');
+        const wirelessSubTabs = Array.from(document.querySelectorAll('.sub-tab[data-wireless-tab]'));
+        const wirelessSubPages = Array.from(document.querySelectorAll('.wireless-subpage'));
         let socket = null;
+        let latestWirelessSnapshot = null;
         let wirelessRuntimeCurrent = null;
         let controlDefaultsInitialized = false;
 
+        function switchWirelessSubTab(tabName) {
+            wirelessSubTabs.forEach((tab) => {
+                const isActive = tab.dataset.wirelessTab === tabName;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', String(isActive));
+            });
+
+            wirelessSubPages.forEach((panel) => {
+                const isActive = panel.dataset.wirelessPanel === tabName;
+                panel.classList.toggle('active', isActive);
+                panel.hidden = !isActive;
+            });
+        }
+
         function setText(id, value) {
-            document.getElementById(id).textContent = value;
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            }
         }
 
         function formatBytes(bytes) {
@@ -607,6 +732,77 @@
                         ? 'pairing'
                         : 'idle';
             return `<span class="status-pill ${stateClass}">${escapeHtml(label)}</span>`;
+        }
+
+        function parseConnectionSlot(linkSlot) {
+            const match = String(linkSlot || '').match(/(\d+)/);
+            return match ? Number(match[1]) : null;
+        }
+
+        function normalizePairMac(macAddress) {
+            const normalized = String(macAddress || '').replaceAll(':', '').trim();
+            return normalized || '00000000';
+        }
+
+        function buildPairStatus(slotConnection) {
+            if (!slotConnection) {
+                return 'idle';
+            }
+
+            const pairState = String(slotConnection.pair_state || '').toLowerCase();
+            const linkState = String(slotConnection.link_state || '').toLowerCase();
+            const macValue = normalizePairMac(slotConnection.mac_address);
+
+            if (pairState.includes('pairing')) {
+                return 'pairing';
+            }
+            if (pairState.includes('paired')) {
+                return 'paired';
+            }
+            if (macValue !== '00000000' && (linkState.includes('connect') || linkState.includes('lock') || pairState.includes('stable'))) {
+                return 'paired';
+            }
+            return 'idle';
+        }
+
+        function buildPairRow(slotIndex, slotConnection) {
+            const status = buildPairStatus(slotConnection);
+            const macValue = normalizePairMac(slotConnection?.mac_address);
+            const isPairing = status === 'pairing';
+            const buttonLabel = isPairing ? 'Stop' : 'Pair';
+            return `
+                <div class="rf-pair-row">
+                    <div class="rf-pair-user">User ${slotIndex + 1}</div>
+                    <span class="rf-pair-dot ${status}" aria-hidden="true"></span>
+                    <div class="rf-pair-mac">${escapeHtml(macValue)}</div>
+                    <button class="sys-button-default rf-pair-button" type="button" data-pair-slot="${slotIndex}" data-pair-start="${String(!isPairing)}">${buttonLabel}</button>
+                </div>
+            `;
+        }
+
+        function renderPairPanel(connections) {
+            const container = document.getElementById('rf-pair-list');
+            if (!container) {
+                return;
+            }
+
+            const bySlot = new Map(
+                (Array.isArray(connections) ? connections : [])
+                    .map((connection) => [parseConnectionSlot(connection.link_slot), connection])
+                    .filter(([slot]) => slot !== null)
+            );
+
+            container.innerHTML = Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex))).join('');
+
+            container.querySelectorAll('[data-pair-slot]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const slot = Number(button.getAttribute('data-pair-slot'));
+                    const pairStart = button.getAttribute('data-pair-start') === 'true';
+                    applyWirelessSetting('set_pair_mode', { slot, pair_start: pairStart }).catch((error) => {
+                        document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
+                    });
+                });
+            });
         }
 
         function toPolylinePoints(values, width, height, minValue, maxValue, startX, startY, endX, endY) {
@@ -698,7 +894,7 @@
             const previousValue = select.value;
             const safeChannels = Array.isArray(channels) ? channels : [];
             select.innerHTML = safeChannels.map((channel) => `
-                <option value="${channel.index}">${channel.index} - ${channel.frequency} (${channel.power_dbm} dBm)</option>
+                <option value="${channel.index}">${channel.index}-${String(channel.frequency || '--').replace(/\s+/g, '').replace('GHz', 'G').replace('MHz', 'M')}</option>
             `).join('');
 
             if (!controlDefaultsInitialized) {
@@ -706,6 +902,31 @@
             } else if (previousValue && safeChannels.some((channel) => String(channel.index) === previousValue)) {
                 select.value = previousValue;
             }
+
+            updateSelectWidth(select);
+        }
+
+        function updateSelectWidth(select) {
+            if (!select || select.tagName !== 'SELECT') {
+                return;
+            }
+
+            const optionTexts = Array.from(select.options).map((option) => option.text || '');
+            const selectedText = select.options[select.selectedIndex]?.text || '';
+            const longestText = optionTexts.reduce((maxLen, text) => Math.max(maxLen, text.length), 0);
+            const baseLength = Math.max(selectedText.length, longestText);
+            const widthCh = Math.max(7, Math.min(baseLength + 5, 40));
+            select.style.width = `${widthCh}ch`;
+        }
+
+        function getSelectedMcsAuto() {
+            return document.querySelector('input[name="control-mcs-auto"]:checked')?.value === 'true';
+        }
+
+        function updateRfSelectWidths() {
+            document.querySelectorAll('#wireless-panel-rf select.sys-input').forEach((select) => {
+                updateSelectWidth(select);
+            });
         }
 
         function formatBooleanState(value, trueLabel, falseLabel) {
@@ -715,66 +936,90 @@
             return value ? trueLabel : falseLabel;
         }
 
+        function setRfRadioState(isOn) {
+            const onElement = document.getElementById('rf-radio-state-on');
+            const offElement = document.getElementById('rf-radio-state-off');
+            onElement.classList.toggle('active', isOn);
+            offElement.classList.toggle('active', !isOn);
+        }
+
+        function renderRfProfile(snapshot) {
+            const general = snapshot?.general || {};
+            const hasRadioData = Boolean(general.mac_address && general.mac_address !== '--');
+
+            setRfRadioState(hasRadioData);
+            setText('rf-operation-mode', formatRfOperationMode(general.operation_mode));
+        }
+
+        function formatRfOperationMode(value) {
+            const normalized = String(value || '').toUpperCase();
+            if (normalized.includes('DEV')) {
+                return 'DEV';
+            }
+            if (normalized.includes('AP')) {
+                return 'AP';
+            }
+            return '--';
+        }
+
         function renderWirelessRuntime(payload) {
-            const statusElement = document.getElementById('wireless-runtime-status');
             if (!payload || !payload.available || !payload.current) {
                 wirelessRuntimeCurrent = null;
-                statusElement.textContent = payload?.message || '真实无线运行时数据不可用';
-                document.getElementById('runtime-mac').textContent = '--';
-                document.getElementById('runtime-band').textContent = '--';
-                document.getElementById('runtime-channel-mode').textContent = '--';
-                document.getElementById('runtime-channel').textContent = '--';
-                document.getElementById('runtime-power').textContent = '--';
-                document.getElementById('runtime-power-mode').textContent = '--';
-                document.getElementById('runtime-power-auto').textContent = '--';
-                document.getElementById('runtime-mcs').textContent = '--';
-                document.getElementById('runtime-throughput').textContent = '--';
-                document.getElementById('runtime-compile-time').textContent = '--';
-                document.getElementById('runtime-software-version').textContent = '--';
-                document.getElementById('runtime-firmware-version').textContent = '--';
-                document.getElementById('runtime-hardware-version').textContent = '--';
-                document.getElementById('runtime-uptime').textContent = '--';
+                setText('runtime-mac', '--');
+                setText('runtime-compile-time', '--');
+                setText('runtime-software-version', '--');
+                setText('runtime-firmware-version', '--');
+                document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
+                    radio.checked = false;
+                });
+                document.getElementById('control-channel-auto-on').checked = false;
+                document.getElementById('control-channel-auto-off').checked = false;
+                document.getElementById('control-mcs-auto-auto').checked = false;
+                document.getElementById('control-mcs-auto-manual').checked = false;
+                document.getElementById('control-power-auto-on').checked = false;
+                document.getElementById('control-power-auto-off').checked = false;
                 return;
             }
 
             const current = payload.current;
             wirelessRuntimeCurrent = current;
-            const warningText = Array.isArray(current.warnings) && current.warnings.length > 0
-                ? ` | Partial warnings: ${current.warnings.join(' ; ')}`
-                : '';
-
-            document.getElementById('runtime-mac').textContent = current.local_mac_address;
-            document.getElementById('runtime-band').textContent = `${current.work_band} · ${formatBooleanState(current.band_auto, 'Auto', 'Manual')}`;
-            document.getElementById('runtime-channel-mode').textContent = formatBooleanState(current.channel_auto, 'Auto', 'Manual');
-            document.getElementById('runtime-channel').textContent = `${current.work_channel_index ?? '--'} · ${current.work_channel_frequency}`;
-            document.getElementById('runtime-power').textContent = current.current_power_dbm === null || current.current_power_dbm === undefined
-                ? '--'
-                : `${current.current_power_dbm} dBm (User ${current.current_power_user ?? '--'})`;
-            document.getElementById('runtime-power-mode').textContent = current.current_power_mode;
-            document.getElementById('runtime-power-auto').textContent = formatBooleanState(current.current_power_auto, 'Enabled', 'Disabled');
-            document.getElementById('runtime-mcs').textContent = `${current.current_mcs_label} (${current.current_mcs_direction}, Slot ${current.current_slot ?? '--'})`;
-            document.getElementById('runtime-throughput').textContent = current.current_mcs_throughput_kbps === null || current.current_mcs_throughput_kbps === undefined
-                ? '--'
-                : `${current.current_mcs_throughput_kbps} kbps`;
-            document.getElementById('runtime-compile-time').textContent = current.compile_time || '--';
-            document.getElementById('runtime-software-version').textContent = current.software_version || '--';
-            document.getElementById('runtime-firmware-version').textContent = current.firmware_version || '--';
-            document.getElementById('runtime-hardware-version').textContent = current.hardware_version || '--';
-            document.getElementById('runtime-uptime').textContent = current.system_uptime || '--';
-            statusElement.textContent = `${payload.message || '真实无线运行时数据已刷新'}${warningText}`;
+            setText('runtime-mac', current.local_mac_address || '--');
+            setText('runtime-compile-time', current.compile_time || '--');
+            setText('runtime-software-version', current.software_version || '--');
+            setText('runtime-firmware-version', current.firmware_version || '--');
 
             populateChannelOptions(current.channels, current.work_channel_index);
 
             if (!controlDefaultsInitialized) {
-                document.getElementById('control-channel-auto').value = String(current.channel_auto ?? true);
+                if (current.band_auto === true) {
+                    document.getElementById('control-band-auto').checked = true;
+                } else {
+                    const bandCode = String(current.work_band_code ?? '1');
+                    const selectedBand = document.querySelector(`input[name="control-band-select"][value="${bandCode}"]`);
+                    if (selectedBand) {
+                        selectedBand.checked = true;
+                    }
+                }
+                if ((current.channel_auto ?? true) === true) {
+                    document.getElementById('control-channel-auto-on').checked = true;
+                } else {
+                    document.getElementById('control-channel-auto-off').checked = true;
+                }
                 document.getElementById('control-channel-direction').value = 'rx';
                 document.getElementById('control-power-mode').value = current.current_power_mode.toLowerCase().startsWith('open') ? 'openloop' : 'closeloop';
-                document.getElementById('control-power-auto').value = String(current.current_power_auto ?? true);
-                document.getElementById('control-power-user').value = current.current_power_user ?? 0;
+                if ((current.current_power_auto ?? true) === true) {
+                    document.getElementById('control-power-auto-on').checked = true;
+                } else {
+                    document.getElementById('control-power-auto-off').checked = true;
+                }
                 document.getElementById('control-power-db').value = current.current_power_dbm ?? 20;
-                document.getElementById('control-mcs-slot').value = current.current_slot ?? 0;
-                document.getElementById('control-mcs-auto').value = String(current.current_mcs_auto ?? true);
-                document.getElementById('control-mcs-value').value = current.current_mcs_value ?? 0;
+                document.getElementById('control-mcs-slot').value = String(current.current_slot ?? 0);
+                if ((current.current_mcs_auto ?? true) === true) {
+                    document.getElementById('control-mcs-auto-auto').checked = true;
+                } else {
+                    document.getElementById('control-mcs-auto-manual').checked = true;
+                }
+                document.getElementById('control-mcs-value').value = String(current.current_mcs_value ?? 0);
                 document.getElementById('control-bandwidth-slot').value = current.current_slot ?? 0;
                 document.getElementById('control-bandwidth-direction').value = 'rx';
                 if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
@@ -782,6 +1027,8 @@
                 }
                 controlDefaultsInitialized = true;
             }
+
+            updateRfSelectWidths();
         }
 
         async function loadWirelessRuntimeDetails() {
@@ -792,7 +1039,7 @@
 
         async function applyWirelessSetting(action, payload) {
             const statusElement = document.getElementById('wireless-control-status');
-            statusElement.textContent = `正在执行 ${action} ...`;
+            statusElement.textContent = `Applying ${action} ...`;
 
             const response = await fetch('/api/wireless/runtime/apply', {
                 method: 'POST',
@@ -815,6 +1062,47 @@
 
             await loadInitialSnapshot().catch(() => {});
             return result;
+        }
+
+        function getSelectedPowerAuto() {
+            return document.querySelector('input[name="control-power-auto"]:checked')?.value === 'true';
+        }
+
+        function getSelectedChannelAuto() {
+            return document.querySelector('input[name="control-channel-auto"]:checked')?.value === 'true';
+        }
+
+        async function applyBandSelection() {
+            const selected = document.querySelector('input[name="control-band-select"]:checked');
+            if (!selected) {
+                return;
+            }
+
+            if (selected.value === 'auto') {
+                await applyWirelessSetting('set_band_mode', { auto_mode: true });
+                return;
+            }
+
+            await applyWirelessSetting('set_band_mode', { auto_mode: false });
+            await applyWirelessSetting('set_band', { target_band: Number(selected.value) });
+        }
+
+        function bindAutoApply(controlIds, action, buildPayload, eventName = 'change') {
+            controlIds.forEach((controlId) => {
+                const control = document.getElementById(controlId);
+                if (!control) {
+                    return;
+                }
+
+                control.addEventListener(eventName, () => {
+                    if (control.tagName === 'SELECT') {
+                        updateSelectWidth(control);
+                    }
+                    applyWirelessSetting(action, buildPayload()).catch((error) => {
+                        document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
+                    });
+                });
+            });
         }
 
         function renderConnections(connections) {
@@ -863,6 +1151,7 @@
         }
 
         function renderSnapshot(snapshot) {
+            latestWirelessSnapshot = snapshot;
             setText('general-mac', snapshot.general.mac_address);
             setText('general-mode', snapshot.general.operation_mode);
             setText('general-network', snapshot.general.network_id);
@@ -881,6 +1170,8 @@
             setText('traffic-tx-bytes', formatBytes(snapshot.traffic.transmit_bytes));
             setText('traffic-tx-packets', snapshot.traffic.transmit_packets.toLocaleString());
 
+            renderRfProfile(snapshot);
+            renderPairPanel(snapshot.connections);
             renderConnections(snapshot.connections);
             renderChart(snapshot.chart);
             liveState.textContent = `实时数据已连接 · 序号 ${snapshot.sequence}`;
@@ -922,75 +1213,59 @@
             });
         }
 
-        document.getElementById('btn-set-channel-mode').addEventListener('click', () => {
-            applyWirelessSetting('set_channel_mode', {
-                auto_mode: document.getElementById('control-channel-auto').value === 'true',
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+        bindAutoApply(['control-channel-auto-on', 'control-channel-auto-off'], 'set_channel_mode', () => ({
+            auto_mode: getSelectedChannelAuto(),
+            }));
+
+        document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
+            radio.addEventListener('change', () => {
+                applyBandSelection().catch((error) => {
+                    document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
+                });
             });
         });
 
-        document.getElementById('btn-set-channel').addEventListener('click', () => {
-            applyWirelessSetting('set_channel', {
+        bindAutoApply(['control-channel-direction', 'control-channel-index'], 'set_channel', () => ({
                 direction: document.getElementById('control-channel-direction').value,
                 channel_index: Number(document.getElementById('control-channel-index').value),
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
-            });
-        });
+            }));
 
-        document.getElementById('btn-set-power-mode').addEventListener('click', () => {
-            applyWirelessSetting('set_power_mode', {
+        bindAutoApply(['control-power-mode'], 'set_power_mode', () => ({
                 power_mode: document.getElementById('control-power-mode').value,
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
-            });
-        });
+            }));
 
-        document.getElementById('btn-set-power-auto').addEventListener('click', () => {
-            applyWirelessSetting('set_power_auto', {
-                auto_mode: document.getElementById('control-power-auto').value === 'true',
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
-            });
-        });
+        bindAutoApply(['control-power-auto-on', 'control-power-auto-off'], 'set_power_auto', () => ({
+            auto_mode: getSelectedPowerAuto(),
+            }));
 
-        document.getElementById('btn-set-power').addEventListener('click', () => {
-            applyWirelessSetting('set_power', {
-                user: Number(document.getElementById('control-power-user').value),
+        bindAutoApply(['control-power-db'], 'set_power', () => ({
+            user: Number(wirelessRuntimeCurrent?.current_power_user ?? 0),
                 power_dbm: Number(document.getElementById('control-power-db').value),
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
-            });
-        });
+            }));
 
-        document.getElementById('btn-set-mcs-mode').addEventListener('click', () => {
-            applyWirelessSetting('set_mcs_mode', {
+        bindAutoApply(['control-mcs-slot', 'control-mcs-auto-auto', 'control-mcs-auto-manual'], 'set_mcs_mode', () => ({
                 slot: Number(document.getElementById('control-mcs-slot').value),
-                auto_mode: document.getElementById('control-mcs-auto').value === 'true',
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
-            });
-        });
+            auto_mode: getSelectedMcsAuto(),
+            }));
 
-        document.getElementById('btn-set-mcs').addEventListener('click', () => {
-            applyWirelessSetting('set_mcs', {
+        bindAutoApply(['control-mcs-slot', 'control-mcs-value'], 'set_mcs', () => ({
                 slot: Number(document.getElementById('control-mcs-slot').value),
                 mcs: Number(document.getElementById('control-mcs-value').value),
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
-            });
-        });
+            }));
 
-        document.getElementById('btn-set-bandwidth').addEventListener('click', () => {
-            applyWirelessSetting('set_bandwidth', {
+        bindAutoApply(['control-bandwidth-slot', 'control-bandwidth-direction', 'control-bandwidth-value'], 'set_bandwidth', () => ({
                 slot: Number(document.getElementById('control-bandwidth-slot').value),
                 direction: document.getElementById('control-bandwidth-direction').value,
                 bandwidth: Number(document.getElementById('control-bandwidth-value').value),
-            }).catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `设置失败: ${error.message}`;
+            }));
+
+        wirelessSubTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                switchWirelessSubTab(tab.dataset.wirelessTab || 'status');
             });
         });
+
+        switchWirelessSubTab('status');
 
         loadInitialSnapshot().catch((error) => {
             liveState.textContent = `初始数据加载失败: ${error.message}`;
@@ -999,7 +1274,7 @@
         });
 
         loadWirelessRuntimeDetails().catch((error) => {
-            document.getElementById('wireless-runtime-status').textContent = `运行时数据加载失败: ${error.message}`;
+            console.error('Failed to load wireless runtime details:', error);
         });
 
         window.setInterval(() => {

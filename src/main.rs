@@ -101,6 +101,7 @@ struct WirelessRuntimeView {
     local_mac_address: String,
     operation_mode: String,
     compatibility_mode: String,
+    work_band_code: Option<u8>,
     bandwidth_code: Option<u8>,
     bandwidth: String,
     frequency_khz: Option<u32>,
@@ -141,8 +142,10 @@ struct WirelessChannelOption {
 struct WirelessSettingRequest {
     action: String,
     auto_mode: Option<bool>,
+    pair_start: Option<bool>,
     slot: Option<u8>,
     user: Option<u8>,
+    target_band: Option<u8>,
     direction: Option<String>,
     channel_index: Option<u8>,
     mcs: Option<u8>,
@@ -399,6 +402,17 @@ async fn apply_wireless_setting(
         .unwrap_or(0);
 
     let result = match request.action.as_str() {
+        "set_pair_mode" => request
+            .pair_start
+            .ok_or_else(|| "pair_start is required".to_string())
+            .and_then(|pair_start| {
+                let slot = request.slot.unwrap_or(default_slot);
+                let slot_bmp = 1_u8.checked_shl(u32::from(slot)).unwrap_or(0);
+                if slot_bmp == 0 {
+                    return Err(format!("Unsupported slot '{}'; expected 0-7", slot));
+                }
+                baseband.set_pair_mode(pair_start, slot_bmp)
+            }),
         "set_channel_mode" => request
             .auto_mode
             .ok_or_else(|| "auto_mode is required".to_string())
@@ -432,6 +446,15 @@ async fn apply_wireless_setting(
             .auto_mode
             .ok_or_else(|| "auto_mode is required".to_string())
             .and_then(|enabled| baseband.set_power_auto(enabled)),
+        "set_band_mode" => request
+            .auto_mode
+            .ok_or_else(|| "auto_mode is required".to_string())
+            .and_then(|auto_mode| baseband.set_band_mode(auto_mode)),
+        "set_band" => request
+            .target_band
+            .ok_or_else(|| "target_band is required".to_string())
+            .and_then(parse_band)
+            .and_then(|target_band| baseband.set_band(target_band)),
         "set_bandwidth_mode" => request
             .auto_mode
             .ok_or_else(|| "auto_mode is required".to_string())
@@ -1159,6 +1182,7 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
         local_mac_address: details.status.mac_hex.clone(),
         operation_mode: format_operation_mode(&details.status),
         compatibility_mode: format_baseband_mode(details.status.mode).to_string(),
+        work_band_code: details.band_info.as_ref().map(|info| info.work_band),
         bandwidth_code: details.status.bandwidth,
         bandwidth: details
             .status
@@ -1273,6 +1297,13 @@ fn parse_power_mode(value: &str) -> Result<u8, String> {
         "openloop" | "open" | "0" => Ok(0),
         "closeloop" | "close" | "closed" | "1" => Ok(1),
         other => Err(format!("Unsupported power_mode '{}'; expected openloop or closeloop", other)),
+    }
+}
+
+fn parse_band(value: u8) -> Result<u8, String> {
+    match value {
+        0..=2 => Ok(value),
+        other => Err(format!("Unsupported target_band '{}'; expected 0(600M), 1(2.4G), or 2(5.8G)", other)),
     }
 }
 

@@ -108,6 +108,16 @@ pub struct BbBandInfoSummary {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct BbSetBandModeSummary {
+    pub auto_mode: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BbSetBandSummary {
+    pub target_band: u8,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BbChannelEntrySummary {
     pub index: u8,
     pub frequency_khz: u32,
@@ -590,6 +600,18 @@ pub struct bb_set_pwr_auto_in_t {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_band_mode_t {
+    pub auto_mode: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_band_t {
+    pub target_band: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_bandwidth_t {
     pub slot: u8,
     pub dir: u8,
@@ -822,6 +844,8 @@ pub const BB_SET_CHAN: u32 = bb_request(BB_REQ_SET, 6);
 pub const BB_SET_POWER_MODE: u32 = bb_request(BB_REQ_SET, 7);
 pub const BB_SET_POWER: u32 = bb_request(BB_REQ_SET, 8);
 pub const BB_SET_POWER_AUTO: u32 = bb_request(BB_REQ_SET, 9);
+pub const BB_SET_BAND_MODE: u32 = bb_request(BB_REQ_SET, 18);
+pub const BB_SET_BAND: u32 = bb_request(BB_REQ_SET, 19);
 pub const BB_SET_MCS_MODE: u32 = bb_request(BB_REQ_SET, 12);
 pub const BB_SET_MCS: u32 = bb_request(BB_REQ_SET, 13);
 pub const BB_SET_BANDWIDTH: u32 = bb_request(BB_REQ_SET, 22);
@@ -1718,6 +1742,42 @@ pub fn set_power_auto(handle: *mut bb_dev_handle_t, enabled: bool) -> Result<(),
         ) {
             0 => Ok(()),
             e => Err(format!("bb_ioctl(BB_SET_POWER_AUTO) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn set_band_mode(handle: *mut bb_dev_handle_t, auto_mode: bool) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_band_mode_t {
+        auto_mode: u8::from(auto_mode),
+    };
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_BAND_MODE as c_uint,
+            &input as *const bb_set_band_mode_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_BAND_MODE) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn set_band(handle: *mut bb_dev_handle_t, target_band: u8) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_band_t { target_band };
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_BAND as c_uint,
+            &input as *const bb_set_band_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_BAND) failed with code: {}", e)),
         }
     }
 }
