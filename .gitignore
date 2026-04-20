@@ -5,3 +5,4 @@ ar_dbg_client
 target
 target_verify
 stress-result.json
+daemon_log/
