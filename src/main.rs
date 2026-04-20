@@ -273,12 +273,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 初始化基带 API
     let (baseband, baseband_health) = match BasebandManager::initialize_with_health() {
         (Some(bb), health) => {
-            info!("✓ Baseband API initialized successfully");
             let mut health = health;
 
             if health.effective_mode == "hardware-remote-bb-host" {
+                if health.host.connected {
+                    info!("✓ Remote bb_host session initialized successfully");
+                } else {
+                    warn!(
+                        "Remote bb_host manager initialized without an active daemon session: {}",
+                        health.host.message
+                    );
+                    info!("Remote bb_host auto-reconnect remains enabled; waiting for daemon availability");
+                }
                 health.socket_init.message = "Skipped in remote bb_host mode".to_string();
             } else {
+                info!("✓ Baseband API initialized successfully");
                 // 初始化通信 socket
                 let socket_result = bb.initialize_socket(0);
                 health.record_socket_init(socket_result.clone(), 0);
@@ -545,7 +554,16 @@ fn build_system_info() -> SystemInfo {
 }
 
 async fn get_baseband_health(State(state): State<Arc<AppState>>) -> Json<BasebandHealthStatus> {
-    Json(state.baseband_health.clone())
+    let response = match state.baseband.as_ref() {
+        Some(baseband) => {
+            let mut health = baseband.get_health_status();
+            health.socket_init = state.baseband_health.socket_init.clone();
+            health
+        }
+        None => state.baseband_health.clone(),
+    };
+
+    Json(response)
 }
 
 async fn get_baseband_stats(State(state): State<Arc<AppState>>) -> Json<BasebandStatsResponse> {

@@ -390,9 +390,9 @@
                                                         <span class="rf-toggle-option rf-toggle-option-off" id="rf-radio-state-off">Off</span>
                                                     </div>
                                                 </td>
-                                                <td>Operation Mode</td>
+                                                <td>Operation Device</td>
                                                 <td>
-                                                    <select id="rf-operation-mode" class="sys-input rf-mode-select" aria-label="Operation mode device list">
+                                                    <select id="rf-operation-mode" class="sys-input rf-mode-select" aria-label="Operation device list">
                                                         <option value="">--</option>
                                                     </select>
                                                 </td>
@@ -949,9 +949,11 @@
             offElement.classList.toggle('active', !isOn);
         }
 
-        function renderRfProfile(snapshot) {
-            const general = snapshot?.general || {};
-            const hasRadioData = Boolean(general.mac_address && general.mac_address !== '--');
+        function renderRfProfile() {
+            const hasRadioData = Boolean(
+                wirelessRuntimeCurrent?.local_mac_address
+                && wirelessRuntimeCurrent.local_mac_address !== '--'
+            );
 
             setRfRadioState(hasRadioData);
         }
@@ -996,6 +998,7 @@
         function renderWirelessRuntime(payload) {
             if (!payload || !payload.available || !payload.current) {
                 wirelessRuntimeCurrent = null;
+                renderRfProfile();
                 renderRfDeviceOptions(null);
                 setText('runtime-mac', '--');
                 setText('runtime-compile-time', '--');
@@ -1015,6 +1018,7 @@
 
             const current = payload.current;
             wirelessRuntimeCurrent = current;
+            renderRfProfile();
             renderRfDeviceOptions(current);
             setText('runtime-mac', current.local_mac_address || '--');
             setText('runtime-compile-time', current.compile_time || '--');

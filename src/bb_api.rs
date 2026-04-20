@@ -32,6 +32,38 @@ fn run_remote_sdk_call<T>(enabled: bool, operation: impl FnOnce() -> Result<T, S
     result
 }
 
+#[derive(Debug, Clone)]
+struct RemoteHostConfig {
+    address: String,
+    port: i32,
+}
+
+struct RemoteSessionConnectOutcome {
+    status: ffi::BbGetStatusSummary,
+    device_count: i32,
+    daemon_version: Option<String>,
+}
+
+fn remote_host_config_from_env() -> Option<RemoteHostConfig> {
+    let address = std::env::var("BB_HOST_ADDR").ok()?;
+    let port = std::env::var("BB_HOST_PORT")
+        .ok()
+        .and_then(|value| value.parse::<i32>().ok())
+        .unwrap_or(0);
+
+    Some(RemoteHostConfig { address, port })
+}
+
+fn non_empty_trimmed(value: String) -> Option<String> {
+    let trimmed = value.trim();
+
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BasebandOperationStatus {
     pub attempted: bool,
@@ -187,6 +219,7 @@ pub struct BasebandApi {
     requires_start: bool,
     device_handle: usize,
     host_handle: usize,
+    remote_host: Option<RemoteHostConfig>,
     host_devices_cache: RefCell<Vec<ffi::BbDiscoveredDeviceSummary>>,
     plot_subscription_active: bool,
     plot_user: Option<u8>,
@@ -202,6 +235,327 @@ impl BasebandApi {
             .filter(|character| character.is_ascii_hexdigit())
             .flat_map(|character| character.to_lowercase())
             .collect()
+    }
+
+    fn is_remote_mode(&self) -> bool {
+        self.remote_host.is_some()
+    }
+
+    fn clear_remote_session_state(&mut self) {
+        if self.plot_subscription_active && self.device_handle != 0 {
+            if let Some(user) = self.plot_user {
+                let _ = ffi::unsubscribe_plot_stream(self.handle_ptr(), user);
+            }
+        }
+        self.plot_subscription_active = false;
+        self.plot_user = None;
+
+        if self.host_handle != 0 {
+            self.close_remote_handles();
+        } else if self.device_handle != 0 {
+            let _ = ffi::close_device(self.handle_ptr());
+            self.device_handle = 0;
+        }
+
+        if self.host_handle != 0 {
+            let _ = ffi::disconnect_host(self.host_ptr());
+            self.host_handle = 0;
+        }
+
+        self.initialized = false;
+        self.started = false;
+        self.host_devices_cache.borrow_mut().clear();
+        self.remote_device_handles.clear();
+    }
+
+    fn remember_current_remote_device(&mut self, status: &ffi::BbGetStatusSummary) {
+        let active_mac = Self::normalize_mac(&status.mac_hex);
+
+        if active_mac.is_empty() {
+            self.active_device_mac = None;
+            return;
+        }
+
+        self.active_device_mac = Some(active_mac.clone());
+        self.remember_remote_handle(active_mac, self.device_handle);
+    }
+
+    fn establish_remote_session(&mut self) -> Result<RemoteSessionConnectOutcome, String> {
+        let remote_host = self
+            .remote_host
+            .clone()
+            .ok_or_else(|| "Remote bb_host mode not configured".to_string())?;
+
+        let host = run_remote_sdk_call(true, || ffi::connect_host(&remote_host.address, remote_host.port))?;
+        self.host_handle = host as usize;
+
+        let daemon_version = ffi::get_daemon_version(host).ok().and_then(non_empty_trimmed);
+        let preferred_mac = self.active_device_mac.clone();
+        let open_result = if let Some(target_mac) = preferred_mac.as_deref() {
+            match run_remote_sdk_call(true, || ffi::open_host_device_by_mac(self.host_ptr(), target_mac)) {
+                Ok(result) => Ok(result),
+                Err(err) => {
+                    tracing::warn!(
+                        "Failed to reopen preferred remote device {}: {}. Falling back to first detected device.",
+                        target_mac,
+                        err
+                    );
+                    run_remote_sdk_call(true, || ffi::open_first_device_on_host(self.host_ptr()))
+                }
+            }
+        } else {
+            run_remote_sdk_call(true, || ffi::open_first_device_on_host(self.host_ptr()))
+        };
+
+        let (device_handle, device_count) = match open_result {
+            Ok(result) => result,
+            Err(err) => {
+                let _ = ffi::disconnect_host(self.host_ptr());
+                self.host_handle = 0;
+                return Err(err);
+            }
+        };
+
+        let status = match run_remote_sdk_call(true, || {
+            ffi::get_status(device_handle, ffi::BB_ALL_DATA_USER_BMP)
+        }) {
+            Ok(status) => status,
+            Err(err) => {
+                let _ = ffi::close_device(device_handle);
+                let _ = ffi::disconnect_host(self.host_ptr());
+                self.host_handle = 0;
+                return Err(err);
+            }
+        };
+
+        self.device_handle = device_handle as usize;
+        self.initialized = true;
+        self.remember_current_remote_device(&status);
+
+        if let Err(err) = self.refresh_host_devices_cache() {
+            tracing::warn!("Failed to refresh remote host device cache after connect: {}", err);
+        }
+
+        Ok(RemoteSessionConnectOutcome {
+            status,
+            device_count,
+            daemon_version,
+        })
+    }
+
+    fn ensure_remote_session(&mut self) -> Result<(), String> {
+        if !self.is_remote_mode() {
+            return Ok(());
+        }
+
+        if self.initialized && self.host_handle != 0 && self.device_handle != 0 {
+            return Ok(());
+        }
+
+        self.clear_remote_session_state();
+        let outcome = self.establish_remote_session()?;
+        let remote_host = self.remote_host.as_ref().expect("remote host config must exist");
+        let active_mac = outcome.status.mac_hex.clone();
+
+        if let Some(version) = outcome.daemon_version.as_ref() {
+            tracing::info!(
+                "Remote bb_host session ready: {}:{} daemon_version={} device_count={} active_device={}",
+                remote_host.address,
+                remote_host.port,
+                version,
+                outcome.device_count,
+                active_mac
+            );
+        } else {
+            tracing::info!(
+                "Remote bb_host session ready: {}:{} device_count={} active_device={}",
+                remote_host.address,
+                remote_host.port,
+                outcome.device_count,
+                active_mac
+            );
+        }
+
+        Ok(())
+    }
+
+    fn execute_remote_operation<T>(
+        &mut self,
+        label: &str,
+        mut operation: impl FnMut(&mut Self) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.ensure_remote_session()?;
+
+        match operation(self) {
+            Ok(value) => Ok(value),
+            Err(first_err) => {
+                tracing::warn!(
+                    "Remote operation '{}' failed: {}. Resetting session and retrying once.",
+                    label,
+                    first_err
+                );
+                self.clear_remote_session_state();
+                self.ensure_remote_session()?;
+                operation(self).map_err(|retry_err| {
+                    format!(
+                        "{}; retry after remote reconnect failed: {}",
+                        first_err,
+                        retry_err
+                    )
+                })
+            }
+        }
+    }
+
+    fn with_device_operation<T>(
+        &mut self,
+        label: &str,
+        mut operation: impl FnMut(*mut ffi::bb_dev_handle_t) -> Result<T, String>,
+    ) -> Result<T, String> {
+        if self.is_remote_mode() {
+            self.execute_remote_operation(label, |api| operation(api.handle_ptr()))
+        } else {
+            if !self.initialized {
+                return Err("Baseband API not initialized".to_string());
+            }
+
+            operation(self.handle_ptr())
+        }
+    }
+
+    fn current_remote_device_count(&self) -> Option<i32> {
+        let device_count = self.host_devices_cache.borrow().len();
+
+        if device_count > i32::MAX as usize {
+            Some(i32::MAX)
+        } else {
+            Some(device_count as i32)
+        }
+    }
+
+    fn snapshot_remote_health(&mut self) -> BasebandHealthStatus {
+        let mut health = BasebandHealthStatus::new();
+        let remote_host = self.remote_host.clone();
+
+        health.effective_mode = "hardware-remote-bb-host".to_string();
+        health.init.message = "Skipped in remote bb_host mode".to_string();
+        health.start.message = "Skipped in remote bb_host mode".to_string();
+        health.socket_init.message = "Skipped in remote bb_host mode".to_string();
+        health.device_open.attempted = true;
+        health.status_read.attempted = true;
+
+        match self.get_status_summary() {
+            Ok(status) => {
+                health.host.connected = self.host_handle != 0 && self.device_handle != 0;
+
+                if let Some(config) = remote_host.as_ref() {
+                    health.host.daemon_version = if self.host_handle != 0 {
+                        ffi::get_daemon_version(self.host_ptr()).ok().and_then(non_empty_trimmed)
+                    } else {
+                        None
+                    };
+                    health.host.message = if let Some(version) = health.host.daemon_version.as_ref() {
+                        format!(
+                            "Connected to bb_host {}:{} (daemon_version={})",
+                            config.address,
+                            config.port,
+                            version
+                        )
+                    } else {
+                        format!(
+                            "Connected to bb_host {}:{} (daemon version unavailable)",
+                            config.address,
+                            config.port
+                        )
+                    };
+                }
+
+                if let Err(err) = self.refresh_host_devices_cache() {
+                    tracing::warn!("Failed to refresh remote host devices while building health snapshot: {}", err);
+                }
+
+                health.runtime.detected_device_count = self.current_remote_device_count();
+                health.runtime.status_snapshot = Some(status);
+                health.device_open.success = self.device_handle != 0;
+                health.device_open.message = if let Some(device_count) = health.runtime.detected_device_count {
+                    format!("Remote baseband device ready, device_count={}", device_count)
+                } else {
+                    "Remote baseband device ready".to_string()
+                };
+                health.status_read.success = true;
+                health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
+            }
+            Err(err) => {
+                health.host.connected = false;
+                health.device_open.success = false;
+                health.device_open.message = err.clone();
+                health.status_read.success = false;
+                health.status_read.message = err.clone();
+
+                if let Some(config) = remote_host.as_ref() {
+                    health.host.message = format!(
+                        "Failed to connect bb_host {}:{}: {}",
+                        config.address,
+                        config.port,
+                        err
+                    );
+                } else {
+                    health.host.message = err;
+                }
+            }
+        }
+
+        health.sdk = ffi::runtime_diagnostics();
+        health
+    }
+
+    fn snapshot_local_health(&mut self) -> BasebandHealthStatus {
+        let mut health = BasebandHealthStatus::new();
+
+        health.effective_mode = if self.initialized {
+            "hardware-local-sdk".to_string()
+        } else {
+            "simulator".to_string()
+        };
+        health.device_open.message = "Local SDK mode does not open a remote device handle".to_string();
+        health.init.attempted = true;
+        health.init.success = self.initialized;
+        health.init.message = if self.initialized {
+            "bb_init succeeded".to_string()
+        } else {
+            "bb_init not completed".to_string()
+        };
+        health.start.attempted = true;
+        health.start.success = self.started;
+        health.start.message = if self.started {
+            "bb_start succeeded".to_string()
+        } else {
+            "bb_start not completed".to_string()
+        };
+        health.status_read.attempted = true;
+
+        match self.get_status_summary() {
+            Ok(status) => {
+                health.status_read.success = true;
+                health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
+                health.runtime.status_snapshot = Some(status);
+            }
+            Err(err) => {
+                health.status_read.success = false;
+                health.status_read.message = err;
+            }
+        }
+
+        health.sdk = ffi::runtime_diagnostics();
+        health
+    }
+
+    pub fn get_health_status(&mut self) -> BasebandHealthStatus {
+        if self.is_remote_mode() {
+            self.snapshot_remote_health()
+        } else {
+            self.snapshot_local_health()
+        }
     }
 
     fn refresh_host_devices_cache(&mut self) -> Result<(), String> {
@@ -263,12 +617,14 @@ impl BasebandApi {
 
     /// 获取或初始化全局基带 API 实例
     pub fn get_with_health() -> (Self, BasebandHealthStatus) {
+        let remote_host = remote_host_config_from_env();
         let mut api = BasebandApi {
             initialized: false,
             started: false,
             requires_start: true,
             device_handle: 0,
             host_handle: 0,
+            remote_host: remote_host.clone(),
             host_devices_cache: RefCell::new(Vec::new()),
             plot_subscription_active: false,
             plot_user: None,
@@ -278,81 +634,48 @@ impl BasebandApi {
         };
         let mut health = BasebandHealthStatus::new();
 
-        if let Ok(host_addr) = std::env::var("BB_HOST_ADDR") {
-            let host_port = std::env::var("BB_HOST_PORT")
-                .ok()
-                .and_then(|value| value.parse::<i32>().ok())
-                .unwrap_or(0);
-
+        if let Some(remote_host) = remote_host {
+            let host_addr = remote_host.address.clone();
+            let host_port = remote_host.port;
             tracing::info!("Using remote bb_host mode: {}:{}", host_addr, host_port);
             api.requires_start = false;
             health.init.message = "Skipped in remote bb_host mode".to_string();
             health.start.message = "Skipped in remote bb_host mode".to_string();
 
-            match ffi::connect_host(&host_addr, host_port) {
-                Ok(host) => {
-                    api.host_handle = host as usize;
+            match api.establish_remote_session() {
+                Ok(outcome) => {
                     health.host.connected = true;
-                    health.host.daemon_version = ffi::get_daemon_version(host).ok().and_then(|value| {
-                        let trimmed = value.trim();
-
-                        if trimmed.is_empty() {
-                            None
-                        } else {
-                            Some(trimmed.to_string())
-                        }
-                    });
+                    health.host.daemon_version = outcome.daemon_version.clone();
                     health.host.message = if let Some(version) = health.host.daemon_version.as_ref() {
                         format!("Connected to bb_host {}:{} (daemon_version={})", host_addr, host_port, version)
                     } else {
                         format!("Connected to bb_host {}:{} (daemon version unavailable)", host_addr, host_port)
                     };
 
-                    match ffi::open_first_device_on_host(host) {
-                        Ok((device, device_count)) => {
-                            api.device_handle = device as usize;
-                            api.initialized = true;
-                            health.runtime.detected_device_count = Some(device_count);
-                            health.device_open.attempted = true;
-                            health.device_open.success = true;
-                            health.device_open.message = format!("Opened first baseband device from remote host, device_count={}", device_count);
-                            health.status_read.attempted = true;
-                            health.effective_mode = "hardware-remote-bb-host".to_string();
-
-                            match ffi::get_status(api.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP) {
-                                Ok(snapshot) => {
-                                    health.status_read.success = true;
-                                    health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
-                                    let active_mac = Self::normalize_mac(&snapshot.mac_hex);
-                                    api.active_device_mac = Some(active_mac.clone());
-                                    api.remember_remote_handle(active_mac, api.device_handle);
-                                    tracing::info!("Skipping plot stream subscription in remote bb_host mode");
-                                    if let Err(err) = api.refresh_host_devices_cache() {
-                                        tracing::warn!("Failed to cache remote host devices: {}", err);
-                                    }
-                                    health.runtime.status_snapshot = Some(snapshot);
-                                }
-                                Err(err) => {
-                                    health.status_read.success = false;
-                                    health.status_read.message = err;
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let _ = ffi::disconnect_host(host);
-                            api.host_handle = 0;
-                            health.host.connected = false;
-                            health.host.message = format!("Connected to host but failed to open device: {}", e);
-                            health.device_open.attempted = true;
-                            health.device_open.success = false;
-                            health.device_open.message = e.clone();
-                            tracing::error!("Failed to open baseband device from host {}:{}: {}", host_addr, host_port, e);
-                        }
-                    }
+                    health.runtime.detected_device_count = Some(outcome.device_count);
+                    health.device_open.attempted = true;
+                    health.device_open.success = true;
+                    health.device_open.message = format!(
+                        "Opened baseband device from remote host, device_count={}",
+                        outcome.device_count
+                    );
+                    health.status_read.attempted = true;
+                    health.status_read.success = true;
+                    health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
+                    health.effective_mode = "hardware-remote-bb-host".to_string();
+                    tracing::info!("Skipping plot stream subscription in remote bb_host mode");
+                    health.runtime.status_snapshot = Some(outcome.status);
                 }
                 Err(e) => {
                     health.host.connected = false;
+                    health.effective_mode = "hardware-remote-bb-host".to_string();
                     health.host.message = format!("Failed to connect bb_host {}:{}: {}", host_addr, host_port, e);
+                    health.device_open.attempted = true;
+                    health.device_open.success = false;
+                    health.device_open.message = e.clone();
+                    health.status_read.attempted = true;
+                    health.status_read.success = false;
+                    health.status_read.message = e.clone();
                     tracing::error!("Failed to connect bb_host {}:{}: {}", host_addr, host_port, e);
                 }
             }
@@ -460,29 +783,24 @@ impl BasebandApi {
     }
 
     /// 创建数据传输 socket
-    pub fn create_socket(&self, socket_id: u32, flags: u32, max_size: u32) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-        ffi::create_socket(self.handle_ptr(), socket_id, flags, max_size)
-    }
-
-    pub fn get_status_summary(&self) -> Result<ffi::BbGetStatusSummary, String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        run_remote_sdk_call(self.host_handle != 0, || {
-            ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)
+    pub fn create_socket(&mut self, socket_id: u32, flags: u32, max_size: u32) -> Result<(), String> {
+        self.with_device_operation("create_socket", |handle| {
+            ffi::create_socket(handle, socket_id, flags, max_size)
         })
     }
 
-    pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
+    pub fn get_status_summary(&mut self) -> Result<ffi::BbGetStatusSummary, String> {
+        let is_remote = self.is_remote_mode();
 
-        let is_remote = self.host_handle != 0;
+        self.with_device_operation("get_status_summary", |handle| {
+            run_remote_sdk_call(is_remote, || {
+                ffi::get_status(handle, ffi::BB_ALL_DATA_USER_BMP)
+            })
+        })
+    }
+
+    fn load_wireless_runtime_details(&mut self) -> Result<WirelessRuntimeDetails, String> {
+        let is_remote = self.is_remote_mode();
         let status = run_remote_sdk_call(is_remote, || {
             ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)
         })?;
@@ -576,6 +894,20 @@ impl BasebandApi {
         })
     }
 
+    pub fn get_wireless_runtime_details(&mut self) -> Result<WirelessRuntimeDetails, String> {
+        if self.is_remote_mode() {
+            self.execute_remote_operation("get_wireless_runtime_details", |api| {
+                api.load_wireless_runtime_details()
+            })
+        } else {
+            if !self.initialized {
+                return Err("Baseband API not initialized".to_string());
+            }
+
+            self.load_wireless_runtime_details()
+        }
+    }
+
     pub fn get_plot_snapshot(&self) -> Option<ffi::BbPlotSnapshotSummary> {
         if !self.initialized {
             return None;
@@ -584,28 +916,15 @@ impl BasebandApi {
         ffi::latest_plot_snapshot()
     }
 
-    pub fn switch_active_device(&mut self, target_mac: &str) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        if self.host_handle == 0 {
-            return Err("Device switching requires remote bb_host mode".to_string());
-        }
-
-        let normalized_target = Self::normalize_mac(target_mac);
-        if normalized_target.is_empty() {
-            return Err("device_mac is required".to_string());
-        }
-
-        if self.active_device_mac.as_deref() == Some(normalized_target.as_str()) {
+    fn switch_remote_device_once(&mut self, target_mac: &str, normalized_target: &str) -> Result<(), String> {
+        if self.initialized && self.active_device_mac.as_deref() == Some(normalized_target) {
             return Ok(());
         }
 
-        if let Some(cached_handle) = self.cached_remote_handle(&normalized_target) {
+        if let Some(cached_handle) = self.cached_remote_handle(normalized_target) {
             self.device_handle = cached_handle;
             self.initialized = true;
-            self.active_device_mac = Some(normalized_target);
+            self.active_device_mac = Some(normalized_target.to_string());
             return Ok(());
         }
 
@@ -638,7 +957,7 @@ impl BasebandApi {
 
         self.device_handle = new_handle as usize;
         self.initialized = true;
-        self.active_device_mac = Some(normalized_target);
+        self.active_device_mac = Some(normalized_target.to_string());
         self.remember_remote_handle(Self::normalize_mac(&new_status.mac_hex), self.device_handle);
 
         if self.host_handle == 0 {
@@ -650,100 +969,71 @@ impl BasebandApi {
         Ok(())
     }
 
-    pub fn set_pair_mode(&self, start: bool, slot_bmp: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
+    pub fn switch_active_device(&mut self, target_mac: &str) -> Result<(), String> {
+        if !self.is_remote_mode() {
+            return Err("Device switching requires remote bb_host mode".to_string());
         }
 
-        ffi::set_pair_mode(self.handle_ptr(), start, slot_bmp)
+        let normalized_target = Self::normalize_mac(target_mac);
+        if normalized_target.is_empty() {
+            return Err("device_mac is required".to_string());
+        }
+
+        self.execute_remote_operation("switch_active_device", |api| {
+            api.switch_remote_device_once(target_mac, &normalized_target)
+        })
     }
 
-    pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_channel_mode(self.handle_ptr(), auto_mode)
+    pub fn set_pair_mode(&mut self, start: bool, slot_bmp: u8) -> Result<(), String> {
+        self.with_device_operation("set_pair_mode", |handle| ffi::set_pair_mode(handle, start, slot_bmp))
     }
 
-    pub fn set_channel(&self, dir: u8, chan_index: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_channel(self.handle_ptr(), dir, chan_index)
+    pub fn set_channel_mode(&mut self, auto_mode: bool) -> Result<(), String> {
+        self.with_device_operation("set_channel_mode", |handle| ffi::set_channel_mode(handle, auto_mode))
     }
 
-    pub fn set_mcs_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_mcs_mode(self.handle_ptr(), slot, auto_mode)
+    pub fn set_channel(&mut self, dir: u8, chan_index: u8) -> Result<(), String> {
+        self.with_device_operation("set_channel", |handle| ffi::set_channel(handle, dir, chan_index))
     }
 
-    pub fn set_mcs(&self, slot: u8, mcs: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_mcs(self.handle_ptr(), slot, mcs)
+    pub fn set_mcs_mode(&mut self, slot: u8, auto_mode: bool) -> Result<(), String> {
+        self.with_device_operation("set_mcs_mode", |handle| ffi::set_mcs_mode(handle, slot, auto_mode))
     }
 
-    pub fn set_power_mode(&self, pwr_mode: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_power_mode(self.handle_ptr(), pwr_mode)
+    pub fn set_mcs(&mut self, slot: u8, mcs: u8) -> Result<(), String> {
+        self.with_device_operation("set_mcs", |handle| ffi::set_mcs(handle, slot, mcs))
     }
 
-    pub fn set_power(&self, user: u8, power_dbm: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_power(self.handle_ptr(), user, power_dbm)
+    pub fn set_power_mode(&mut self, pwr_mode: u8) -> Result<(), String> {
+        self.with_device_operation("set_power_mode", |handle| ffi::set_power_mode(handle, pwr_mode))
     }
 
-    pub fn set_power_auto(&self, enabled: bool) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_power_auto(self.handle_ptr(), enabled)
+    pub fn set_power(&mut self, user: u8, power_dbm: u8) -> Result<(), String> {
+        self.with_device_operation("set_power", |handle| ffi::set_power(handle, user, power_dbm))
     }
 
-    pub fn set_band_mode(&self, auto_mode: bool) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_band_mode(self.handle_ptr(), auto_mode)
+    pub fn set_power_auto(&mut self, enabled: bool) -> Result<(), String> {
+        self.with_device_operation("set_power_auto", |handle| ffi::set_power_auto(handle, enabled))
     }
 
-    pub fn set_band(&self, target_band: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_band(self.handle_ptr(), target_band)
+    pub fn set_band_mode(&mut self, auto_mode: bool) -> Result<(), String> {
+        self.with_device_operation("set_band_mode", |handle| ffi::set_band_mode(handle, auto_mode))
     }
 
-    pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        ffi::set_bandwidth(self.handle_ptr(), slot, dir, bandwidth)
+    pub fn set_band(&mut self, target_band: u8) -> Result<(), String> {
+        self.with_device_operation("set_band", |handle| ffi::set_band(handle, target_band))
     }
 
-    pub fn set_bandwidth_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
+    pub fn set_bandwidth(&mut self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
+        self.with_device_operation("set_bandwidth", |handle| {
+            ffi::set_bandwidth(handle, slot, dir, bandwidth)
+        })
+    }
 
-        ffi::set_bandwidth_mode(self.handle_ptr(), slot, auto_mode)
+    pub fn set_bandwidth_mode(&mut self, slot: u8, auto_mode: bool) -> Result<(), String> {
+        self.with_device_operation("set_bandwidth_mode", |handle| {
+            ffi::set_bandwidth_mode(handle, slot, auto_mode)
+        })
     }
 
     /// 获取通信统计信息
@@ -772,28 +1062,20 @@ impl Drop for BasebandApi {
             self.started = false;
         }
 
-        if self.initialized {
-            if self.requires_start {
+        if self.requires_start {
+            if self.initialized {
                 let _ = ffi::deinit(self.handle_ptr());
-            }
 
-            if self.host_handle != 0 {
-                self.close_remote_handles();
-            } else if self.device_handle != 0 {
-                let _ = ffi::close_device(self.handle_ptr());
-                self.device_handle = 0;
-            }
+                if self.device_handle != 0 {
+                    let _ = ffi::close_device(self.handle_ptr());
+                    self.device_handle = 0;
+                }
 
-            if self.host_handle != 0 {
-                let _ = ffi::disconnect_host(self.host_ptr());
-                self.host_handle = 0;
-            }
-
-            if self.requires_start {
                 tracing::info!("Baseband SDK deinitialized");
-            } else {
-                tracing::info!("Baseband remote host disconnected");
             }
+        } else if self.is_remote_mode() {
+            self.clear_remote_session_state();
+            tracing::info!("Baseband remote host disconnected");
         }
     }
 }
@@ -821,6 +1103,16 @@ impl BasebandManager {
         let (mut api, mut health) = BasebandApi::get_with_health();
 
         if !api.is_initialized() {
+            if api.is_remote_mode() {
+                health.effective_mode = "hardware-remote-bb-host".to_string();
+                return (
+                    Some(BasebandManager {
+                        api: Arc::new(Mutex::new(api)),
+                    }),
+                    health,
+                );
+            }
+
             return (None, health);
         }
 
@@ -881,7 +1173,7 @@ impl BasebandManager {
 
     /// 初始化通信 socket
     pub fn initialize_socket(&self, socket_id: u32) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         // TX + RX 双向通信
         let flags = ffi::BB_SOCK_FLAG_TX | ffi::BB_SOCK_FLAG_RX;
         api.create_socket(socket_id, flags, 4096)
@@ -895,15 +1187,20 @@ impl BasebandManager {
 
     pub fn get_status_snapshot(&self) -> Result<ffi::BbGetStatusSummary, String> {
         tracing::debug!("BasebandManager::get_status_snapshot acquiring SDK status");
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         let result = api.get_status_summary();
         tracing::debug!(success = result.is_ok(), "BasebandManager::get_status_snapshot finished");
         result
     }
 
     pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.get_wireless_runtime_details()
+    }
+
+    pub fn get_health_status(&self) -> BasebandHealthStatus {
+        let mut api = self.api.lock().unwrap();
+        api.get_health_status()
     }
 
     pub fn get_plot_snapshot(&self) -> Option<ffi::BbPlotSnapshotSummary> {
@@ -912,42 +1209,42 @@ impl BasebandManager {
     }
 
     pub fn set_pair_mode(&self, start: bool, slot_bmp: u8) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_pair_mode(start, slot_bmp)
     }
 
     pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_channel_mode(auto_mode)
     }
 
     pub fn set_channel(&self, dir: u8, chan_index: u8) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_channel(dir, chan_index)
     }
 
     pub fn set_mcs_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_mcs_mode(slot, auto_mode)
     }
 
     pub fn set_mcs(&self, slot: u8, mcs: u8) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_mcs(slot, mcs)
     }
 
     pub fn set_power_mode(&self, pwr_mode: u8) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_power_mode(pwr_mode)
     }
 
     pub fn set_power(&self, user: u8, power_dbm: u8) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_power(user, power_dbm)
     }
 
     pub fn set_power_auto(&self, enabled: bool) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_power_auto(enabled)
     }
 
@@ -957,22 +1254,22 @@ impl BasebandManager {
     }
 
     pub fn set_band_mode(&self, auto_mode: bool) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_band_mode(auto_mode)
     }
 
     pub fn set_band(&self, target_band: u8) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_band(target_band)
     }
 
     pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_bandwidth(slot, dir, bandwidth)
     }
 
     pub fn set_bandwidth_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
         api.set_bandwidth_mode(slot, auto_mode)
     }
 
