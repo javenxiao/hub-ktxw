@@ -21,6 +21,11 @@ use libloading::Library;
 #[cfg(target_os = "windows")]
 const O_RDWR: c_int = 0x0002;
 
+const MAX_HOST_DEVICE_COUNT: usize = 32;
+
+#[cfg(target_os = "windows")]
+static SDK_CONSOLE_REDIRECT_LOCK: Mutex<()> = Mutex::new(());
+
 #[cfg(target_os = "windows")]
 extern "C" {
     fn _dup(fd: c_int) -> c_int;
@@ -105,6 +110,13 @@ pub struct BbSystemInfoSummary {
 pub struct BbBandInfoSummary {
     pub band_auto: bool,
     pub work_band: u8,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BbDiscoveredDeviceSummary {
+    pub mac_address: String,
+    pub role: Option<u8>,
+    pub role_label: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -213,6 +225,13 @@ pub struct bb_dev_handle_t {
 #[repr(C)]
 pub struct bb_host_t {
     _private: [u8; 0],
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_dev_info_t {
+    pub mac: [u8; 32],
+    pub maclen: c_int,
 }
 
 #[repr(C)]
@@ -634,6 +653,7 @@ type BbGetDaemonVerFn = unsafe extern "C" fn(phost: *mut bb_host_t) -> *const i8
 type BbHostConnectFn = unsafe extern "C" fn(phost: *mut *mut bb_host_t, addr: *const i8, port: c_int) -> c_int;
 type BbHostDisconnectFn = unsafe extern "C" fn(phost: *mut bb_host_t) -> c_int;
 type BbDevGetListFn = unsafe extern "C" fn(phost: *mut bb_host_t, plist: *mut *mut *mut bb_dev_t) -> c_int;
+type BbDevGetInfoFn = unsafe extern "C" fn(devs: *mut bb_dev_t, dev_info: *mut bb_dev_info_t) -> c_int;
 type BbDevOpenFn = unsafe extern "C" fn(devs: *mut bb_dev_t) -> *mut bb_dev_handle_t;
 type BbDevCloseFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
 type BbDevFreeListFn = unsafe extern "C" fn(plist: *mut *mut bb_dev_t) -> c_int;
@@ -661,6 +681,7 @@ struct Ar8030Sdk {
     bb_host_connect: BbHostConnectFn,
     bb_host_disconnect: BbHostDisconnectFn,
     bb_dev_getlist: BbDevGetListFn,
+    bb_dev_getinfo: Option<BbDevGetInfoFn>,
     bb_dev_open: BbDevOpenFn,
     bb_dev_close: BbDevCloseFn,
     bb_dev_freelist: BbDevFreeListFn,
@@ -895,6 +916,7 @@ fn load_sdk() -> Result<Ar8030Sdk, String> {
             let bb_host_connect = load_symbol::<BbHostConnectFn>(&library, b"bb_host_connect\0")?;
             let bb_host_disconnect = load_symbol::<BbHostDisconnectFn>(&library, b"bb_host_disconnect\0")?;
             let bb_dev_getlist = load_symbol::<BbDevGetListFn>(&library, b"bb_dev_getlist\0")?;
+            let bb_dev_getinfo = load_optional_symbol::<BbDevGetInfoFn>(&library, b"bb_dev_getinfo\0");
             let bb_dev_open = load_symbol::<BbDevOpenFn>(&library, b"bb_dev_open\0")?;
             let bb_dev_close = load_symbol::<BbDevCloseFn>(&library, b"bb_dev_close\0")?;
             let bb_dev_freelist = load_symbol::<BbDevFreeListFn>(&library, b"bb_dev_freelist\0")?;
@@ -916,6 +938,7 @@ fn load_sdk() -> Result<Ar8030Sdk, String> {
                 bb_host_connect,
                 bb_host_disconnect,
                 bb_dev_getlist,
+                bb_dev_getinfo,
                 bb_dev_open,
                 bb_dev_close,
                 bb_dev_freelist,
@@ -941,6 +964,10 @@ unsafe fn load_symbol<T: Copy>(library: &Library, symbol_name: &[u8]) -> Result<
         .get::<T>(symbol_name)
         .map(|symbol| *symbol)
         .map_err(|err| format!("failed to resolve symbol {}: {}", String::from_utf8_lossy(symbol_name), err))
+}
+
+unsafe fn load_optional_symbol<T: Copy>(library: &Library, symbol_name: &[u8]) -> Option<T> {
+    library.get::<T>(symbol_name).ok().map(|symbol| *symbol)
 }
 
 pub fn runtime_diagnostics() -> FfiRuntimeDiagnostics {
@@ -1123,6 +1150,7 @@ unsafe extern "C" fn handle_plot_event(arg: *mut c_void, _user: *mut c_void) {
 fn suppress_sdk_console_output<T, F: FnOnce() -> T>(action: F) -> T {
     #[cfg(target_os = "windows")]
     {
+        let _redirect_guard = SDK_CONSOLE_REDIRECT_LOCK.lock().ok();
         let null_path = match CString::new("NUL") {
             Ok(path) => path,
             Err(_) => return action(),
@@ -1207,12 +1235,12 @@ pub fn disconnect_host(host: *mut bb_host_t) -> Result<(), String> {
         return Ok(());
     }
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_host_disconnect)(host) {
             0 => Ok(()),
             e => Err(format!("bb_host_disconnect failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<(*mut bb_dev_handle_t, i32), String> {
@@ -1222,11 +1250,17 @@ pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<(*mut bb_dev_ha
         let mut device_list: *mut *mut bb_dev_t = std::ptr::null_mut();
         let device_count = (sdk.bb_dev_getlist)(host, &mut device_list);
 
-        if device_count < 0 {
-            return Err(format!("bb_dev_getlist failed with code: {}", device_count));
-        }
+        let checked_device_count = match checked_host_device_count(device_count) {
+            Ok(count) => count,
+            Err(error) => {
+                if !device_list.is_null() {
+                    let _ = (sdk.bb_dev_freelist)(device_list);
+                }
+                return Err(error);
+            }
+        };
 
-        if device_count == 0 || device_list.is_null() {
+        if checked_device_count == 0 || device_list.is_null() {
             return Err("No baseband devices detected".to_string());
         }
 
@@ -1244,6 +1278,133 @@ pub fn open_first_device_on_host(host: *mut bb_host_t) -> Result<(*mut bb_dev_ha
         } else {
             Ok((handle, device_count))
         }
+    })
+}
+
+pub fn list_host_devices(host: *mut bb_host_t) -> Result<Vec<BbDiscoveredDeviceSummary>, String> {
+    let sdk = sdk()?;
+
+    suppress_sdk_console_output(|| unsafe {
+        let mut device_list: *mut *mut bb_dev_t = std::ptr::null_mut();
+        let device_count = (sdk.bb_dev_getlist)(host, &mut device_list);
+
+        let checked_device_count = match checked_host_device_count(device_count) {
+            Ok(count) => count,
+            Err(error) => {
+                if !device_list.is_null() {
+                    let _ = (sdk.bb_dev_freelist)(device_list);
+                }
+                return Err(error);
+            }
+        };
+
+        if checked_device_count == 0 || device_list.is_null() {
+            return Ok(Vec::new());
+        }
+
+        let devices = std::slice::from_raw_parts(device_list, checked_device_count);
+        let mut summaries = Vec::with_capacity(devices.len());
+
+        for device in devices {
+            if device.is_null() {
+                continue;
+            }
+
+            let mut device_info = bb_dev_info_t::default();
+            let mac_address = sdk
+                .bb_dev_getinfo
+                .and_then(|getinfo| match getinfo(*device, &mut device_info) {
+                    0 => format_dev_info_mac(&device_info),
+                    _ => None,
+                })
+                .unwrap_or_else(|| "--".to_string());
+
+            summaries.push(BbDiscoveredDeviceSummary {
+                mac_address,
+                role: None,
+                role_label: "Unknown".to_string(),
+            });
+        }
+
+        let _ = (sdk.bb_dev_freelist)(device_list);
+        Ok(summaries)
+    })
+}
+
+pub fn open_host_device_by_mac(host: *mut bb_host_t, target_mac: &str) -> Result<(*mut bb_dev_handle_t, i32), String> {
+    let sdk = sdk()?;
+    let normalized_target = normalize_mac_string(target_mac);
+
+    if normalized_target.is_empty() {
+        return Err("device_mac is required".to_string());
+    }
+
+    suppress_sdk_console_output(|| unsafe {
+        let mut device_list: *mut *mut bb_dev_t = std::ptr::null_mut();
+        let device_count = (sdk.bb_dev_getlist)(host, &mut device_list);
+
+        let checked_device_count = match checked_host_device_count(device_count) {
+            Ok(count) => count,
+            Err(error) => {
+                if !device_list.is_null() {
+                    let _ = (sdk.bb_dev_freelist)(device_list);
+                }
+                return Err(error);
+            }
+        };
+
+        if checked_device_count == 0 || device_list.is_null() {
+            return Err("No baseband devices detected".to_string());
+        }
+
+        let devices = std::slice::from_raw_parts(device_list, checked_device_count);
+
+        for device in devices {
+            if device.is_null() {
+                continue;
+            }
+
+            let mut device_info = bb_dev_info_t::default();
+            let listed_mac = sdk
+                .bb_dev_getinfo
+                .and_then(|getinfo| match getinfo(*device, &mut device_info) {
+                    0 => format_dev_info_mac(&device_info),
+                    _ => None,
+                });
+
+            if let Some(mac_address) = listed_mac.as_ref() {
+                if normalize_mac_string(mac_address) == normalized_target {
+                    let handle = (sdk.bb_dev_open)(*device);
+                    let _ = (sdk.bb_dev_freelist)(device_list);
+                    return if handle.is_null() {
+                        Err("bb_dev_open returned null handle".to_string())
+                    } else {
+                        Ok((handle, device_count))
+                    };
+                }
+                continue;
+            }
+
+            let handle = (sdk.bb_dev_open)(*device);
+            if handle.is_null() {
+                continue;
+            }
+
+            let matches = match get_status(handle, BB_ALL_DATA_USER_BMP) {
+                Ok(status) => normalize_mac_string(&status.mac_hex) == normalized_target,
+                Err(_) => false,
+            };
+
+            if matches {
+                let _ = (sdk.bb_dev_freelist)(device_list);
+                return Ok((handle, device_count));
+            }
+
+            let _ = (sdk.bb_dev_close)(handle);
+        }
+
+        let _ = (sdk.bb_dev_freelist)(device_list);
+        Err(format!("No baseband device matched MAC {}", normalized_target))
     })
 }
 
@@ -1350,7 +1511,7 @@ pub fn get_system_info(handle: *mut bb_dev_handle_t) -> Result<BbSystemInfoSumma
     let sdk = sdk()?;
     let mut output = bb_get_sys_info_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_SYS_INFO as c_uint,
@@ -1366,7 +1527,7 @@ pub fn get_system_info(handle: *mut bb_dev_handle_t) -> Result<BbSystemInfoSumma
             }),
             e => Err(format!("bb_ioctl(BB_GET_SYS_INFO) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, String> {
@@ -1374,7 +1535,7 @@ pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, 
     let input = bb_get_band_info_in_t::default();
     let mut output = bb_get_band_info_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_BAND_INFO as c_uint,
@@ -1387,14 +1548,14 @@ pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, 
             }),
             e => Err(format!("bb_ioctl(BB_GET_BAND_INFO) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_channel_info(handle: *mut bb_dev_handle_t) -> Result<BbChannelInfoSummary, String> {
     let sdk = sdk()?;
     let mut output = bb_get_chan_info_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_CHAN_INFO as c_uint,
@@ -1436,7 +1597,7 @@ pub fn get_channel_info(handle: *mut bb_dev_handle_t) -> Result<BbChannelInfoSum
             }
             e => Err(format!("bb_ioctl(BB_GET_CHAN_INFO) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_mcs(handle: *mut bb_dev_handle_t, dir: u8, slot: u8) -> Result<BbMcsValueSummary, String> {
@@ -1444,7 +1605,7 @@ pub fn get_mcs(handle: *mut bb_dev_handle_t, dir: u8, slot: u8) -> Result<BbMcsV
     let input = bb_get_mcs_in_t { dir, slot };
     let mut output = bb_get_mcs_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_MCS as c_uint,
@@ -1459,7 +1620,7 @@ pub fn get_mcs(handle: *mut bb_dev_handle_t, dir: u8, slot: u8) -> Result<BbMcsV
             }),
             e => Err(format!("bb_ioctl(BB_GET_MCS) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_mcs_mode(handle: *mut bb_dev_handle_t, slot: u8) -> Result<BbMcsModeSummary, String> {
@@ -1467,7 +1628,7 @@ pub fn get_mcs_mode(handle: *mut bb_dev_handle_t, slot: u8) -> Result<BbMcsModeS
     let input = bb_get_mcs_mode_in_t { slot };
     let mut output = bb_get_mcs_mode_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_MCS_MODE as c_uint,
@@ -1480,14 +1641,14 @@ pub fn get_mcs_mode(handle: *mut bb_dev_handle_t, slot: u8) -> Result<BbMcsModeS
             }),
             e => Err(format!("bb_ioctl(BB_GET_MCS_MODE) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_power_mode(handle: *mut bb_dev_handle_t) -> Result<BbPowerModeSummary, String> {
     let sdk = sdk()?;
     let mut output = bb_get_pwr_mode_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_POWER_MODE as c_uint,
@@ -1497,7 +1658,7 @@ pub fn get_power_mode(handle: *mut bb_dev_handle_t) -> Result<BbPowerModeSummary
             0 => Ok(BbPowerModeSummary { pwr_mode: output.pwr_mode }),
             e => Err(format!("bb_ioctl(BB_GET_POWER_MODE) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_current_power(handle: *mut bb_dev_handle_t, user: u8) -> Result<BbCurrentPowerSummary, String> {
@@ -1505,7 +1666,7 @@ pub fn get_current_power(handle: *mut bb_dev_handle_t, user: u8) -> Result<BbCur
     let input = bb_get_cur_pwr_in_t { usr: user };
     let mut output = bb_get_cur_pwr_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_CUR_POWER as c_uint,
@@ -1518,14 +1679,14 @@ pub fn get_current_power(handle: *mut bb_dev_handle_t, user: u8) -> Result<BbCur
             }),
             e => Err(format!("bb_ioctl(BB_GET_CUR_POWER) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn get_power_auto(handle: *mut bb_dev_handle_t) -> Result<BbPowerAutoSummary, String> {
     let sdk = sdk()?;
     let mut output = bb_get_pwr_auto_out_t::default();
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
             handle,
             BB_GET_POWER_AUTO as c_uint,
@@ -1537,7 +1698,7 @@ pub fn get_power_auto(handle: *mut bb_dev_handle_t) -> Result<BbPowerAutoSummary
             }),
             e => Err(format!("bb_ioctl(BB_GET_POWER_AUTO) failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn subscribe_plot_stream(handle: *mut bb_dev_handle_t, user: u8, cache_num: u8) -> Result<(), String> {
@@ -1829,6 +1990,75 @@ fn format_bb_mac(mac: &bb_mac_t) -> String {
         .map(|value| format!("{:02X}", value))
         .collect::<Vec<_>>()
         .join(":")
+}
+
+fn format_dev_info_mac(info: &bb_dev_info_t) -> Option<String> {
+    let maclen = usize::try_from(info.maclen).ok()?;
+    if maclen == 0 {
+        return None;
+    }
+
+    let raw_bytes = info.mac.iter().take(maclen).copied().collect::<Vec<_>>();
+    let ascii_hex = raw_bytes
+        .iter()
+        .take_while(|value| **value != 0)
+        .filter(|value| value.is_ascii_hexdigit())
+        .map(|value| (*value as char).to_ascii_uppercase())
+        .collect::<String>();
+
+    if ascii_hex.len() >= BB_MAC_LEN * 2 {
+        let compact = ascii_hex.chars().take(BB_MAC_LEN * 2).collect::<String>();
+        return Some(
+            compact
+                .as_bytes()
+                .chunks(2)
+                .map(|chunk| std::str::from_utf8(chunk).unwrap_or("--").to_string())
+                .collect::<Vec<_>>()
+                .join(":"),
+        );
+    }
+
+    Some(
+        raw_bytes
+            .iter()
+            .map(|value| format!("{:02X}", value))
+            .collect::<Vec<_>>()
+            .join(":"),
+    )
+}
+
+fn checked_host_device_count(device_count: i32) -> Result<usize, String> {
+    if device_count < 0 {
+        return Err(format!("bb_dev_getlist failed with code: {}", device_count));
+    }
+
+    let device_count = usize::try_from(device_count)
+        .map_err(|_| format!("bb_dev_getlist returned an invalid device count: {}", device_count))?;
+
+    if device_count > MAX_HOST_DEVICE_COUNT {
+        return Err(format!(
+            "bb_dev_getlist returned {} devices, exceeding safety limit {}",
+            device_count, MAX_HOST_DEVICE_COUNT
+        ));
+    }
+
+    Ok(device_count)
+}
+
+fn format_role_label(role: u8) -> &'static str {
+    match role {
+        0 => "AP",
+        1 => "DEV",
+        _ => "Unknown",
+    }
+}
+
+fn normalize_mac_string(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_hexdigit())
+        .collect::<String>()
+        .to_lowercase()
 }
 
 fn c_char_array_to_string(buffer: &[c_char]) -> String {
@@ -2147,57 +2377,57 @@ pub fn close_device(handle: *mut bb_dev_handle_t) -> Result<(), String> {
         return Ok(());
     }
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_dev_close)(handle) {
             0 => Ok(()),
             e => Err(format!("bb_dev_close failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn init(handle: *mut bb_dev_handle_t) -> Result<(), String> {
     let sdk = sdk()?;
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_init)(handle) {
             0 => Ok(()),
             e => Err(format!("bb_init failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn start(handle: *mut bb_dev_handle_t) -> Result<(), String> {
     let sdk = sdk()?;
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_start)(handle) {
             value if value >= 0 => Ok(()),
             e => Err(format!("bb_start failed with code: {}", e)),
         }
-    }
+    })
 }
 
 /// 反初始化基带 SDK
 pub fn deinit(handle: *mut bb_dev_handle_t) -> Result<(), String> {
     let sdk = sdk()?;
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_deinit)(handle) {
             0 => Ok(()),
             e => Err(format!("bb_deinit failed with code: {}", e)),
         }
-    }
+    })
 }
 
 pub fn stop(handle: *mut bb_dev_handle_t) -> Result<(), String> {
     let sdk = sdk()?;
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_stop)(handle) {
             0 => Ok(()),
             e => Err(format!("bb_stop failed with code: {}", e)),
         }
-    }
+    })
 }
 
 /// 创建数据传输 socket
@@ -2213,12 +2443,12 @@ pub fn create_socket(
         rx_buf_size: if flags & BB_SOCK_FLAG_RX != 0 { max_size } else { 0 },
     };
 
-    unsafe {
+    suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_socket_open)(handle, 0, socket_id as c_uint, flags as c_uint, &mut opt) {
             fd if fd >= 0 => Ok(()),
             e => Err(format!("Open socket for port {} failed with code: {}", socket_id, e)),
         }
-    }
+    })
 }
 
 pub unsafe fn bb_socket_write(socket_id: c_int, data: *const c_void, size: c_uint, timeout: c_int) -> c_int {

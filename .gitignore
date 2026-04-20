@@ -3,3 +3,5 @@ Thumbs.db
 desktop.ini
 ar_dbg_client
 target
+target_verify
+stress-result.json

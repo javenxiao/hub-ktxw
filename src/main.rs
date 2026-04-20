@@ -100,6 +100,7 @@ struct WirelessRuntimeResponse {
 struct WirelessRuntimeView {
     local_mac_address: String,
     operation_mode: String,
+    available_devices: Vec<WirelessDeviceOption>,
     compatibility_mode: String,
     work_band_code: Option<u8>,
     bandwidth_code: Option<u8>,
@@ -138,10 +139,19 @@ struct WirelessChannelOption {
     power_dbm: i32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct WirelessDeviceOption {
+    role: String,
+    mac_address: String,
+    label: String,
+    selected: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct WirelessSettingRequest {
     action: String,
     auto_mode: Option<bool>,
+    device_mac: Option<String>,
     pair_start: Option<bool>,
     slot: Option<u8>,
     user: Option<u8>,
@@ -377,31 +387,38 @@ async fn apply_wireless_setting(
     };
 
     let baseband = Arc::clone(baseband);
-    let current = match baseband.get_wireless_runtime_details() {
-        Ok(details) => details,
-        Err(err) => {
-            return Json(WirelessSettingResponse {
-                success: false,
-                message: format!("Failed to read current wireless runtime before applying setting: {}", err),
-                current: None,
-            });
+    let current = if request.action == "select_device" {
+        None
+    } else {
+        match baseband.get_wireless_runtime_details() {
+            Ok(details) => Some(details),
+            Err(err) => {
+                return Json(WirelessSettingResponse {
+                    success: false,
+                    message: format!("Failed to read current wireless runtime before applying setting: {}", err),
+                    current: None,
+                });
+            }
         }
     };
 
     let default_slot = current
-        .mcs_value
         .as_ref()
-        .map(|value| value.slot)
-        .or_else(|| current.status.links.first().map(|link| link.slot as u8))
+        .and_then(|details| details.mcs_value.as_ref().map(|value| value.slot))
+        .or_else(|| current.as_ref().and_then(|details| details.status.links.first().map(|link| link.slot as u8)))
         .unwrap_or(0);
     let default_user = current
-        .current_power
         .as_ref()
-        .map(|value| value.user)
-        .or(current.status.active_user)
+        .and_then(|details| details.current_power.as_ref().map(|value| value.user))
+        .or_else(|| current.as_ref().and_then(|details| details.status.active_user))
         .unwrap_or(0);
 
     let result = match request.action.as_str() {
+        "select_device" => request
+            .device_mac
+            .as_deref()
+            .ok_or_else(|| "device_mac is required".to_string())
+            .and_then(|device_mac| baseband.switch_active_device(device_mac)),
         "set_pair_mode" => request
             .pair_start
             .ok_or_else(|| "pair_start is required".to_string())
@@ -486,7 +503,7 @@ async fn apply_wireless_setting(
         Err(err) => Json(WirelessSettingResponse {
             success: false,
             message: err,
-            current: Some(build_wireless_runtime_view(&current)),
+            current: current.as_ref().map(build_wireless_runtime_view),
         }),
     }
 }
@@ -776,11 +793,20 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
 fn spawn_data_feeder(state: Arc<AppState>) {
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(Duration::from_secs(1));
+        let interval_secs = if state.baseband_health.effective_mode == "hardware-remote-bb-host" {
+            3
+        } else {
+            1
+        };
+        let mut ticker = tokio::time::interval_at(
+            tokio::time::Instant::now() + Duration::from_secs(interval_secs),
+            Duration::from_secs(interval_secs),
+        );
         let mut tick = 1_u64;
 
         loop {
             ticker.tick().await;
+            tracing::debug!(tick, "spawn_data_feeder tick started");
 
             let previous = state.snapshot.read().await.clone();
             let snapshot = match state.baseband.as_ref() {
@@ -799,6 +825,7 @@ fn spawn_data_feeder(state: Arc<AppState>) {
                 },
                 None => build_simulated_snapshot(tick),
             };
+            tracing::debug!(tick, "spawn_data_feeder tick completed");
 
             {
                 let mut guard = state.snapshot.write().await;
@@ -992,6 +1019,7 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.snr.as_slice()),
             previous,
+            status.snr_db,
         ),
         build_chart_series_from_source(
             "ap_ldpc_err",
@@ -999,6 +1027,7 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.ldpc_err.as_slice()),
             previous,
+            None,
         ),
         build_chart_series_from_source(
             "ap_ldpc_num",
@@ -1006,6 +1035,7 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.ldpc_num.as_slice()),
             previous,
+            None,
         ),
         build_chart_series_from_source(
             "ap_gain_a",
@@ -1013,6 +1043,7 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.gain_a.as_slice()),
             previous,
+            status.signal_main,
         ),
         build_chart_series_from_source(
             "ap_gain_b",
@@ -1020,6 +1051,7 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.gain_b.as_slice()),
             previous,
+            status.signal_aux,
         ),
         build_chart_series_from_source(
             "ap_mcs_rx",
@@ -1027,6 +1059,7 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.mcs_rx.as_slice()),
             previous,
+            status.rx_mcs.map(i32::from),
         ),
         build_chart_series_from_source(
             "ap_fch_lock",
@@ -1034,6 +1067,7 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.fch_lock.as_slice()),
             previous,
+            status.link_state.map(i32::from),
         ),
     ];
 
@@ -1126,12 +1160,20 @@ fn build_chart_series_from_source(
     unit: &str,
     source: Option<&[i32]>,
     previous: Option<&WirelessSnapshot>,
+    fallback_current_value: Option<i32>,
 ) -> ChartSeries {
-    let points = source
+    let mut points = source
         .map(|values| take_tail_points(values, HISTORY_POINTS))
         .or_else(|| previous_chart_points(previous, key))
         .unwrap_or_default();
-    let current_value = points.last().copied();
+
+    if source.is_none() {
+        if let Some(value) = fallback_current_value {
+            points = history_from_previous(Some(points.as_slice()), value, HISTORY_POINTS);
+        }
+    }
+
+    let current_value = fallback_current_value.or_else(|| points.last().copied());
 
     build_chart_series(key, label, unit, current_value, points)
 }
@@ -1177,10 +1219,56 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             power_dbm: entry.power_dbm,
         })
         .collect::<Vec<_>>();
+    let current_role = format_role(details.status.role).to_string();
+    let current_mac_normalized = normalize_device_mac(&details.status.mac_hex);
+    let peer_mac_normalized = details
+        .status
+        .peer_mac_hex
+        .as_deref()
+        .map(normalize_device_mac)
+        .unwrap_or_default();
+    let available_devices = if details.available_devices.is_empty() {
+        vec![WirelessDeviceOption {
+            role: current_role.clone(),
+            mac_address: details.status.mac_hex.clone(),
+            label: format_device_selector_label(&current_role, &details.status.mac_hex),
+            selected: true,
+        }]
+    } else {
+        details
+            .available_devices
+            .iter()
+            .map(|device| {
+                let normalized_mac = normalize_device_mac(&device.mac_address);
+                let selected = !current_mac_normalized.is_empty() && normalized_mac == current_mac_normalized;
+                let role = if selected {
+                    current_role.clone()
+                } else if !peer_mac_normalized.is_empty() && normalized_mac == peer_mac_normalized {
+                    match details.status.role {
+                        0 => "DEV".to_string(),
+                        1 => "AP".to_string(),
+                        _ => "Unknown".to_string(),
+                    }
+                } else if device.role_label == "Unknown" {
+                    "Unknown".to_string()
+                } else {
+                    device.role_label.clone()
+                };
+
+                WirelessDeviceOption {
+                    role: role.clone(),
+                    mac_address: device.mac_address.clone(),
+                    label: format_device_selector_label(&role, &device.mac_address),
+                    selected,
+                }
+            })
+            .collect::<Vec<_>>()
+    };
 
     WirelessRuntimeView {
         local_mac_address: details.status.mac_hex.clone(),
         operation_mode: format_operation_mode(&details.status),
+        available_devices,
         compatibility_mode: format_baseband_mode(details.status.mode).to_string(),
         work_band_code: details.band_info.as_ref().map(|info| info.work_band),
         bandwidth_code: details.status.bandwidth,
@@ -1396,11 +1484,7 @@ fn format_pair_state(link: &ffi::BbLinkStatusSummary) -> String {
 }
 
 fn format_operation_mode(status: &BbGetStatusSummary) -> String {
-    let role = match status.role {
-        0 => "AP",
-        1 => "DEV",
-        _ => "Unknown",
-    };
+    let role = format_role(status.role);
 
     let sync_role = if status.sync_mode == 1 {
         if status.sync_master == 1 {
@@ -1413,6 +1497,31 @@ fn format_operation_mode(status: &BbGetStatusSummary) -> String {
     };
 
     format!("{} ({})", role, sync_role)
+}
+
+fn format_role(role: u8) -> &'static str {
+    match role {
+        0 => "AP",
+        1 => "DEV",
+        _ => "Unknown",
+    }
+}
+
+fn normalize_device_mac(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_hexdigit())
+        .collect::<String>()
+        .to_lowercase()
+}
+
+fn format_device_selector_label(role: &str, mac_address: &str) -> String {
+    let normalized_mac = normalize_device_mac(mac_address);
+    if normalized_mac.is_empty() {
+        role.to_string()
+    } else {
+        format!("{}:{}", role, normalized_mac)
+    }
 }
 
 fn format_link_state(state: u8) -> &'static str {

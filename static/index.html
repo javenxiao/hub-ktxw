@@ -391,7 +391,11 @@
                                                     </div>
                                                 </td>
                                                 <td>Operation Mode</td>
-                                                <td><span id="rf-operation-mode" class="rf-mode-display">--</span></td>
+                                                <td>
+                                                    <select id="rf-operation-mode" class="sys-input rf-mode-select" aria-label="Operation mode device list">
+                                                        <option value="">--</option>
+                                                    </select>
+                                                </td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -668,6 +672,8 @@
         let latestWirelessSnapshot = null;
         let wirelessRuntimeCurrent = null;
         let controlDefaultsInitialized = false;
+        let pendingDeviceSelectionMac = null;
+        let deviceSelectionInFlight = false;
 
         function switchWirelessSubTab(tabName) {
             wirelessSubTabs.forEach((tab) => {
@@ -948,23 +954,49 @@
             const hasRadioData = Boolean(general.mac_address && general.mac_address !== '--');
 
             setRfRadioState(hasRadioData);
-            setText('rf-operation-mode', formatRfOperationMode(general.operation_mode));
         }
 
-        function formatRfOperationMode(value) {
-            const normalized = String(value || '').toUpperCase();
-            if (normalized.includes('DEV')) {
-                return 'DEV';
+        function normalizeRfDeviceMac(value) {
+            return String(value || '')
+                .toLowerCase()
+                .replace(/[^0-9a-f]/g, '');
+        }
+
+        function renderRfDeviceOptions(current) {
+            const select = document.getElementById('rf-operation-mode');
+            if (!select) {
+                return;
             }
-            if (normalized.includes('AP')) {
-                return 'AP';
+
+            const devices = Array.isArray(current?.available_devices) ? current.available_devices : [];
+            if (devices.length === 0) {
+                select.innerHTML = '<option value="">--</option>';
+                select.value = '';
+                updateSelectWidth(select);
+                return;
             }
-            return '--';
+
+            const selectedMac = normalizeRfDeviceMac(current?.local_mac_address);
+            const queuedMac = normalizeRfDeviceMac(pendingDeviceSelectionMac);
+            const targetMac = queuedMac || selectedMac;
+            select.innerHTML = devices.map((device) => {
+                const value = normalizeRfDeviceMac(device.mac_address);
+                const isSelected = Boolean(device.selected) || (targetMac && value === targetMac);
+                return `<option value="${escapeHtml(value)}"${isSelected ? ' selected' : ''}>${escapeHtml(device.label || '--')}</option>`;
+            }).join('');
+
+            if (targetMac && Array.from(select.options).some((option) => option.value === targetMac)) {
+                select.value = targetMac;
+            }
+
+            select.disabled = deviceSelectionInFlight;
+            updateSelectWidth(select);
         }
 
         function renderWirelessRuntime(payload) {
             if (!payload || !payload.available || !payload.current) {
                 wirelessRuntimeCurrent = null;
+                renderRfDeviceOptions(null);
                 setText('runtime-mac', '--');
                 setText('runtime-compile-time', '--');
                 setText('runtime-software-version', '--');
@@ -983,6 +1015,7 @@
 
             const current = payload.current;
             wirelessRuntimeCurrent = current;
+            renderRfDeviceOptions(current);
             setText('runtime-mac', current.local_mac_address || '--');
             setText('runtime-compile-time', current.compile_time || '--');
             setText('runtime-software-version', current.software_version || '--');
@@ -1054,14 +1087,72 @@
             if (result.current) {
                 controlDefaultsInitialized = false;
                 renderWirelessRuntime({
-                    available: result.success,
+                    available: true,
                     message: result.message,
                     current: result.current,
                 });
             }
 
             await loadInitialSnapshot().catch(() => {});
+
+             if (!response.ok || result.success === false) {
+                throw new Error(result.message || `HTTP ${response.status}`);
+            }
+
             return result;
+        }
+
+        async function flushQueuedDeviceSelection() {
+            const select = document.getElementById('rf-operation-mode');
+            if (deviceSelectionInFlight) {
+                return;
+            }
+
+            deviceSelectionInFlight = true;
+            if (select) {
+                select.disabled = true;
+            }
+
+            try {
+                while (pendingDeviceSelectionMac) {
+                    const targetMac = normalizeRfDeviceMac(pendingDeviceSelectionMac);
+                    pendingDeviceSelectionMac = null;
+
+                    if (!targetMac) {
+                        continue;
+                    }
+
+                    const currentMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
+                    if (targetMac === currentMac) {
+                        continue;
+                    }
+
+                    await applyWirelessSetting('select_device', { device_mac: targetMac });
+                }
+            } finally {
+                deviceSelectionInFlight = false;
+                if (select) {
+                    select.disabled = false;
+                    updateSelectWidth(select);
+                }
+            }
+        }
+
+        function queueDeviceSelection(deviceMac) {
+            const normalizedMac = normalizeRfDeviceMac(deviceMac);
+            if (!normalizedMac) {
+                return;
+            }
+
+            pendingDeviceSelectionMac = normalizedMac;
+            if (deviceSelectionInFlight) {
+                document.getElementById('wireless-control-status').textContent = 'Device switch queued ...';
+                return;
+            }
+
+            flushQueuedDeviceSelection().catch((error) => {
+                document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
+            });
         }
 
         function getSelectedPowerAuto() {
@@ -1216,6 +1307,25 @@
         bindAutoApply(['control-channel-auto-on', 'control-channel-auto-off'], 'set_channel_mode', () => ({
             auto_mode: getSelectedChannelAuto(),
             }));
+
+        const rfOperationModeSelect = document.getElementById('rf-operation-mode');
+        if (rfOperationModeSelect) {
+            rfOperationModeSelect.addEventListener('change', () => {
+                updateSelectWidth(rfOperationModeSelect);
+
+                const selectedMac = rfOperationModeSelect.value;
+                if (!selectedMac) {
+                    return;
+                }
+
+                const currentMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
+                if (selectedMac === currentMac) {
+                    return;
+                }
+
+                queueDeviceSelection(selectedMac);
+            });
+        }
 
         document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
             radio.addEventListener('change', () => {

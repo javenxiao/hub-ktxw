@@ -910,16 +910,9 @@ tbody td {
     color: #5f6770;
 }
 
-.rf-mode-display {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 54px;
-    padding: 2px 10px;
-    line-height: 1.4;
-    border: 1px solid #c9d0d7;
-    border-radius: 3px;
-    background: #f7f8f2;
+.rf-mode-select {
+    min-width: 158px;
+    max-width: 100%;
     color: #17324d;
     font-weight: 700;
 }

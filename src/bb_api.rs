@@ -2,8 +2,35 @@
 //!
 //! 提供类型安全的高级接口，用于与基带芯片 (ar8030) SOC 通信
 
-use std::sync::{Arc, Mutex};
+use std::{cell::RefCell, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
 use crate::ffi;
+
+const REMOTE_SDK_CALL_GAP: Duration = Duration::from_millis(20);
+const REMOTE_DEVICE_SWITCH_GAP: Duration = Duration::from_millis(1200);
+static REMOTE_SDK_LAST_CALL_AT: Mutex<Option<Instant>> = Mutex::new(None);
+
+fn run_remote_sdk_call<T>(enabled: bool, operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    if enabled {
+        let sleep_duration = {
+            let last_call = REMOTE_SDK_LAST_CALL_AT.lock().unwrap();
+            last_call
+                .and_then(|instant| REMOTE_SDK_CALL_GAP.checked_sub(instant.elapsed()))
+        };
+
+        if let Some(duration) = sleep_duration {
+            thread::sleep(duration);
+        }
+    }
+
+    let result = operation();
+
+    if enabled {
+        let mut last_call = REMOTE_SDK_LAST_CALL_AT.lock().unwrap();
+        *last_call = Some(Instant::now());
+    }
+
+    result
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BasebandOperationStatus {
@@ -45,6 +72,7 @@ pub struct BasebandHealthStatus {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WirelessRuntimeDetails {
     pub status: ffi::BbGetStatusSummary,
+    pub available_devices: Vec<ffi::BbDiscoveredDeviceSummary>,
     pub system_info: Option<ffi::BbSystemInfoSummary>,
     pub band_info: Option<ffi::BbBandInfoSummary>,
     pub channel_info: Option<ffi::BbChannelInfoSummary>,
@@ -159,11 +187,80 @@ pub struct BasebandApi {
     requires_start: bool,
     device_handle: usize,
     host_handle: usize,
+    host_devices_cache: RefCell<Vec<ffi::BbDiscoveredDeviceSummary>>,
     plot_subscription_active: bool,
     plot_user: Option<u8>,
+    active_device_mac: Option<String>,
+    last_remote_device_switch_at: Option<Instant>,
+    remote_device_handles: Vec<(String, usize)>,
 }
 
 impl BasebandApi {
+    fn normalize_mac(value: &str) -> String {
+        value
+            .chars()
+            .filter(|character| character.is_ascii_hexdigit())
+            .flat_map(|character| character.to_lowercase())
+            .collect()
+    }
+
+    fn refresh_host_devices_cache(&mut self) -> Result<(), String> {
+        if self.host_handle == 0 {
+            self.host_devices_cache.borrow_mut().clear();
+            return Ok(());
+        }
+
+        let devices = run_remote_sdk_call(true, || ffi::list_host_devices(self.host_ptr()))?;
+        *self.host_devices_cache.borrow_mut() = devices;
+        Ok(())
+    }
+
+    fn remember_remote_handle(&mut self, normalized_mac: String, handle: usize) {
+        if self.host_handle == 0 || handle == 0 || normalized_mac.is_empty() {
+            return;
+        }
+
+        if let Some((_, cached_handle)) = self
+            .remote_device_handles
+            .iter_mut()
+            .find(|(mac, _)| mac == &normalized_mac)
+        {
+            *cached_handle = handle;
+            return;
+        }
+
+        self.remote_device_handles.push((normalized_mac, handle));
+    }
+
+    fn cached_remote_handle(&self, normalized_mac: &str) -> Option<usize> {
+        self.remote_device_handles
+            .iter()
+            .find(|(mac, handle)| mac == normalized_mac && *handle != 0)
+            .map(|(_, handle)| *handle)
+    }
+
+    fn close_remote_handles(&mut self) {
+        let mut handles = self
+            .remote_device_handles
+            .iter()
+            .map(|(_, handle)| *handle)
+            .collect::<Vec<_>>();
+
+        if self.device_handle != 0 {
+            handles.push(self.device_handle);
+        }
+
+        handles.sort_unstable();
+        handles.dedup();
+
+        for handle in handles.into_iter().filter(|handle| *handle != 0) {
+            let _ = ffi::close_device(handle as *mut ffi::bb_dev_handle_t);
+        }
+
+        self.remote_device_handles.clear();
+        self.device_handle = 0;
+    }
+
     /// 获取或初始化全局基带 API 实例
     pub fn get_with_health() -> (Self, BasebandHealthStatus) {
         let mut api = BasebandApi {
@@ -172,8 +269,12 @@ impl BasebandApi {
             requires_start: true,
             device_handle: 0,
             host_handle: 0,
+            host_devices_cache: RefCell::new(Vec::new()),
             plot_subscription_active: false,
             plot_user: None,
+            active_device_mac: None,
+            last_remote_device_switch_at: None,
+            remote_device_handles: Vec::new(),
         };
         let mut health = BasebandHealthStatus::new();
 
@@ -222,8 +323,12 @@ impl BasebandApi {
                                 Ok(snapshot) => {
                                     health.status_read.success = true;
                                     health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
-                                    if let Err(err) = api.enable_plot_stream(snapshot.active_user.unwrap_or(0)) {
-                                        tracing::warn!("Failed to enable plot stream in remote bb_host mode: {}", err);
+                                    let active_mac = Self::normalize_mac(&snapshot.mac_hex);
+                                    api.active_device_mac = Some(active_mac.clone());
+                                    api.remember_remote_handle(active_mac, api.device_handle);
+                                    tracing::info!("Skipping plot stream subscription in remote bb_host mode");
+                                    if let Err(err) = api.refresh_host_devices_cache() {
+                                        tracing::warn!("Failed to cache remote host devices: {}", err);
                                     }
                                     health.runtime.status_snapshot = Some(snapshot);
                                 }
@@ -367,7 +472,9 @@ impl BasebandApi {
             return Err("Baseband API not initialized".to_string());
         }
 
-        ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)
+        run_remote_sdk_call(self.host_handle != 0, || {
+            ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)
+        })
     }
 
     pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
@@ -375,61 +482,78 @@ impl BasebandApi {
             return Err("Baseband API not initialized".to_string());
         }
 
-        let status = ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)?;
+        let is_remote = self.host_handle != 0;
+        let status = run_remote_sdk_call(is_remote, || {
+            ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP)
+        })?;
         let slot = status.links.first().map(|link| link.slot as u8).unwrap_or(0);
         let user = status.active_user.unwrap_or(0);
         let mut warnings = Vec::new();
+        let available_devices = if self.host_handle != 0 {
+            if self.host_devices_cache.borrow().is_empty() {
+                match run_remote_sdk_call(true, || ffi::list_host_devices(self.host_ptr())) {
+                    Ok(devices) => {
+                        *self.host_devices_cache.borrow_mut() = devices;
+                    }
+                    Err(err) => warnings.push(err),
+                }
+            }
 
-        let system_info = match ffi::get_system_info(self.handle_ptr()) {
+            self.host_devices_cache.borrow().clone()
+        } else {
+            Vec::new()
+        };
+
+        let system_info = match run_remote_sdk_call(is_remote, || ffi::get_system_info(self.handle_ptr())) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let band_info = match ffi::get_band_info(self.handle_ptr()) {
+        let band_info = match run_remote_sdk_call(is_remote, || ffi::get_band_info(self.handle_ptr())) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let channel_info = match ffi::get_channel_info(self.handle_ptr()) {
+        let channel_info = match run_remote_sdk_call(is_remote, || ffi::get_channel_info(self.handle_ptr())) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let mcs_mode = match ffi::get_mcs_mode(self.handle_ptr(), slot) {
+        let mcs_mode = match run_remote_sdk_call(is_remote, || ffi::get_mcs_mode(self.handle_ptr(), slot)) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let mcs_value = match ffi::get_mcs(self.handle_ptr(), ffi::BB_DIR_TX, slot) {
+        let mcs_value = match run_remote_sdk_call(is_remote, || ffi::get_mcs(self.handle_ptr(), ffi::BB_DIR_TX, slot)) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let power_mode = match ffi::get_power_mode(self.handle_ptr()) {
+        let power_mode = match run_remote_sdk_call(is_remote, || ffi::get_power_mode(self.handle_ptr())) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let current_power = match ffi::get_current_power(self.handle_ptr(), user) {
+        let current_power = match run_remote_sdk_call(is_remote, || ffi::get_current_power(self.handle_ptr(), user)) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let power_auto = match ffi::get_power_auto(self.handle_ptr()) {
+        let power_auto = match run_remote_sdk_call(is_remote, || ffi::get_power_auto(self.handle_ptr())) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
@@ -439,6 +563,7 @@ impl BasebandApi {
 
         Ok(WirelessRuntimeDetails {
             status,
+            available_devices,
             system_info,
             band_info,
             channel_info,
@@ -457,6 +582,72 @@ impl BasebandApi {
         }
 
         ffi::latest_plot_snapshot()
+    }
+
+    pub fn switch_active_device(&mut self, target_mac: &str) -> Result<(), String> {
+        if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        if self.host_handle == 0 {
+            return Err("Device switching requires remote bb_host mode".to_string());
+        }
+
+        let normalized_target = Self::normalize_mac(target_mac);
+        if normalized_target.is_empty() {
+            return Err("device_mac is required".to_string());
+        }
+
+        if self.active_device_mac.as_deref() == Some(normalized_target.as_str()) {
+            return Ok(());
+        }
+
+        if let Some(cached_handle) = self.cached_remote_handle(&normalized_target) {
+            self.device_handle = cached_handle;
+            self.initialized = true;
+            self.active_device_mac = Some(normalized_target);
+            return Ok(());
+        }
+
+        if let Some(last_switch_at) = self.last_remote_device_switch_at {
+            if let Some(remaining) = REMOTE_DEVICE_SWITCH_GAP.checked_sub(last_switch_at.elapsed()) {
+                thread::sleep(remaining);
+            }
+        }
+        self.last_remote_device_switch_at = Some(Instant::now());
+
+        let current_handle = self.handle_ptr();
+        let (new_handle, _) = run_remote_sdk_call(true, || {
+            ffi::open_host_device_by_mac(self.host_ptr(), target_mac)
+        })?;
+        let new_status = match run_remote_sdk_call(true, || ffi::get_status(new_handle, ffi::BB_ALL_DATA_USER_BMP)) {
+            Ok(status) => status,
+            Err(err) => {
+                let _ = ffi::close_device(new_handle);
+                return Err(err);
+            }
+        };
+
+        if self.plot_subscription_active {
+            if let Some(user) = self.plot_user {
+                let _ = ffi::unsubscribe_plot_stream(current_handle, user);
+            }
+            self.plot_subscription_active = false;
+            self.plot_user = None;
+        }
+
+        self.device_handle = new_handle as usize;
+        self.initialized = true;
+        self.active_device_mac = Some(normalized_target);
+        self.remember_remote_handle(Self::normalize_mac(&new_status.mac_hex), self.device_handle);
+
+        if self.host_handle == 0 {
+            if let Err(err) = self.enable_plot_stream(new_status.active_user.unwrap_or(0)) {
+                tracing::warn!("Failed to enable plot stream after device switch: {}", err);
+            }
+        }
+
+        Ok(())
     }
 
     pub fn set_pair_mode(&self, start: bool, slot_bmp: u8) -> Result<(), String> {
@@ -582,9 +773,13 @@ impl Drop for BasebandApi {
         }
 
         if self.initialized {
-            let _ = ffi::deinit(self.handle_ptr());
+            if self.requires_start {
+                let _ = ffi::deinit(self.handle_ptr());
+            }
 
-            if self.device_handle != 0 {
+            if self.host_handle != 0 {
+                self.close_remote_handles();
+            } else if self.device_handle != 0 {
                 let _ = ffi::close_device(self.handle_ptr());
                 self.device_handle = 0;
             }
@@ -594,7 +789,11 @@ impl Drop for BasebandApi {
                 self.host_handle = 0;
             }
 
-            tracing::info!("Baseband SDK deinitialized");
+            if self.requires_start {
+                tracing::info!("Baseband SDK deinitialized");
+            } else {
+                tracing::info!("Baseband remote host disconnected");
+            }
         }
     }
 }
@@ -695,8 +894,11 @@ impl BasebandManager {
     }
 
     pub fn get_status_snapshot(&self) -> Result<ffi::BbGetStatusSummary, String> {
+        tracing::debug!("BasebandManager::get_status_snapshot acquiring SDK status");
         let api = self.api.lock().unwrap();
-        api.get_status_summary()
+        let result = api.get_status_summary();
+        tracing::debug!(success = result.is_ok(), "BasebandManager::get_status_snapshot finished");
+        result
     }
 
     pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
@@ -747,6 +949,11 @@ impl BasebandManager {
     pub fn set_power_auto(&self, enabled: bool) -> Result<(), String> {
         let api = self.api.lock().unwrap();
         api.set_power_auto(enabled)
+    }
+
+    pub fn switch_active_device(&self, target_mac: &str) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.switch_active_device(target_mac)
     }
 
     pub fn set_band_mode(&self, auto_mode: bool) -> Result<(), String> {
