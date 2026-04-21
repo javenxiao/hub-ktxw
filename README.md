@@ -81,9 +81,38 @@ CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_STRIP=/path/to/arm-linux-gnueabihf-st
 
 ## 4. 本地运行
 
+### 4.1 启动与运行
+
+当前代码已经内置以下默认启动参数：
+
+```text
+RUST_LOG=info
+BB_HOST_ADDR=127.0.0.1
+BB_HOST_PORT=50000
+```
+
+因此日常启动时不需要每次手动输入环境变量，直接运行即可。
+
 开发模式运行：
 
-```bash
+```powershell
+cd e:\Artosyn\10_project\rshtml
+cargo run
+```
+
+如果已经完成编译，也可以直接运行可执行文件：
+
+```powershell
+cd e:\Artosyn\10_project\rshtml
+.\target\debug\wireless_status_server.exe
+```
+
+如果某次需要临时覆盖默认值，仍然可以在启动前手动设置：
+
+```powershell
+$env:RUST_LOG = "debug"
+$env:BB_HOST_ADDR = "192.168.1.10"
+$env:BB_HOST_PORT = "50000"
 cargo run
 ```
 
@@ -103,7 +132,27 @@ cargo run
 - WebSocket /ws 是否能收到推送数据
 - 运行目录下是否存在 ar8030_client.dll
 
-### 4.1 当前基线验证结果
+### 4.2 结束程序
+
+如果程序是从当前终端以前台方式启动的，最简单的结束方式是：
+
+```text
+Ctrl + C
+```
+
+如果程序已经在后台运行，或者当前终端已经关闭，可以执行：
+
+```powershell
+Get-Process wireless_status_server -ErrorAction SilentlyContinue | Stop-Process -Force
+```
+
+或者：
+
+```powershell
+taskkill /F /IM wireless_status_server.exe
+```
+
+### 4.3 当前基线验证结果
 
 已在本仓库执行过一次基线验证，当前结果如下：
 
@@ -119,14 +168,6 @@ cargo run
 - ar8030_client.dll 已复制到 target/debug
 - 但第三方 DLL 的依赖仍可能缺失，导致 SDK 初始化失败
 - 这种情况下，Web 服务本身仍可启动，只是基带能力不可用
-
-如果要尝试走远程 host 模式，可以在启动前设置：
-
-```powershell
-$env:BB_HOST_ADDR="<bb_host_ip>"
-$env:BB_HOST_PORT="<bb_host_port>"
-cargo run
-```
 
 说明：
 

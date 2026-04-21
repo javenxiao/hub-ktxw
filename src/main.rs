@@ -29,6 +29,26 @@ use tracing::{error, info, warn};
 use bb_api::{BasebandHealthStatus, BasebandManager, CommunicationStats, WirelessRuntimeDetails};
 use ffi::{BbGetStatusSummary, BbPlotSnapshotSummary};
 
+const DEFAULT_RUST_LOG: &str = "info";
+const DEFAULT_BB_HOST_ADDR: &str = "127.0.0.1";
+const DEFAULT_BB_HOST_PORT: &str = "50000";
+
+fn set_default_env_var(key: &str, value: &str) {
+    let should_set = std::env::var(key)
+        .map(|existing| existing.trim().is_empty())
+        .unwrap_or(true);
+
+    if should_set {
+        std::env::set_var(key, value);
+    }
+}
+
+fn apply_default_runtime_env() {
+    set_default_env_var("RUST_LOG", DEFAULT_RUST_LOG);
+    set_default_env_var("BB_HOST_ADDR", DEFAULT_BB_HOST_ADDR);
+    set_default_env_var("BB_HOST_PORT", DEFAULT_BB_HOST_PORT);
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct SystemInfo {
     host_name: String,
@@ -241,6 +261,7 @@ const SNR_UNAVAILABLE_DB: i32 = -1;
 
 struct AppState {
     snapshot: RwLock<WirelessSnapshot>,
+    wireless_runtime: RwLock<WirelessRuntimeResponse>,
     tx: broadcast::Sender<WirelessSnapshot>,
     baseband: Option<Arc<BasebandManager>>,
     baseband_health: BasebandHealthStatus,
@@ -249,12 +270,14 @@ struct AppState {
 impl AppState {
     fn new(
         initial: WirelessSnapshot,
+        initial_runtime: WirelessRuntimeResponse,
         baseband: Option<Arc<BasebandManager>>,
         baseband_health: BasebandHealthStatus,
     ) -> Self {
         let (tx, _) = broadcast::channel(128);
         Self {
             snapshot: RwLock::new(initial),
+            wireless_runtime: RwLock::new(initial_runtime),
             tx,
             baseband,
             baseband_health,
@@ -264,6 +287,8 @@ impl AppState {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    apply_default_runtime_env();
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
@@ -317,9 +342,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => build_simulated_snapshot(0),
     };
-    let state = Arc::new(AppState::new(initial, baseband.clone(), baseband_health));
+    let initial_runtime = match baseband.as_ref() {
+        Some(baseband) => match baseband.get_wireless_runtime_details() {
+            Ok(details) => runtime_response_from_details(&details),
+            Err(err) => runtime_unavailable_response(format!(
+                "Failed to fetch wireless runtime details: {}",
+                err
+            )),
+        },
+        None => runtime_unavailable_response(
+            "Baseband SDK not available; runtime controls require real hardware mode".to_string(),
+        ),
+    };
+    let state = Arc::new(AppState::new(initial, initial_runtime, baseband.clone(), baseband_health));
 
     spawn_data_feeder(state.clone());
+    spawn_runtime_feeder(state.clone());
 
     let app = Router::new()
         .route("/api/wireless/status", get(get_wireless_status))
@@ -362,24 +400,16 @@ async fn get_wireless_status(State(state): State<Arc<AppState>>) -> Json<Wireles
 }
 
 async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<WirelessRuntimeResponse> {
-    match state.baseband.as_ref() {
-        Some(baseband) => match baseband.get_wireless_runtime_details() {
-            Ok(details) => Json(WirelessRuntimeResponse {
-                available: true,
-                message: "Wireless runtime details fetched successfully".to_string(),
-                current: Some(build_wireless_runtime_view(&details)),
-            }),
-            Err(err) => Json(WirelessRuntimeResponse {
-                available: false,
-                message: format!("Failed to fetch wireless runtime details: {}", err),
-                current: None,
-            }),
-        },
-        None => Json(WirelessRuntimeResponse {
-            available: false,
-            message: "Baseband SDK not available; runtime controls require real hardware mode".to_string(),
-            current: None,
-        }),
+    Json(state.wireless_runtime.read().await.clone())
+}
+
+fn action_requires_runtime_context(action: &str, request: &WirelessSettingRequest) -> bool {
+    match action {
+        "set_pair_mode" | "set_mcs_mode" | "set_mcs" | "set_bandwidth_mode" | "set_bandwidth" => {
+            request.slot.is_none()
+        }
+        "set_power" => request.user.is_none(),
+        _ => false,
     }
 }
 
@@ -396,9 +426,8 @@ async fn apply_wireless_setting(
     };
 
     let baseband = Arc::clone(baseband);
-    let current = if request.action == "select_device" {
-        None
-    } else {
+    let cached_current = state.wireless_runtime.read().await.current.clone();
+    let current = if action_requires_runtime_context(&request.action, &request) && cached_current.is_none() {
         match baseband.get_wireless_runtime_details() {
             Ok(details) => Some(details),
             Err(err) => {
@@ -409,17 +438,21 @@ async fn apply_wireless_setting(
                 });
             }
         }
+    } else {
+        None
     };
 
     let default_slot = current
         .as_ref()
         .and_then(|details| details.mcs_value.as_ref().map(|value| value.slot))
         .or_else(|| current.as_ref().and_then(|details| details.status.links.first().map(|link| link.slot as u8)))
+        .or_else(|| cached_current.as_ref().and_then(|runtime| runtime.current_slot))
         .unwrap_or(0);
     let default_user = current
         .as_ref()
         .and_then(|details| details.current_power.as_ref().map(|value| value.user))
         .or_else(|| current.as_ref().and_then(|details| details.status.active_user))
+        .or_else(|| cached_current.as_ref().and_then(|runtime| runtime.current_power_user))
         .unwrap_or(0);
 
     let result = match request.action.as_str() {
@@ -498,10 +531,8 @@ async fn apply_wireless_setting(
     match result {
         Ok(()) => {
             refresh_snapshot_from_baseband(&state, &baseband).await;
-            let current = baseband
-                .get_wireless_runtime_details()
-                .ok()
-                .map(|details| build_wireless_runtime_view(&details));
+            refresh_runtime_from_baseband(&state, &baseband).await;
+            let current = state.wireless_runtime.read().await.current.clone();
 
             Json(WirelessSettingResponse {
                 success: true,
@@ -512,7 +543,7 @@ async fn apply_wireless_setting(
         Err(err) => Json(WirelessSettingResponse {
             success: false,
             message: err,
-            current: current.as_ref().map(build_wireless_runtime_view),
+            current: cached_current.or_else(|| current.as_ref().map(build_wireless_runtime_view)),
         }),
     }
 }
@@ -851,6 +882,30 @@ fn spawn_data_feeder(state: Arc<AppState>) {
             }
             let _ = state.tx.send(snapshot);
             tick = tick.wrapping_add(1);
+        }
+    });
+}
+
+fn spawn_runtime_feeder(state: Arc<AppState>) {
+    tokio::spawn(async move {
+        let interval_secs = if state.baseband_health.effective_mode == "hardware-remote-bb-host" {
+            5
+        } else {
+            2
+        };
+        let mut ticker = tokio::time::interval_at(
+            tokio::time::Instant::now() + Duration::from_secs(interval_secs),
+            Duration::from_secs(interval_secs),
+        );
+
+        loop {
+            ticker.tick().await;
+
+            let Some(baseband) = state.baseband.as_ref() else {
+                continue;
+            };
+
+            refresh_runtime_from_baseband(&state, baseband).await;
         }
     });
 }
@@ -1368,6 +1423,22 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
     }
 }
 
+fn runtime_response_from_details(details: &WirelessRuntimeDetails) -> WirelessRuntimeResponse {
+    WirelessRuntimeResponse {
+        available: true,
+        message: "Wireless runtime details fetched successfully".to_string(),
+        current: Some(build_wireless_runtime_view(details)),
+    }
+}
+
+fn runtime_unavailable_response(message: String) -> WirelessRuntimeResponse {
+    WirelessRuntimeResponse {
+        available: false,
+        message,
+        current: None,
+    }
+}
+
 async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<BasebandManager>) {
     if let Ok(status) = baseband.get_status_snapshot() {
         let previous = state.snapshot.read().await.clone();
@@ -1388,6 +1459,19 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
 
         let _ = state.tx.send(snapshot);
     }
+}
+
+async fn refresh_runtime_from_baseband(state: &Arc<AppState>, baseband: &Arc<BasebandManager>) {
+    let response = match baseband.get_wireless_runtime_details() {
+        Ok(details) => runtime_response_from_details(&details),
+        Err(err) => runtime_unavailable_response(format!(
+            "Failed to fetch wireless runtime details: {}",
+            err
+        )),
+    };
+
+    let mut guard = state.wireless_runtime.write().await;
+    *guard = response;
 }
 
 fn parse_direction(value: &str) -> Result<u8, String> {

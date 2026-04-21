@@ -687,6 +687,10 @@
                 panel.classList.toggle('active', isActive);
                 panel.hidden = !isActive;
             });
+
+            if (tabName === 'rf') {
+                loadWirelessRuntimeDetails().catch(() => {});
+            }
         }
 
         function setText(id, value) {
