@@ -26,7 +26,7 @@ use tower_http::{
 };
 use tracing::{error, info, warn};
 
-use bb_api::{BasebandHealthStatus, BasebandManager, CommunicationStats, WirelessRuntimeDetails};
+use bb_api::{BasebandHealthStatus, BasebandManager, WirelessRuntimeDetails};
 use ffi::{BbGetStatusSummary, BbPlotSnapshotSummary};
 
 const DEFAULT_RUST_LOG: &str = "info";
@@ -78,13 +78,6 @@ struct SystemInfo {
     wan_gateway: String,
     wan_primary_dns: String,
     wan_secondary_dns: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct BasebandStatsResponse {
-    available: bool,
-    stats: Option<CommunicationStats>,
-    message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,7 +188,6 @@ struct WirelessSettingResponse {
 struct WirelessSnapshot {
     sequence: u64,
     general: GeneralStatus,
-    traffic: TrafficStatus,
     connections: Vec<ConnectionStatus>,
     chart: RssiChart,
 }
@@ -204,20 +196,10 @@ struct WirelessSnapshot {
 struct GeneralStatus {
     mac_address: String,
     operation_mode: String,
-    network_id: String,
     compatibility_mode: String,
     bandwidth: String,
     frequency: String,
     tx_power: String,
-    encryption_type: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TrafficStatus {
-    receive_bytes: u64,
-    receive_packets: u64,
-    transmit_bytes: u64,
-    transmit_packets: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -229,8 +211,6 @@ struct ConnectionStatus {
     tx_mod: String,
     rx_mod: String,
     snr_db: i32,
-    rssi_main_dbm: i32,
-    rssi_aux_dbm: i32,
     signal_level_main: u8,
     signal_level_aux: u8,
     rssi_main_history: Vec<i32>,
@@ -338,7 +318,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let initial = match (baseband.as_ref(), baseband_health.runtime.status_snapshot.as_ref()) {
         (Some(baseband), Some(status)) => {
             let plot_snapshot = baseband.get_plot_snapshot();
-            build_hardware_snapshot(0, status, &baseband.get_communication_stats(), plot_snapshot.as_ref(), None)
+            build_hardware_snapshot(0, status, plot_snapshot.as_ref(), None)
         }
         _ => build_simulated_snapshot(0),
     };
@@ -365,7 +345,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/wireless/runtime/apply", post(apply_wireless_setting))
         .route("/api/system/info", get(get_system_info))
         .route("/api/baseband/health", get(get_baseband_health))
-        .route("/api/baseband/stats", get(get_baseband_stats))
         .route("/api/baseband/test", get(test_baseband_communication))
         .route("/api/baseband/link/exercise", post(exercise_baseband_link))
         .route("/ws", get(ws_handler))
@@ -592,23 +571,6 @@ async fn get_baseband_health(State(state): State<Arc<AppState>>) -> Json<Baseban
             health
         }
         None => state.baseband_health.clone(),
-    };
-
-    Json(response)
-}
-
-async fn get_baseband_stats(State(state): State<Arc<AppState>>) -> Json<BasebandStatsResponse> {
-    let response = match state.baseband.as_ref() {
-        Some(baseband) => BasebandStatsResponse {
-            available: true,
-            stats: Some(baseband.get_communication_stats()),
-            message: "Baseband statistics fetched successfully".to_string(),
-        },
-        None => BasebandStatsResponse {
-            available: false,
-            stats: None,
-            message: "Baseband SDK not available; running in simulator mode".to_string(),
-        },
     };
 
     Json(response)
@@ -861,9 +823,8 @@ fn spawn_data_feeder(state: Arc<AppState>) {
             let snapshot = match state.baseband.as_ref() {
                 Some(baseband) => match baseband.get_status_snapshot() {
                     Ok(status) => {
-                        let stats = baseband.get_communication_stats();
                         let plot_snapshot = baseband.get_plot_snapshot();
-                        build_hardware_snapshot(tick, &status, &stats, plot_snapshot.as_ref(), Some(&previous))
+                        build_hardware_snapshot(tick, &status, plot_snapshot.as_ref(), Some(&previous))
                     }
                     Err(err) => {
                         if tick % 30 == 1 {
@@ -926,26 +887,15 @@ fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
     let ap_mcs_rx = 6 + ((sequence % 6) as i32);
     let ap_fch_lock = if sequence % 9 == 0 { 0 } else { 1 };
 
-    let receive_bytes = 3_965_000 + sequence * 18_400;
-    let transmit_bytes = 10_085_000 + sequence * 24_900;
-
     WirelessSnapshot {
         sequence,
         general: GeneralStatus {
             mac_address: "00:0F:92:FA:37:CE".to_string(),
             operation_mode: "Master".to_string(),
-            network_id: "TEST_ID".to_string(),
             compatibility_mode: "PDDL".to_string(),
             bandwidth: "4 MHz".to_string(),
             frequency: format!("2.{:03} GHz", 438 + ((sequence % 5) as u16)),
             tx_power: format!("{} dBm", 20 + (sequence % 2)),
-            encryption_type: "AES-128".to_string(),
-        },
-        traffic: TrafficStatus {
-            receive_bytes,
-            receive_packets: 42_117 + sequence * 33,
-            transmit_bytes,
-            transmit_packets: 65_437 + sequence * 47,
         },
         connections: vec![ConnectionStatus {
             link_slot: "SLOT 0".to_string(),
@@ -971,8 +921,6 @@ fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
                 "16-QAM FEC 3/4".to_string()
             },
             snr_db: 34 + oscillate(sequence, 2, 7),
-            rssi_main_dbm: peer_current_main_rssi,
-            rssi_aux_dbm: peer_current_aux_rssi,
             signal_level_main: map_signal_level(peer_current_main_rssi),
             signal_level_aux: map_signal_level(peer_current_aux_rssi),
             rssi_main_history: peer_main_history,
@@ -1039,7 +987,6 @@ fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
 fn build_hardware_snapshot(
     sequence: u64,
     status: &BbGetStatusSummary,
-    stats: &CommunicationStats,
     plot_snapshot: Option<&BbPlotSnapshotSummary>,
     previous: Option<&WirelessSnapshot>,
 ) -> WirelessSnapshot {
@@ -1067,8 +1014,6 @@ fn build_hardware_snapshot(
                     .map(format_mcs)
                     .unwrap_or_else(|| "Unavailable".to_string()),
                 snr_db: link.snr_db.unwrap_or(SNR_UNAVAILABLE_DB),
-                rssi_main_dbm: current_main,
-                rssi_aux_dbm: current_aux,
                 signal_level_main: map_signal_level(current_main),
                 signal_level_aux: map_signal_level(current_aux),
                 rssi_main_history: history_from_previous(
@@ -1149,10 +1094,6 @@ fn build_hardware_snapshot(
         general: GeneralStatus {
             mac_address: status.mac_hex.clone(),
             operation_mode: format_operation_mode(status),
-            network_id: format!(
-                "Unavailable (cfg_sbmp=0x{:02X}, rt_sbmp=0x{:02X})",
-                status.cfg_sbmp, status.rt_sbmp
-            ),
             compatibility_mode: format_baseband_mode(status.mode).to_string(),
             bandwidth: status
                 .bandwidth
@@ -1163,13 +1104,6 @@ fn build_hardware_snapshot(
                 .map(format_frequency_khz)
                 .unwrap_or_else(|| "Unavailable".to_string()),
             tx_power: "Unavailable".to_string(),
-            encryption_type: "Unavailable".to_string(),
-        },
-        traffic: TrafficStatus {
-            receive_bytes: stats.recv_bytes,
-            receive_packets: stats.recv_packets as u64,
-            transmit_bytes: stats.send_bytes,
-            transmit_packets: stats.send_packets as u64,
         },
         connections,
         chart: RssiChart {
@@ -1447,7 +1381,6 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
         let snapshot = build_hardware_snapshot(
             next_sequence,
             &status,
-            &baseband.get_communication_stats(),
             plot_snapshot.as_ref(),
             Some(&previous),
         );

@@ -1036,15 +1036,6 @@ impl BasebandApi {
         })
     }
 
-    /// 获取通信统计信息
-    pub fn get_stats(&self) -> CommunicationStats {
-        CommunicationStats {
-            recv_packets: 0,
-            send_packets: 0,
-            recv_bytes: 0,
-            send_bytes: 0,
-        }
-    }
 }
 
 impl Drop for BasebandApi {
@@ -1078,19 +1069,6 @@ impl Drop for BasebandApi {
             tracing::info!("Baseband remote host disconnected");
         }
     }
-}
-
-/// 通信统计数据结构
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct CommunicationStats {
-    /// 接收数据包计数
-    pub recv_packets: u32,
-    /// 发送数据包计数
-    pub send_packets: u32,
-    /// 接收字节数
-    pub recv_bytes: u64,
-    /// 发送字节数
-    pub send_bytes: u64,
 }
 
 /// 管理基带通信的核心模块
@@ -1177,12 +1155,6 @@ impl BasebandManager {
         // TX + RX 双向通信
         let flags = ffi::BB_SOCK_FLAG_TX | ffi::BB_SOCK_FLAG_RX;
         api.create_socket(socket_id, flags, 4096)
-    }
-
-    /// 获取基带统计信息
-    pub fn get_communication_stats(&self) -> CommunicationStats {
-        let api = self.api.lock().unwrap();
-        api.get_stats()
     }
 
     pub fn get_status_snapshot(&self) -> Result<ffi::BbGetStatusSummary, String> {
@@ -1322,10 +1294,4 @@ mod tests {
         println!("API Initialized: {}", api.is_initialized());
     }
 
-    #[test]
-    fn test_communication_stats() {
-        let api = BasebandApi::get();
-        let stats = api.get_stats();
-        println!("Stats: {:?}", stats);
-    }
 }

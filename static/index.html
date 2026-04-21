@@ -288,72 +288,43 @@
                                         <tr>
                                             <th>MAC Address</th>
                                             <th>Operation Mode</th>
-                                            <th>Network ID</th>
                                             <th>Compatibility Mode</th>
                                             <th>Bandwidth</th>
                                             <th>Frequency</th>
                                             <th>Tx Power</th>
-                                            <th>Encryption Type</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr>
                                             <td id="general-mac">--</td>
                                             <td id="general-mode">--</td>
-                                            <td id="general-network">--</td>
                                             <td id="general-compatibility">--</td>
                                             <td id="general-bandwidth">--</td>
                                             <td id="general-frequency">--</td>
                                             <td id="general-tx-power">--</td>
-                                            <td id="general-encryption">--</td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
 
-                            <div class="table-block compact">
-                                <h3>Traffic Status</h3>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Receive Bytes</th>
-                                            <th>Receive Packets</th>
-                                            <th>Transmit Bytes</th>
-                                            <th>Transmit Packets</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td id="traffic-rx-bytes">--</td>
-                                            <td id="traffic-rx-packets">--</td>
-                                            <td id="traffic-tx-bytes">--</td>
-                                            <td id="traffic-tx-packets">--</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div class="table-block compact">
+                            <div class="table-block compact connection-table-block">
                                 <h3>Connection Info (<span id="connection-count">0</span>)</h3>
-                                <table>
+                                <table class="connection-table">
                                     <thead>
                                         <tr>
-                                            <th>Link Slot</th>
                                             <th>Link State</th>
                                             <th>Pair State</th>
                                             <th>MAC Address</th>
                                             <th>Tx Mod</th>
                                             <th>Rx Mod</th>
                                             <th>SNR (dB)</th>
-                                            <th>Signal A</th>
-                                            <th>Signal B</th>
                                             <th>Signal Level</th>
                                             <th>RSSI Graph</th>
                                         </tr>
                                     </thead>
                                     <tbody id="connection-table-body">
                                         <tr>
-                                            <td colspan="11">等待连接数据...</td>
+                                            <td colspan="8">等待连接数据...</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1206,7 +1177,7 @@
 
         function renderConnections(connections) {
             if (!Array.isArray(connections) || connections.length === 0) {
-                connectionTableBody.innerHTML = '<tr><td colspan="11">暂无连接数据</td></tr>';
+                connectionTableBody.innerHTML = '<tr><td colspan="8">暂无连接数据...</td></tr>';
                 setText('connection-count', '0');
                 return;
             }
@@ -1214,15 +1185,12 @@
             setText('connection-count', String(connections.length));
             connectionTableBody.innerHTML = connections.map((connection) => `
                 <tr>
-                    <td>${escapeHtml(connection.link_slot)}</td>
                     <td>${buildStatePill(connection.link_state)}</td>
                     <td>${buildStatePill(connection.pair_state)}</td>
                     <td>${escapeHtml(connection.mac_address)}</td>
                     <td>${escapeHtml(connection.tx_mod)}</td>
                     <td>${escapeHtml(connection.rx_mod)}</td>
                     <td>${escapeHtml(connection.snr_db)}</td>
-                    <td>${escapeHtml(connection.rssi_main_dbm)}</td>
-                    <td>${escapeHtml(connection.rssi_aux_dbm)}</td>
                     <td>${buildSignalBars(Math.max(connection.signal_level_main, connection.signal_level_aux))}</td>
                     <td>${buildMiniChart(connection.rssi_main_history, connection.rssi_aux_history)}</td>
                 </tr>
@@ -1253,7 +1221,6 @@
             latestWirelessSnapshot = snapshot;
             setText('general-mac', snapshot.general.mac_address);
             setText('general-mode', snapshot.general.operation_mode);
-            setText('general-network', snapshot.general.network_id);
             setText('general-compatibility', snapshot.general.compatibility_mode);
             setText('general-bandwidth', snapshot.general.bandwidth);
             setText('general-frequency', snapshot.general.frequency);
@@ -1263,11 +1230,6 @@
                     ? `${wirelessRuntimeCurrent.current_power_dbm} dBm`
                     : snapshot.general.tx_power
             );
-            setText('general-encryption', snapshot.general.encryption_type);
-            setText('traffic-rx-bytes', formatBytes(snapshot.traffic.receive_bytes));
-            setText('traffic-rx-packets', snapshot.traffic.receive_packets.toLocaleString());
-            setText('traffic-tx-bytes', formatBytes(snapshot.traffic.transmit_bytes));
-            setText('traffic-tx-packets', snapshot.traffic.transmit_packets.toLocaleString());
 
             renderRfProfile(snapshot);
             renderPairPanel(snapshot.connections);

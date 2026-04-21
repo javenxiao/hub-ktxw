@@ -542,6 +542,24 @@ tbody td {
     background: #efefe8;
 }
 
+.connection-table-block {
+    overflow-x: auto;
+}
+
+.connection-table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+}
+
+.connection-table th:nth-child(1),
+.connection-table td:nth-child(1),
+.connection-table th:nth-child(3),
+.connection-table td:nth-child(3) {
+    white-space: nowrap;
+    word-break: normal;
+}
+
 .signal-bars {
     display: inline-flex;
     align-items: flex-end;
