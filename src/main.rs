@@ -18,7 +18,7 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, Notify, RwLock};
 use tower_http::{
     cors::CorsLayer,
     services::ServeDir,
@@ -26,7 +26,7 @@ use tower_http::{
 };
 use tracing::{error, info, warn};
 
-use bb_api::{BasebandHealthStatus, BasebandManager, WirelessRuntimeDetails};
+use bb_api::{resolve_plot_user, BasebandHealthStatus, BasebandManager, WirelessRuntimeDetails};
 use ffi::{BbGetStatusSummary, BbPlotSnapshotSummary};
 
 const DEFAULT_RUST_LOG: &str = "info";
@@ -114,6 +114,8 @@ struct WirelessRuntimeView {
     local_mac_address: String,
     operation_mode: String,
     available_devices: Vec<WirelessDeviceOption>,
+    selected_signal_user: Option<u8>,
+    detected_signal_user: Option<u8>,
     compatibility_mode: String,
     work_band_code: Option<u8>,
     bandwidth_code: Option<u8>,
@@ -184,6 +186,20 @@ struct WirelessSettingResponse {
     current: Option<WirelessRuntimeView>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct PlotRefreshSettingsRequest {
+    update_interval_ms: u64,
+    sample_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct PlotRefreshSettingsResponse {
+    success: bool,
+    update_interval_ms: u64,
+    sample_count: usize,
+    message: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct WirelessSnapshot {
     sequence: u64,
@@ -235,13 +251,17 @@ struct RssiChart {
     series: Vec<ChartSeries>,
 }
 
-const HISTORY_POINTS: usize = 18;
+const CONNECTION_HISTORY_POINTS: usize = 18;
+const DEFAULT_AP_PLOT_SAMPLE_POINTS: usize = 200;
 const RSSI_UNAVAILABLE_DBM: i32 = -127;
 const SNR_UNAVAILABLE_DB: i32 = -1;
 
 struct AppState {
     snapshot: RwLock<WirelessSnapshot>,
     wireless_runtime: RwLock<WirelessRuntimeResponse>,
+    plot_refresh_interval_ms: RwLock<u64>,
+    plot_sample_count: RwLock<usize>,
+    plot_refresh_interval_notify: Notify,
     tx: broadcast::Sender<WirelessSnapshot>,
     baseband: Option<Arc<BasebandManager>>,
     baseband_health: BasebandHealthStatus,
@@ -251,6 +271,8 @@ impl AppState {
     fn new(
         initial: WirelessSnapshot,
         initial_runtime: WirelessRuntimeResponse,
+        initial_plot_refresh_interval_ms: u64,
+        initial_plot_sample_count: usize,
         baseband: Option<Arc<BasebandManager>>,
         baseband_health: BasebandHealthStatus,
     ) -> Self {
@@ -258,10 +280,29 @@ impl AppState {
         Self {
             snapshot: RwLock::new(initial),
             wireless_runtime: RwLock::new(initial_runtime),
+            plot_refresh_interval_ms: RwLock::new(clamp_plot_refresh_interval_ms(initial_plot_refresh_interval_ms)),
+            plot_sample_count: RwLock::new(clamp_plot_sample_count(initial_plot_sample_count)),
+            plot_refresh_interval_notify: Notify::new(),
             tx,
             baseband,
             baseband_health,
         }
+    }
+}
+
+fn clamp_plot_refresh_interval_ms(value: u64) -> u64 {
+    value.clamp(100, 10_000)
+}
+
+fn clamp_plot_sample_count(value: usize) -> usize {
+    value.max(10)
+}
+
+fn default_plot_refresh_interval_ms(baseband_health: &BasebandHealthStatus) -> u64 {
+    if baseband_health.effective_mode == "hardware-remote-bb-host" {
+        3_000
+    } else {
+        1_000
     }
 }
 
@@ -318,9 +359,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let initial = match (baseband.as_ref(), baseband_health.runtime.status_snapshot.as_ref()) {
         (Some(baseband), Some(status)) => {
             let plot_snapshot = baseband.get_plot_snapshot();
-            build_hardware_snapshot(0, status, plot_snapshot.as_ref(), None)
+            build_hardware_snapshot(
+                0,
+                status,
+                plot_snapshot.as_ref(),
+                None,
+                DEFAULT_AP_PLOT_SAMPLE_POINTS,
+            )
         }
-        _ => build_simulated_snapshot(0),
+        _ => build_simulated_snapshot(0, DEFAULT_AP_PLOT_SAMPLE_POINTS),
     };
     let initial_runtime = match baseband.as_ref() {
         Some(baseband) => match baseband.get_wireless_runtime_details() {
@@ -334,7 +381,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Baseband SDK not available; runtime controls require real hardware mode".to_string(),
         ),
     };
-    let state = Arc::new(AppState::new(initial, initial_runtime, baseband.clone(), baseband_health));
+    let initial_plot_refresh_interval_ms = default_plot_refresh_interval_ms(&baseband_health);
+    let initial_plot_sample_count = DEFAULT_AP_PLOT_SAMPLE_POINTS;
+    ffi::set_plot_history_limit(initial_plot_sample_count);
+    let state = Arc::new(AppState::new(
+        initial,
+        initial_runtime,
+        initial_plot_refresh_interval_ms,
+        initial_plot_sample_count,
+        baseband.clone(),
+        baseband_health,
+    ));
 
     spawn_data_feeder(state.clone());
     spawn_runtime_feeder(state.clone());
@@ -343,6 +400,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/wireless/status", get(get_wireless_status))
         .route("/api/wireless/runtime", get(get_wireless_runtime))
         .route("/api/wireless/runtime/apply", post(apply_wireless_setting))
+        .route(
+            "/api/wireless/plot/settings",
+            get(get_plot_refresh_settings).post(apply_plot_refresh_settings),
+        )
         .route("/api/system/info", get(get_system_info))
         .route("/api/baseband/health", get(get_baseband_health))
         .route("/api/baseband/test", get(test_baseband_communication))
@@ -380,6 +441,49 @@ async fn get_wireless_status(State(state): State<Arc<AppState>>) -> Json<Wireles
 
 async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<WirelessRuntimeResponse> {
     Json(state.wireless_runtime.read().await.clone())
+}
+
+async fn get_plot_refresh_settings(
+    State(state): State<Arc<AppState>>,
+) -> Json<PlotRefreshSettingsResponse> {
+    let update_interval_ms = clamp_plot_refresh_interval_ms(*state.plot_refresh_interval_ms.read().await);
+    let sample_count = clamp_plot_sample_count(*state.plot_sample_count.read().await);
+    Json(PlotRefreshSettingsResponse {
+        success: true,
+        update_interval_ms,
+        sample_count,
+        message: "AP Plot refresh interval loaded".to_string(),
+    })
+}
+
+async fn apply_plot_refresh_settings(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<PlotRefreshSettingsRequest>,
+) -> Json<PlotRefreshSettingsResponse> {
+    let update_interval_ms = clamp_plot_refresh_interval_ms(request.update_interval_ms);
+    let sample_count = clamp_plot_sample_count(request.sample_count);
+
+    {
+        let mut guard = state.plot_refresh_interval_ms.write().await;
+        *guard = update_interval_ms;
+    }
+    {
+        let mut guard = state.plot_sample_count.write().await;
+        *guard = sample_count;
+    }
+    ffi::set_plot_history_limit(sample_count);
+    state.plot_refresh_interval_notify.notify_waiters();
+
+    Json(PlotRefreshSettingsResponse {
+        success: true,
+        update_interval_ms,
+        sample_count,
+        message: format!(
+            "AP Plot settings updated: refresh {} ms, samples {}",
+            update_interval_ms,
+            sample_count
+        ),
+    })
 }
 
 fn action_requires_runtime_context(action: &str, request: &WirelessSettingRequest) -> bool {
@@ -435,6 +539,10 @@ async fn apply_wireless_setting(
         .unwrap_or(0);
 
     let result = match request.action.as_str() {
+        "set_signal_user" => request
+            .user
+            .ok_or_else(|| "user is required".to_string())
+            .and_then(|user| baseband.set_signal_user_preference(user)),
         "select_device" => request
             .device_mac
             .as_deref()
@@ -804,27 +912,72 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
 fn spawn_data_feeder(state: Arc<AppState>) {
     tokio::spawn(async move {
-        let interval_secs = if state.baseband_health.effective_mode == "hardware-remote-bb-host" {
-            3
-        } else {
-            1
-        };
-        let mut ticker = tokio::time::interval_at(
-            tokio::time::Instant::now() + Duration::from_secs(interval_secs),
-            Duration::from_secs(interval_secs),
-        );
         let mut tick = 1_u64;
+        let mut last_plot_sample_count: Option<usize> = None;
+        let mut plot_stall_ticks = 0_u8;
 
         loop {
-            ticker.tick().await;
+            let interval_ms = clamp_plot_refresh_interval_ms(*state.plot_refresh_interval_ms.read().await);
+            let sleep = tokio::time::sleep(Duration::from_millis(interval_ms));
+            tokio::pin!(sleep);
+
+            tokio::select! {
+                _ = &mut sleep => {}
+                _ = state.plot_refresh_interval_notify.notified() => {
+                    continue;
+                }
+            }
+
             tracing::debug!(tick, "spawn_data_feeder tick started");
 
             let previous = state.snapshot.read().await.clone();
+            let sample_count = *state.plot_sample_count.read().await;
             let snapshot = match state.baseband.as_ref() {
                 Some(baseband) => match baseband.get_status_snapshot() {
                     Ok(status) => {
-                        let plot_snapshot = baseband.get_plot_snapshot();
-                        build_hardware_snapshot(tick, &status, plot_snapshot.as_ref(), Some(&previous))
+                        let plot_user = resolve_plot_user(&status);
+
+                        if let Err(err) = baseband.ensure_plot_stream(plot_user) {
+                            if tick % 30 == 1 {
+                                warn!("Failed to keep AP plot stream enabled: {}", err);
+                            }
+                        }
+
+                        let mut plot_snapshot = baseband.get_plot_snapshot();
+                        let current_plot_sample_count = plot_snapshot.as_ref().map(|plot| plot.sample_count);
+                        let plot_has_progress = match (current_plot_sample_count, last_plot_sample_count) {
+                            (Some(current), Some(previous)) => current > previous,
+                            (Some(current), None) => current > 0,
+                            (None, _) => false,
+                        };
+
+                        if plot_has_progress {
+                            plot_stall_ticks = 0;
+                        } else {
+                            plot_stall_ticks = plot_stall_ticks.saturating_add(1);
+                            if plot_stall_ticks >= 2 {
+                                match baseband.rebind_plot_stream(plot_user) {
+                                    Ok(()) => {
+                                        tracing::info!(tick, plot_user, "Rebound AP plot stream after stalled samples");
+                                        plot_snapshot = baseband.get_plot_snapshot();
+                                    }
+                                    Err(err) => {
+                                        warn!("Failed to rebind AP plot stream: {}", err);
+                                    }
+                                }
+                                plot_stall_ticks = 0;
+                            }
+                        }
+
+                        last_plot_sample_count = plot_snapshot.as_ref().map(|plot| plot.sample_count);
+
+                        build_hardware_snapshot(
+                            tick,
+                            &status,
+                            plot_snapshot.as_ref(),
+                            Some(&previous),
+                            sample_count,
+                        )
                     }
                     Err(err) => {
                         if tick % 30 == 1 {
@@ -833,7 +986,7 @@ fn spawn_data_feeder(state: Arc<AppState>) {
                         carry_forward_snapshot(previous, tick)
                     }
                 },
-                None => build_simulated_snapshot(tick),
+                None => build_simulated_snapshot(tick, sample_count),
             };
             tracing::debug!(tick, "spawn_data_feeder tick completed");
 
@@ -871,15 +1024,15 @@ fn spawn_runtime_feeder(state: Arc<AppState>) {
     });
 }
 
-fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
+fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> WirelessSnapshot {
     let peer_main_rssi = -65 + oscillate(sequence + 4, 4, 13);
     let peer_aux_rssi = -69 + oscillate(sequence + 7, 5, 15);
     let peer_current_main_rssi = peer_main_rssi.clamp(-74, -52);
     let peer_current_aux_rssi = peer_aux_rssi.clamp(-78, -56);
 
-    let peer_main_history = build_history(sequence + 9, peer_current_main_rssi, HISTORY_POINTS, 5);
-    let peer_aux_history = build_history(sequence + 12, peer_current_aux_rssi, HISTORY_POINTS, 4);
-    let ap_snr = 118 + oscillate(sequence, 9, 13);
+    let peer_main_history = build_history(sequence + 9, peer_current_main_rssi, CONNECTION_HISTORY_POINTS, 5);
+    let peer_aux_history = build_history(sequence + 12, peer_current_aux_rssi, CONNECTION_HISTORY_POINTS, 4);
+    let ap_snr = 20 + oscillate(sequence, 2, 7);
     let ap_ldpc_err = (sequence % 7) as i32 + oscillate(sequence + 2, 2, 5).max(0);
     let ap_ldpc_num = 360 + oscillate(sequence + 5, 24, 17);
     let ap_gain_a = 72 + oscillate(sequence + 1, 7, 9);
@@ -935,49 +1088,49 @@ fn build_simulated_snapshot(sequence: u64) -> WirelessSnapshot {
                     "ap_snr",
                     "",
                     Some(ap_snr),
-                    build_metric_history(sequence, ap_snr, HISTORY_POINTS, 8, 60, 180),
+                    build_metric_history(sequence, ap_snr, plot_sample_count, 2, 10, 30),
                 ),
                 build_chart_series(
                     "ap_ldpc_err",
                     "ap_ldpc_err",
                     "",
                     Some(ap_ldpc_err),
-                    build_metric_history(sequence + 1, ap_ldpc_err, HISTORY_POINTS, 2, 0, 20),
+                    build_metric_history(sequence + 1, ap_ldpc_err, plot_sample_count, 2, 0, 20),
                 ),
                 build_chart_series(
                     "ap_ldpc_num",
                     "ap_ldpc_num",
                     "",
                     Some(ap_ldpc_num),
-                    build_metric_history(sequence + 2, ap_ldpc_num, HISTORY_POINTS, 18, 250, 420),
+                    build_metric_history(sequence + 2, ap_ldpc_num, plot_sample_count, 18, 250, 420),
                 ),
                 build_chart_series(
                     "ap_gain_a",
                     "ap_gain_a",
                     "",
                     Some(ap_gain_a),
-                    build_metric_history(sequence + 3, ap_gain_a, HISTORY_POINTS, 6, 40, 100),
+                    build_metric_history(sequence + 3, ap_gain_a, plot_sample_count, 6, 40, 100),
                 ),
                 build_chart_series(
                     "ap_gain_b",
                     "ap_gain_b",
                     "",
                     Some(ap_gain_b),
-                    build_metric_history(sequence + 4, ap_gain_b, HISTORY_POINTS, 6, 40, 100),
+                    build_metric_history(sequence + 4, ap_gain_b, plot_sample_count, 6, 40, 100),
                 ),
                 build_chart_series(
                     "ap_mcs_rx",
                     "ap_mcs_rx",
                     "",
                     Some(ap_mcs_rx),
-                    build_metric_history(sequence + 5, ap_mcs_rx, HISTORY_POINTS, 2, 0, 24),
+                    build_metric_history(sequence + 5, ap_mcs_rx, plot_sample_count, 2, 0, 24),
                 ),
                 build_chart_series(
                     "ap_fch_lock",
                     "ap_fch_lock",
                     "",
                     Some(ap_fch_lock),
-                    build_metric_history(sequence + 6, ap_fch_lock, HISTORY_POINTS, 1, 0, 1),
+                    build_metric_history(sequence + 6, ap_fch_lock, plot_sample_count, 1, 0, 1),
                 ),
             ],
         },
@@ -989,7 +1142,9 @@ fn build_hardware_snapshot(
     status: &BbGetStatusSummary,
     plot_snapshot: Option<&BbPlotSnapshotSummary>,
     previous: Option<&WirelessSnapshot>,
+    plot_sample_count: usize,
 ) -> WirelessSnapshot {
+    let plot_snr_points = plot_snapshot.map(|plot| convert_plot_snr_points_to_db(&plot.snr));
     let connections = status
         .links
         .iter()
@@ -1019,12 +1174,12 @@ fn build_hardware_snapshot(
                 rssi_main_history: history_from_previous(
                     previous_connection_history(previous, link.slot, true),
                     current_main,
-                    HISTORY_POINTS,
+                    CONNECTION_HISTORY_POINTS,
                 ),
                 rssi_aux_history: history_from_previous(
                     previous_connection_history(previous, link.slot, false),
                     current_aux,
-                    HISTORY_POINTS,
+                    CONNECTION_HISTORY_POINTS,
                 ),
             }
         })
@@ -1035,9 +1190,10 @@ fn build_hardware_snapshot(
             "ap_snr",
             "ap_snr",
             "",
-            plot_snapshot.map(|plot| plot.snr.as_slice()),
+            plot_snr_points.as_deref(),
             previous,
             status.snr_db,
+            plot_sample_count,
         ),
         build_chart_series_from_source(
             "ap_ldpc_err",
@@ -1045,7 +1201,8 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.ldpc_err.as_slice()),
             previous,
-            None,
+            status.ldpc_err,
+            plot_sample_count,
         ),
         build_chart_series_from_source(
             "ap_ldpc_num",
@@ -1054,6 +1211,7 @@ fn build_hardware_snapshot(
             plot_snapshot.map(|plot| plot.ldpc_num.as_slice()),
             previous,
             None,
+            plot_sample_count,
         ),
         build_chart_series_from_source(
             "ap_gain_a",
@@ -1062,6 +1220,7 @@ fn build_hardware_snapshot(
             plot_snapshot.map(|plot| plot.gain_a.as_slice()),
             previous,
             status.signal_main,
+            plot_sample_count,
         ),
         build_chart_series_from_source(
             "ap_gain_b",
@@ -1070,6 +1229,7 @@ fn build_hardware_snapshot(
             plot_snapshot.map(|plot| plot.gain_b.as_slice()),
             previous,
             status.signal_aux,
+            plot_sample_count,
         ),
         build_chart_series_from_source(
             "ap_mcs_rx",
@@ -1078,6 +1238,7 @@ fn build_hardware_snapshot(
             plot_snapshot.map(|plot| plot.mcs_rx.as_slice()),
             previous,
             status.rx_mcs.map(i32::from),
+            plot_sample_count,
         ),
         build_chart_series_from_source(
             "ap_fch_lock",
@@ -1085,7 +1246,8 @@ fn build_hardware_snapshot(
             "",
             plot_snapshot.map(|plot| plot.fch_lock.as_slice()),
             previous,
-            status.link_state.map(i32::from),
+            None,
+            plot_sample_count,
         ),
     ];
 
@@ -1168,21 +1330,38 @@ fn build_chart_series_from_source(
     source: Option<&[i32]>,
     previous: Option<&WirelessSnapshot>,
     fallback_current_value: Option<i32>,
+    plot_sample_count: usize,
 ) -> ChartSeries {
-    let mut points = source
-        .map(|values| take_tail_points(values, HISTORY_POINTS))
+    let source_points = source
+        .map(|values| take_tail_points(values, plot_sample_count))
+        .filter(|values| !values.is_empty());
+    let source_missing = source_points.is_none();
+
+    let mut points = source_points
         .or_else(|| previous_chart_points(previous, key))
         .unwrap_or_default();
 
-    if source.is_none() {
+    if source_missing {
         if let Some(value) = fallback_current_value {
-            points = history_from_previous(Some(points.as_slice()), value, HISTORY_POINTS);
+            points = history_from_previous(Some(points.as_slice()), value, plot_sample_count);
         }
     }
 
-    let current_value = fallback_current_value.or_else(|| points.last().copied());
+    let current_value = points.last().copied().or(fallback_current_value);
 
     build_chart_series(key, label, unit, current_value, points)
+}
+
+fn convert_plot_snr_points_to_db(values: &[i32]) -> Vec<i32> {
+    values.iter().copied().map(plot_snr_linear_to_db).collect()
+}
+
+fn plot_snr_linear_to_db(snr_linear: i32) -> i32 {
+    if snr_linear <= 0 {
+        return 0;
+    }
+
+    (10.0 * ((snr_linear as f64) / 36.0).log10()).round() as i32
 }
 
 fn previous_chart_points(previous: Option<&WirelessSnapshot>, key: &str) -> Option<Vec<i32>> {
@@ -1276,6 +1455,8 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
         local_mac_address: details.status.mac_hex.clone(),
         operation_mode: format_operation_mode(&details.status),
         available_devices,
+        selected_signal_user: details.status.active_user,
+        detected_signal_user: details.status.detected_active_user,
         compatibility_mode: format_baseband_mode(details.status.mode).to_string(),
         work_band_code: details.band_info.as_ref().map(|info| info.work_band),
         bandwidth_code: details.status.bandwidth,
@@ -1378,11 +1559,13 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
         let previous = state.snapshot.read().await.clone();
         let next_sequence = previous.sequence.wrapping_add(1);
         let plot_snapshot = baseband.get_plot_snapshot();
+        let sample_count = *state.plot_sample_count.read().await;
         let snapshot = build_hardware_snapshot(
             next_sequence,
             &status,
             plot_snapshot.as_ref(),
             Some(&previous),
+            sample_count,
         );
 
         {

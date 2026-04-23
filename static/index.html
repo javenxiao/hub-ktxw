@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>wireless web</title>
     <meta name="description" content="仿设备管理后台的无线状态页面。">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f3b8f'/%3E%3Ctext x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='Arial'%3ER%3C/text%3E%3C/svg%3E">
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <div class="console-frame">
         <div class="tab-state">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-system" checked>
-            <input class="tab-input" type="radio" name="primary-tab" id="tab-network">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-wireless">
+            <input class="tab-input" type="radio" name="primary-tab" id="tab-network">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-firewall">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-serial">
             <input class="tab-input" type="radio" name="primary-tab" id="tab-diag">
@@ -20,8 +21,8 @@
 
             <nav class="top-tabs" aria-label="主栏目切换">
                 <label class="tab-label" for="tab-system">System</label>
-                <label class="tab-label" for="tab-network">Network</label>
                 <label class="tab-label" for="tab-wireless">Wireless</label>
+                <label class="tab-label" for="tab-network">Network</label>
                 <label class="tab-label" for="tab-firewall">Firewall</label>
                 <label class="tab-label" for="tab-serial">Serial</label>
                 <label class="tab-label" for="tab-diag">Diag</label>
@@ -256,14 +257,6 @@
         }, 3000);
     </script>
 
-            <section class="content-panel panel-network">
-                <div class="section-strip"></div>
-                <div class="panel-body placeholder-panel">
-                    <h2>Network</h2>
-                    <p>网络配置区域预留，后续可以补 IP、路由、DHCP 或 WAN/LAN 相关内容。</p>
-                </div>
-            </section>
-
             <section class="content-panel panel-wireless">
                 <div class="section-strip"></div>
                 <div class="panel-body wireless-page">
@@ -274,16 +267,14 @@
 
                     <div class="page-header">
                         <h1>Wireless Interfaces</h1>
-                        <div class="live-state" id="live-state">等待服务器数据</div>
+                        <div class="live-state offline" id="live-state" role="img" aria-label="RF Radio offline" title="RF Radio offline"></div>
                     </div>
 
                     <div class="wireless-subpage active" id="wireless-panel-status" data-wireless-panel="status" role="tabpanel">
-                        <section class="panel-box">
-                            <h2>RF Status</h2>
-
-                            <div class="table-block">
-                                <h3>General Status</h3>
-                                <table>
+                        <section class="panel-box wireless-status-panel">
+                            <div class="sys-section rf-summary-section wireless-status-section">
+                                <h3 class="sys-section-title">General Status</h3>
+                                <table class="wireless-status-table wireless-overview-table">
                                     <thead>
                                         <tr>
                                             <th>MAC Address</th>
@@ -307,9 +298,9 @@
                                 </table>
                             </div>
 
-                            <div class="table-block compact connection-table-block">
-                                <h3>Connection Info (<span id="connection-count">0</span>)</h3>
-                                <table class="connection-table">
+                            <div class="sys-section rf-summary-section wireless-status-section connection-table-block">
+                                <h3 class="sys-section-title">Connection Info (<span id="connection-count">0</span>)</h3>
+                                <table class="connection-table wireless-status-table">
                                     <thead>
                                         <tr>
                                             <th>Link State</th>
@@ -332,14 +323,24 @@
                         </section>
 
                         <section class="chart-panel">
-                            <h2 id="chart-title">AP Plot Data</h2>
+                            <h2 class="sys-section-title chart-panel-title" id="chart-title">AP Plot Data (--)</h2>
                             <div class="chart-box">
-                                <div class="chart-notes">
-                                    <p id="chart-target-device">Target: --</p>
-                                    <p id="chart-series-count">Series: --</p>
+                                <div class="plot-toolbar">
+                                    <div class="plot-toolbar-main">
+                                        <div class="plot-toolbar-actions">
+                                            <button class="sys-button-primary plot-toolbar-button" id="plot-start-btn" type="button">Start</button>
+                                            <button class="sys-button-default plot-toolbar-button" id="plot-pause-btn" type="button">Pause</button>
+                                            <button class="sys-button-default plot-toolbar-button" id="plot-stop-btn" type="button">Stop</button>
+                                            <button class="sys-button-default plot-toolbar-button" id="plot-record-btn" type="button">Start Recording</button>
+                                        </div>
+                                        <button class="sys-button-default plot-toolbar-button plot-settings-toggle" id="plot-settings-toggle" type="button" aria-expanded="false" aria-controls="plot-settings-panel">Axes</button>
+                                    </div>
+                                    <div class="plot-toolbar-state">
+                                        <span class="plot-state-chip running" id="plot-stream-state">Streaming</span>
+                                    </div>
                                 </div>
                                 <div class="plot-series-grid" id="plot-series-grid">
-                                    <div class="plot-series-empty">等待 Plot 数据...</div>
+                                    <div class="plot-series-empty">Waiting for plot data...</div>
                                 </div>
                             </div>
                         </section>
@@ -365,6 +366,14 @@
                                                 <td>
                                                     <select id="rf-operation-mode" class="sys-input rf-mode-select" aria-label="Operation device list">
                                                         <option value="">--</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>Physical User</td>
+                                                <td colspan="3">
+                                                    <select id="rf-signal-user" class="sys-input rf-mode-select" aria-label="Physical user selection">
+                                                        <option value="0">Physical User 0</option>
                                                     </select>
                                                 </td>
                                             </tr>
@@ -600,6 +609,14 @@
                 </div>
             </section>
 
+            <section class="content-panel panel-network">
+                <div class="section-strip"></div>
+                <div class="panel-body placeholder-panel">
+                    <h2>Network</h2>
+                    <p>网络配置区域预留，后续可以补 IP、路由、DHCP 或 WAN/LAN 相关内容。</p>
+                </div>
+            </section>
+
             <section class="content-panel panel-firewall">
                 <div class="section-strip"></div>
                 <div class="panel-body placeholder-panel">
@@ -645,6 +662,44 @@
         let controlDefaultsInitialized = false;
         let pendingDeviceSelectionMac = null;
         let deviceSelectionInFlight = false;
+        const rfSignalUserOptions = [
+            { value: 0, label: 'Physical User 0' },
+            { value: 1, label: 'Physical User 1' },
+            { value: 2, label: 'Physical User 2' },
+            { value: 3, label: 'Physical User 3' },
+            { value: 4, label: 'Physical User 4' },
+            { value: 5, label: 'Physical User 5' },
+            { value: 6, label: 'Physical User 6' },
+            { value: 7, label: 'Physical User 7' },
+            { value: 8, label: 'Physical User BR/CS' },
+            { value: 9, label: 'Physical User BR2/CS2' },
+        ];
+        const plotPalette = ['#3155d4', '#d84d3f', '#2b8a3e', '#0f766e', '#8b5cf6', '#ca8a04', '#0ea5e9'];
+        const plotState = {
+            paused: false,
+            stopped: false,
+            recording: false,
+            visibility: new Map(),
+            frames: [],
+            lastIncomingChart: null,
+            lastRecordedSequence: null,
+            pendingChart: null,
+            renderTimerId: null,
+            lastRenderedAt: 0,
+            appliedUpdateIntervalMs: null,
+            appliedSampleCount: null,
+            controlsOpen: false,
+            controls: {
+                xMin: '0',
+                xMax: '200',
+                yMin: '0',
+                yMax: '100',
+                updateIntervalMs: '1000',
+                chartTitle: '',
+                xAxisTitle: 'Sample',
+                yAxisTitle: 'Value',
+            },
+        };
 
         function switchWirelessSubTab(tabName) {
             wirelessSubTabs.forEach((tab) => {
@@ -825,45 +880,901 @@
             return unit ? `${value} ${unit}` : `${value}`;
         }
 
-        function buildPlotSeriesCard(series, index) {
-            const points = Array.isArray(series.points)
+        function getPlotSeriesKey(series, index) {
+            return String(series?.key || series?.label || `series_${index + 1}`);
+        }
+
+        function getPlotSeriesLabel(series, index) {
+            return String(series?.label || series?.key || `series_${index + 1}`);
+        }
+
+        function getPlotSeriesColor(index) {
+            return plotPalette[index % plotPalette.length];
+        }
+
+        function ensurePlotVisibilityState(seriesList) {
+            const activeKeys = new Set();
+            seriesList.forEach((series, index) => {
+                const key = getPlotSeriesKey(series, index);
+                activeKeys.add(key);
+                if (!plotState.visibility.has(key)) {
+                    plotState.visibility.set(key, true);
+                }
+            });
+
+            Array.from(plotState.visibility.keys()).forEach((key) => {
+                if (!activeKeys.has(key)) {
+                    plotState.visibility.delete(key);
+                }
+            });
+        }
+
+        function resolveCompositeRange(seriesList) {
+            const values = seriesList.flatMap((series) => Array.isArray(series.points)
                 ? series.points.filter((value) => Number.isFinite(value))
-                : [];
-            const seriesLabel = series.label || series.key || `series_${index + 1}`;
+                : []);
+
+            if (values.length === 0) {
+                return [0, 1];
+            }
+
+            return normalizeRange(Math.min(...values), Math.max(...values));
+        }
+
+        function parsePlotSettingNumber(value) {
+            const trimmed = String(value ?? '').trim();
+            if (!trimmed) {
+                return null;
+            }
+
+            const parsed = Number(trimmed);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+
+        function parsePlotUpdateIntervalMs(value) {
+            const trimmed = String(value ?? '').trim();
+            if (!trimmed) {
+                return 1000;
+            }
+
+            const parsed = Math.round(Number(trimmed));
+            if (!Number.isFinite(parsed)) {
+                return 1000;
+            }
+
+            return Math.min(10_000, Math.max(100, parsed));
+        }
+
+        function parsePlotSampleCount(value) {
+            const trimmed = String(value ?? '').trim();
+            if (!trimmed) {
+                return 200;
+            }
+
+            const parsed = Math.round(Number(trimmed));
+            if (!Number.isFinite(parsed)) {
+                return 200;
+            }
+
+            return Math.max(10, parsed);
+        }
+
+        function formatPlotAxisValue(value) {
+            if (!Number.isFinite(value)) {
+                return '--';
+            }
+
+            const rounded = Math.round(value);
+            if (Math.abs(value - rounded) < 0.001) {
+                return `${rounded}`;
+            }
+
+            return value.toFixed(2).replace(/\.?0+$/, '');
+        }
+
+        function normalizePlotAxisRange(minValue, maxValue, fallbackMin, fallbackMax) {
+            let start = Number.isFinite(minValue) ? minValue : fallbackMin;
+            let end = Number.isFinite(maxValue) ? maxValue : fallbackMax;
+
+            if (start > end) {
+                [start, end] = [end, start];
+            }
+
+            if (start === end) {
+                end = start + 1;
+            }
+
+            return [start, end];
+        }
+
+        function resolvePlotControlSettings(defaultChartTitle, autoMin, autoMax, sampleCount) {
+            const fallbackXMin = 0;
+            const fallbackXMax = sampleCount;
+            const fallbackYMin = 0;
+            const fallbackYMax = 100;
+            const [xMin, xMax] = normalizePlotAxisRange(
+                parsePlotSettingNumber(plotState.controls.xMin),
+                parsePlotSettingNumber(plotState.controls.xMax),
+                fallbackXMin,
+                fallbackXMax,
+            );
+            const [yMin, yMax] = normalizePlotAxisRange(
+                parsePlotSettingNumber(plotState.controls.yMin),
+                parsePlotSettingNumber(plotState.controls.yMax),
+                fallbackYMin,
+                fallbackYMax,
+            );
+            return {
+                xMin,
+                xMax,
+                yMin,
+                yMax,
+                sampleCount,
+                chartTitle: plotState.controls.chartTitle.trim(),
+                xAxisTitle: plotState.controls.xAxisTitle.trim() || 'Sample',
+                yAxisTitle: plotState.controls.yAxisTitle.trim() || 'Value',
+                updateIntervalMs: parsePlotUpdateIntervalMs(plotState.controls.updateIntervalMs),
+                inputs: {
+                    xMin: plotState.controls.xMin.trim() === '' ? formatPlotAxisValue(fallbackXMin) : plotState.controls.xMin,
+                    xMax: plotState.controls.xMax.trim() === '' ? formatPlotAxisValue(fallbackXMax) : plotState.controls.xMax,
+                    yMin: plotState.controls.yMin.trim() === '' ? formatPlotAxisValue(fallbackYMin) : plotState.controls.yMin,
+                    yMax: plotState.controls.yMax.trim() === '' ? formatPlotAxisValue(fallbackYMax) : plotState.controls.yMax,
+                    updateIntervalMs: `${parsePlotUpdateIntervalMs(plotState.controls.updateIntervalMs)}`,
+                    chartTitle: plotState.controls.chartTitle,
+                    xAxisTitle: plotState.controls.xAxisTitle,
+                    yAxisTitle: plotState.controls.yAxisTitle,
+                },
+                placeholders: {
+                    chartTitle: defaultChartTitle || 'Chart Title',
+                },
+            };
+        }
+
+        function niceAxisStep(rawStep) {
+            const safeStep = Math.max(1, Math.abs(rawStep) || 1);
+            const exponent = Math.floor(Math.log10(safeStep));
+            const base = safeStep / (10 ** exponent);
+
+            if (base <= 1) {
+                return 10 ** exponent;
+            }
+            if (base <= 2) {
+                return 2 * (10 ** exponent);
+            }
+            if (base <= 5) {
+                return 5 * (10 ** exponent);
+            }
+            return 10 * (10 ** exponent);
+        }
+
+        function buildAxisTicks(minValue, maxValue, desiredTickCount) {
+            const domainMin = Math.min(minValue, maxValue);
+            const domainMax = Math.max(minValue, maxValue);
+            const range = Math.max(domainMax - domainMin, 1);
+            const step = niceAxisStep(range / Math.max(desiredTickCount - 1, 1));
+            const epsilon = step * 1e-6;
+            const ticks = [];
+            let tickValue = Math.ceil((domainMin - epsilon) / step) * step;
+
+            while (tickValue <= domainMax + epsilon) {
+                ticks.push(Number(tickValue.toFixed(10)));
+                tickValue += step;
+            }
+
+            if (ticks.length === 0) {
+                ticks.push(Number((Math.round(domainMin / step) * step).toFixed(10)));
+            }
+
+            return ticks;
+        }
+
+        function clamp(value, minValue, maxValue) {
+            return Math.min(maxValue, Math.max(minValue, value));
+        }
+
+        function buildPlotLegendItem(series, index, isVisible) {
+            const key = getPlotSeriesKey(series, index);
+            const label = getPlotSeriesLabel(series, index);
+            const color = getPlotSeriesColor(index);
             const unit = series.unit || '';
-            const safeMin = Number.isFinite(series.min_value)
-                ? series.min_value
-                : (points.length > 0 ? Math.min(...points) : 0);
-            const safeMax = Number.isFinite(series.max_value)
-                ? series.max_value
-                : (points.length > 0 ? Math.max(...points) : 1);
-            const [rangeMin, rangeMax] = normalizeRange(safeMin, safeMax);
-            const polylinePoints = points.length > 0
-                ? toPolylinePoints(points, 260, 92, rangeMin, rangeMax, 8, 12, 252, 80)
-                : '8,80 252,80';
             const currentValue = formatChartValue(series.current_value, unit);
-            const rangeText = points.length > 0
-                ? `History: Min ${formatChartValue(series.min_value, unit)} Max ${formatChartValue(series.max_value, unit)}`
-                : 'History: --';
+            const rangeText = Number.isFinite(series.min_value) && Number.isFinite(series.max_value)
+                ? `${formatChartValue(series.min_value, unit)} ~ ${formatChartValue(series.max_value, unit)}`
+                : '--';
 
             return `
-                <article class="plot-series-card">
-                    <div class="plot-series-header">
-                        <div>
-                            <h3>${escapeHtml(seriesLabel)}</h3>
-                            <p>${escapeHtml(unit || 'plot metric')}</p>
-                        </div>
-                        <div class="plot-series-value">${escapeHtml(currentValue)}</div>
-                    </div>
-                    <p class="plot-series-range">${escapeHtml(rangeText)}</p>
-                    <svg class="plot-series-chart" viewBox="0 0 260 92" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(seriesLabel)} trend">
-                        <line x1="8" y1="12" x2="252" y2="12"></line>
-                        <line x1="8" y1="46" x2="252" y2="46"></line>
-                        <line x1="8" y1="80" x2="252" y2="80"></line>
-                        <polyline class="plot-line plot-line-${index % 7}" points="${polylinePoints}"></polyline>
-                    </svg>
-                </article>
+                <button class="plot-legend-item ${isVisible ? '' : 'is-muted'}" type="button" data-plot-key="${escapeHtml(key)}">
+                    <span class="plot-legend-swatch" style="background:${color}"></span>
+                    <span class="plot-legend-copy">
+                        <span class="plot-legend-label">${escapeHtml(label)}</span>
+                        <span class="plot-legend-range">${escapeHtml(rangeText)}</span>
+                    </span>
+                    <span class="plot-legend-value">${escapeHtml(currentValue)}</span>
+                </button>
             `;
+        }
+
+        function buildPlotControlPanel(settings) {
+            const isOpen = plotState.controlsOpen;
+            if (!isOpen) {
+                return '';
+            }
+
+            return `
+                <div class="plot-settings-dock">
+                    <section class="plot-settings-panel" id="plot-settings-panel" aria-label="Plot axis controls">
+                        <div class="plot-settings-panel-header">
+                            <div class="plot-settings-panel-title">Axis Settings</div>
+                            <div class="plot-settings-panel-actions">
+                                <button class="plot-settings-mini-button" id="plot-settings-reset" type="button">Default</button>
+                                <button class="plot-settings-mini-button" id="plot-settings-close" type="button">Close</button>
+                            </div>
+                        </div>
+                        <div class="plot-settings-grid">
+                            <label class="plot-settings-field">
+                                <span>X Min</span>
+                                <input class="sys-input plot-settings-input" data-plot-setting="xMin" type="number" step="0.1" value="${escapeHtml(settings.inputs.xMin)}">
+                            </label>
+                            <label class="plot-settings-field">
+                                <span>Y Min</span>
+                                <input class="sys-input plot-settings-input" data-plot-setting="yMin" type="number" step="0.1" value="${escapeHtml(settings.inputs.yMin)}">
+                            </label>
+                            <label class="plot-settings-field">
+                                <span>X Max</span>
+                                <input class="sys-input plot-settings-input" data-plot-setting="xMax" type="number" min="10" step="1" value="${escapeHtml(settings.inputs.xMax)}">
+                            </label>
+                            <label class="plot-settings-field">
+                                <span>Y Max</span>
+                                <input class="sys-input plot-settings-input" data-plot-setting="yMax" type="number" step="0.1" value="${escapeHtml(settings.inputs.yMax)}">
+                            </label>
+                            <label class="plot-settings-field">
+                                <span>Refresh (ms)</span>
+                                <input class="sys-input plot-settings-input" data-plot-setting="updateIntervalMs" type="number" min="100" step="100" value="${escapeHtml(settings.inputs.updateIntervalMs)}">
+                            </label>
+                        </div>
+                        <div class="plot-settings-group">
+                            <div class="plot-settings-group-title">Chart Title</div>
+                            <input class="sys-input plot-settings-input plot-settings-text" data-plot-setting="chartTitle" type="text" value="${escapeHtml(settings.inputs.chartTitle)}" placeholder="${escapeHtml(settings.placeholders.chartTitle)}">
+                        </div>
+                        <div class="plot-settings-group">
+                            <div class="plot-settings-group-title">X Axis Title</div>
+                            <input class="sys-input plot-settings-input plot-settings-text" data-plot-setting="xAxisTitle" type="text" value="${escapeHtml(settings.inputs.xAxisTitle)}">
+                        </div>
+                        <div class="plot-settings-group">
+                            <div class="plot-settings-group-title">Y Axis Title</div>
+                            <input class="sys-input plot-settings-input plot-settings-text" data-plot-setting="yAxisTitle" type="text" value="${escapeHtml(settings.inputs.yAxisTitle)}">
+                        </div>
+                    </section>
+                </div>
+            `;
+        }
+
+        function buildDisplayPlotSeries(series, sampleCount) {
+            const rawPoints = Array.isArray(series?.points)
+                ? series.points.filter((value) => Number.isFinite(value))
+                : [];
+            const points = rawPoints.slice(Math.max(rawPoints.length - sampleCount, 0));
+            const minValue = points.length > 0 ? Math.min(...points) : null;
+            const maxValue = points.length > 0 ? Math.max(...points) : null;
+
+            return {
+                ...series,
+                points,
+                current_value: series?.current_value ?? (points.length > 0 ? points[points.length - 1] : null),
+                min_value: minValue,
+                max_value: maxValue,
+            };
+        }
+
+        function buildCompositePlotLayout(chart) {
+            const allSeries = Array.isArray(chart && chart.series) ? chart.series : [];
+            ensurePlotVisibilityState(allSeries);
+            const sampleCount = parsePlotSampleCount(plotState.controls.xMax);
+
+            const allEntries = allSeries.map((series, index) => ({
+                series: buildDisplayPlotSeries(series, sampleCount),
+                index,
+                key: getPlotSeriesKey(series, index),
+            }));
+            const visibleEntries = allEntries.filter((entry) => plotState.visibility.get(entry.key) !== false);
+            const pointCount = Math.max(...allEntries.map(({ series }) => Array.isArray(series.points) ? series.points.length : 0), 0);
+            const [autoRangeMin, autoRangeMax] = resolveCompositeRange(visibleEntries.map(({ series }) => series));
+            const controlSettings = resolvePlotControlSettings(chart && chart.title ? chart.title : 'AP Plot Data', autoRangeMin, autoRangeMax, sampleCount);
+            const hasChartTitle = Boolean(controlSettings.chartTitle);
+            const xAxisTicks = buildAxisTicks(controlSettings.xMin, controlSettings.xMax, 6);
+            const plotBox = {
+                startX: 56,
+                endX: 944,
+                startY: hasChartTitle ? 34 : 18,
+                endY: 394,
+                viewBoxWidth: 980,
+                viewBoxHeight: 440,
+            };
+            const rangeMin = controlSettings.yMin;
+            const rangeMax = controlSettings.yMax;
+            const yAxisTicks = buildAxisTicks(rangeMin, rangeMax, 7);
+
+            const horizontalGrid = yAxisTicks.map((value) => {
+                const ratio = (value - rangeMin) / Math.max(rangeMax - rangeMin, 1);
+                const y = plotBox.endY - clamp(ratio, 0, 1) * (plotBox.endY - plotBox.startY);
+                return `
+                    <line class="plot-grid-line" x1="${plotBox.startX}" y1="${y.toFixed(1)}" x2="${plotBox.endX}" y2="${y.toFixed(1)}"></line>
+                    <text class="plot-axis-value" x="44" y="${(y + 4).toFixed(1)}">${formatPlotAxisValue(value)}</text>
+                `;
+            }).join('');
+
+            const verticalGrid = xAxisTicks.map((xValue) => {
+                const ratio = (xValue - controlSettings.xMin) / Math.max(controlSettings.xMax - controlSettings.xMin, 1);
+                const x = plotBox.startX + (plotBox.endX - plotBox.startX) * ratio;
+                return `
+                    <line class="plot-grid-line vertical" x1="${x.toFixed(1)}" y1="${plotBox.startY}" x2="${x.toFixed(1)}" y2="${plotBox.endY}"></line>
+                    <text class="plot-axis-value x-axis" x="${x.toFixed(1)}" y="418">${formatPlotAxisValue(xValue)}</text>
+                `;
+            }).join('');
+
+            const lineMarkup = visibleEntries.map(({ series, index }) => {
+                const rawPoints = Array.isArray(series.points) ? series.points.filter((value) => Number.isFinite(value)) : [];
+                const points = rawPoints.length > 0
+                    ? toPolylinePoints(rawPoints, plotBox.viewBoxWidth, plotBox.viewBoxHeight, rangeMin, rangeMax, plotBox.startX, plotBox.startY, plotBox.endX, plotBox.endY)
+                    : `${plotBox.startX},${plotBox.endY} ${plotBox.endX},${plotBox.endY}`;
+                const color = getPlotSeriesColor(index);
+                const lastValue = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1] : rangeMin;
+                const lastX = pointCount <= 1
+                    ? plotBox.startX
+                    : plotBox.startX + ((plotBox.endX - plotBox.startX) * (rawPoints.length - 1)) / Math.max(pointCount - 1, 1);
+                const ratio = (lastValue - rangeMin) / Math.max(rangeMax - rangeMin, 1);
+                const lastY = plotBox.endY - clamp(ratio, 0, 1) * (plotBox.endY - plotBox.startY);
+                return `
+                    <polyline class="plot-multi-line" points="${points}" style="stroke:${color}"></polyline>
+                    <circle class="plot-endpoint" cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3.5" style="fill:${color}"></circle>
+                `;
+            }).join('');
+
+            const legendMarkup = allEntries.map(({ series, index, key }) => buildPlotLegendItem(series, index, plotState.visibility.get(key) !== false)).join('');
+            const innerTitleMarkup = hasChartTitle
+                ? `<text class="plot-chart-title" x="490" y="22">${escapeHtml(controlSettings.chartTitle)}</text>`
+                : '';
+            const emptyMarkup = visibleEntries.length === 0
+                ? '<div class="plot-workbench-empty">All series are hidden. Re-enable them from the legend.</div>'
+                : '';
+
+            return {
+                pointCount,
+                plotBox,
+                axis: controlSettings,
+                visibleEntries,
+                allSeries,
+                markup: `
+                    <div class="plot-workbench">
+                        <div class="plot-stage">
+                            <div class="plot-surface" id="plot-surface">
+                                <svg class="plot-composite-svg" viewBox="0 0 980 440" preserveAspectRatio="none" role="img" aria-label="Multi-series trend chart">
+                                    <rect class="plot-frame-bg" x="0.5" y="0.5" width="979" height="439" rx="18" ry="18"></rect>
+                                    ${innerTitleMarkup}
+                                    ${horizontalGrid}
+                                    ${verticalGrid}
+                                    <line class="plot-axis-line" x1="${plotBox.startX}" y1="${plotBox.startY}" x2="${plotBox.startX}" y2="${plotBox.endY}"></line>
+                                    <line class="plot-axis-line" x1="${plotBox.startX}" y1="${plotBox.endY}" x2="${plotBox.endX}" y2="${plotBox.endY}"></line>
+                                    ${lineMarkup}
+                                    <text class="plot-axis-title plot-axis-title-y" x="18" y="${((plotBox.startY + plotBox.endY) / 2).toFixed(1)}">${escapeHtml(controlSettings.yAxisTitle)}</text>
+                                    <text class="plot-axis-title plot-axis-title-x" x="490" y="434">${escapeHtml(controlSettings.xAxisTitle)}</text>
+                                </svg>
+                                ${emptyMarkup}
+                                <div class="plot-crosshair" id="plot-crosshair" hidden></div>
+                                <div class="plot-hover-panel" id="plot-hover-panel" hidden></div>
+                                ${buildPlotControlPanel(controlSettings)}
+                            </div>
+                        </div>
+                        <aside class="plot-legend-sidebar" id="plot-legend-sidebar">
+                            <div class="plot-legend-list">
+                                ${legendMarkup || '<div class="plot-series-empty">No series data</div>'}
+                            </div>
+                        </aside>
+                    </div>
+                `,
+            };
+        }
+
+        function capturePlotControlFocusState() {
+            const activeElement = document.activeElement;
+            if (!activeElement || typeof activeElement.matches !== 'function' || !activeElement.matches('[data-plot-setting]')) {
+                return null;
+            }
+
+            let selectionStart = null;
+            let selectionEnd = null;
+            try {
+                selectionStart = activeElement.selectionStart;
+                selectionEnd = activeElement.selectionEnd;
+            } catch {
+                selectionStart = null;
+                selectionEnd = null;
+            }
+
+            return {
+                key: activeElement.getAttribute('data-plot-setting'),
+                selectionStart,
+                selectionEnd,
+            };
+        }
+
+        function restorePlotControlFocusState(focusState) {
+            if (!focusState || !focusState.key) {
+                return;
+            }
+
+            const input = document.querySelector(`[data-plot-setting="${focusState.key}"]`);
+            if (!input) {
+                return;
+            }
+
+            input.focus();
+
+            if (typeof focusState.selectionStart !== 'number' || typeof input.setSelectionRange !== 'function') {
+                return;
+            }
+
+            try {
+                input.setSelectionRange(focusState.selectionStart, focusState.selectionEnd ?? focusState.selectionStart);
+            } catch {
+                // Ignore selection restoration for input types that do not support it.
+            }
+        }
+
+        function isEditingPlotSettings() {
+            const activeElement = document.activeElement;
+            return Boolean(
+                activeElement
+                && typeof activeElement.matches === 'function'
+                && activeElement.matches('[data-plot-setting]')
+            );
+        }
+
+        function clearPlotHoverInfo() {
+            const hoverPanel = document.getElementById('plot-hover-panel');
+            const crosshair = document.getElementById('plot-crosshair');
+            if (hoverPanel) {
+                hoverPanel.hidden = true;
+                hoverPanel.innerHTML = '';
+            }
+            if (crosshair) {
+                crosshair.hidden = true;
+            }
+        }
+
+        function bindPlotLegendEvents(chart) {
+            document.querySelectorAll('[data-plot-key]').forEach((button) => {
+                const toggleSeriesVisibility = () => {
+                    const key = button.getAttribute('data-plot-key');
+                    if (!key) {
+                        return;
+                    }
+                    plotState.visibility.set(key, !(plotState.visibility.get(key) !== false));
+                    renderChart(chart || plotState.lastIncomingChart);
+                };
+
+                button.addEventListener('pointerdown', (event) => {
+                    event.preventDefault();
+                    toggleSeriesVisibility();
+                });
+
+                button.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    toggleSeriesVisibility();
+                });
+            });
+        }
+
+        function bindPlotControlEvents(chart) {
+            document.querySelectorAll('[data-plot-setting]').forEach((input) => {
+                const settingKey = input.getAttribute('data-plot-setting');
+                if (!settingKey || input.dataset.bound) {
+                    return;
+                }
+
+                input.dataset.bound = 'true';
+                input.addEventListener('input', () => {
+                    plotState.controls[settingKey] = input.value;
+                });
+                input.addEventListener('blur', () => {
+                    const chartToRender = plotState.pendingChart || chart || plotState.lastIncomingChart;
+                    if (!chartToRender) {
+                        return;
+                    }
+
+                    window.setTimeout(() => {
+                        if (!isEditingPlotSettings()) {
+                            renderChart(chartToRender);
+                        }
+                    }, 0);
+                });
+                input.addEventListener('change', () => {
+                    plotState.controls[settingKey] = settingKey === 'updateIntervalMs'
+                        ? `${parsePlotUpdateIntervalMs(input.value)}`
+                        : settingKey === 'xMax'
+                            ? `${parsePlotSampleCount(input.value)}`
+                        : input.value;
+                    renderChart(chart || plotState.lastIncomingChart);
+
+                    if (settingKey === 'updateIntervalMs' || settingKey === 'xMax') {
+                        syncPlotRefreshSettings(plotState.controls.updateIntervalMs, chart || plotState.lastIncomingChart);
+                    }
+                });
+                input.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter') {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    plotState.controls[settingKey] = settingKey === 'updateIntervalMs'
+                        ? `${parsePlotUpdateIntervalMs(input.value)}`
+                        : settingKey === 'xMax'
+                            ? `${parsePlotSampleCount(input.value)}`
+                        : input.value;
+                    renderChart(chart || plotState.lastIncomingChart);
+
+                    if (settingKey === 'updateIntervalMs' || settingKey === 'xMax') {
+                        syncPlotRefreshSettings(plotState.controls.updateIntervalMs, chart || plotState.lastIncomingChart);
+                    }
+                });
+            });
+        }
+
+        function bindPlotControlPanelActions(chart) {
+            const closeButton = document.getElementById('plot-settings-close');
+            if (closeButton && !closeButton.dataset.bound) {
+                closeButton.dataset.bound = 'true';
+                closeButton.addEventListener('click', () => {
+                    plotState.controlsOpen = false;
+                    renderChart(chart || plotState.lastIncomingChart);
+                });
+            }
+
+            const resetButton = document.getElementById('plot-settings-reset');
+            if (resetButton && !resetButton.dataset.bound) {
+                resetButton.dataset.bound = 'true';
+                resetButton.addEventListener('click', () => {
+                    plotState.controls.xMin = '0';
+                    plotState.controls.xMax = '200';
+                    plotState.controls.yMin = '0';
+                    plotState.controls.yMax = '100';
+                    plotState.controls.updateIntervalMs = '1000';
+                    renderChart(chart || plotState.lastIncomingChart);
+                    syncPlotRefreshSettings(plotState.controls.updateIntervalMs, chart || plotState.lastIncomingChart);
+                });
+            }
+        }
+
+        function cancelScheduledPlotRender() {
+            if (plotState.renderTimerId !== null) {
+                window.clearTimeout(plotState.renderTimerId);
+                plotState.renderTimerId = null;
+            }
+
+            plotState.pendingChart = null;
+        }
+
+        function schedulePlotChartRender(chart) {
+            const intervalMs = parsePlotUpdateIntervalMs(plotState.controls.updateIntervalMs);
+            plotState.pendingChart = chart || null;
+
+            if (isEditingPlotSettings()) {
+                if (plotState.renderTimerId !== null) {
+                    window.clearTimeout(plotState.renderTimerId);
+                    plotState.renderTimerId = null;
+                }
+                return;
+            }
+
+            if (intervalMs <= 0) {
+                renderChart(plotState.pendingChart);
+                return;
+            }
+
+            const now = Date.now();
+            const elapsed = now - plotState.lastRenderedAt;
+
+            if (plotState.lastRenderedAt === 0 || elapsed >= intervalMs) {
+                renderChart(plotState.pendingChart);
+                return;
+            }
+
+            if (plotState.renderTimerId !== null) {
+                window.clearTimeout(plotState.renderTimerId);
+                plotState.renderTimerId = null;
+            }
+
+            plotState.renderTimerId = window.setTimeout(() => {
+                plotState.renderTimerId = null;
+                renderChart(plotState.pendingChart);
+            }, intervalMs - elapsed);
+        }
+
+        function bindPlotSurfaceEvents(chart, renderModel) {
+            const surface = document.getElementById('plot-surface');
+            const hoverPanel = document.getElementById('plot-hover-panel');
+            const crosshair = document.getElementById('plot-crosshair');
+            if (!surface || !hoverPanel || !crosshair || renderModel.pointCount <= 0 || renderModel.visibleEntries.length === 0) {
+                clearPlotHoverInfo();
+                return;
+            }
+
+            surface.addEventListener('mouseleave', clearPlotHoverInfo);
+            surface.addEventListener('mousemove', (event) => {
+                if (event.target instanceof Element && event.target.closest('.plot-settings-dock')) {
+                    clearPlotHoverInfo();
+                    return;
+                }
+
+                const rect = surface.getBoundingClientRect();
+                const plotLeft = (renderModel.plotBox.startX / renderModel.plotBox.viewBoxWidth) * rect.width;
+                const plotRight = (renderModel.plotBox.endX / renderModel.plotBox.viewBoxWidth) * rect.width;
+                const plotTop = (renderModel.plotBox.startY / renderModel.plotBox.viewBoxHeight) * rect.height;
+                const plotBottom = (renderModel.plotBox.endY / renderModel.plotBox.viewBoxHeight) * rect.height;
+                const localX = event.clientX - rect.left;
+                const localY = event.clientY - rect.top;
+
+                if (localX < plotLeft || localX > plotRight || localY < plotTop || localY > plotBottom) {
+                    clearPlotHoverInfo();
+                    return;
+                }
+
+                const ratio = (localX - plotLeft) / Math.max(plotRight - plotLeft, 1);
+                const sampleIndex = Math.round(ratio * Math.max(renderModel.pointCount - 1, 1));
+                const xValue = renderModel.pointCount <= 1
+                    ? renderModel.axis.xMin
+                    : renderModel.axis.xMin + ((renderModel.axis.xMax - renderModel.axis.xMin) * sampleIndex) / Math.max(renderModel.pointCount - 1, 1);
+                const crosshairX = plotLeft + ((plotRight - plotLeft) * sampleIndex) / Math.max(renderModel.pointCount - 1, 1);
+                const hoverLines = renderModel.visibleEntries.map(({ series, index }) => {
+                    const label = getPlotSeriesLabel(series, index);
+                    const color = getPlotSeriesColor(index);
+                    const rawPoints = Array.isArray(series.points) ? series.points.filter((value) => Number.isFinite(value)) : [];
+                    const rawValue = rawPoints[sampleIndex] ?? series.current_value;
+                    return {
+                        label,
+                        color,
+                        text: `${label}: ${formatChartValue(rawValue, series.unit || '')}`,
+                    };
+                });
+
+                crosshair.hidden = false;
+                crosshair.style.left = `${crosshairX}px`;
+                crosshair.style.top = `${plotTop}px`;
+                crosshair.style.height = `${plotBottom - plotTop}px`;
+
+                hoverPanel.hidden = false;
+                hoverPanel.innerHTML = `
+                    <div class="plot-hover-title">${escapeHtml(renderModel.axis.xAxisTitle)}=${escapeHtml(formatPlotAxisValue(xValue))}</div>
+                    ${hoverLines.map((line) => `
+                        <div class="plot-hover-line">
+                            <span class="plot-hover-swatch" style="background:${line.color}"></span>
+                            <span>${escapeHtml(line.text)}</span>
+                        </div>
+                    `).join('')}
+                `;
+
+                const tooltipX = clamp(localX + 16, 12, rect.width - 220);
+                const tooltipY = clamp(localY - 12, 12, rect.height - 100);
+                hoverPanel.style.left = `${tooltipX}px`;
+                hoverPanel.style.top = `${tooltipY}px`;
+            });
+        }
+
+        function downloadPlotRecording() {
+            if (plotState.frames.length === 0) {
+                return;
+            }
+
+            const payload = {
+                exported_at: new Date().toISOString(),
+                frame_count: plotState.frames.length,
+                frames: plotState.frames,
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `ap-plot-record-${Date.now()}.json`;
+            anchor.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function updatePlotToolbarState(totalSeries = null, visibleSeries = null) {
+            const seriesList = Array.isArray(plotState.lastIncomingChart?.series) ? plotState.lastIncomingChart.series : [];
+            const total = totalSeries ?? seriesList.length;
+            const visible = visibleSeries ?? seriesList.filter((series, index) => plotState.visibility.get(getPlotSeriesKey(series, index)) !== false).length;
+
+            const startButton = document.getElementById('plot-start-btn');
+            const pauseButton = document.getElementById('plot-pause-btn');
+            const stopButton = document.getElementById('plot-stop-btn');
+            const recordButton = document.getElementById('plot-record-btn');
+            const settingsButton = document.getElementById('plot-settings-toggle');
+            const streamState = document.getElementById('plot-stream-state');
+
+            if (startButton) {
+                startButton.disabled = !plotState.paused && !plotState.stopped;
+                startButton.classList.toggle('is-working', !plotState.paused && !plotState.stopped);
+                startButton.classList.remove('is-selected');
+            }
+            if (pauseButton) {
+                pauseButton.disabled = plotState.stopped;
+                pauseButton.textContent = plotState.paused ? 'Paused' : 'Pause';
+                pauseButton.classList.toggle('is-selected', plotState.paused);
+                pauseButton.classList.remove('is-working');
+            }
+            if (stopButton) {
+                stopButton.disabled = plotState.stopped;
+                stopButton.classList.toggle('is-selected', plotState.stopped);
+                stopButton.classList.remove('is-working');
+            }
+            if (recordButton) {
+                recordButton.textContent = plotState.recording ? 'Stop Recording' : 'Start Recording';
+                recordButton.classList.toggle('is-working', plotState.recording);
+                recordButton.classList.remove('is-selected');
+            }
+            if (settingsButton) {
+                settingsButton.classList.toggle('is-open', plotState.controlsOpen);
+                settingsButton.setAttribute('aria-expanded', String(plotState.controlsOpen));
+            }
+            if (streamState) {
+                streamState.textContent = plotState.stopped ? 'Stopped' : (plotState.paused ? 'Paused' : 'Streaming');
+                streamState.className = `plot-state-chip ${plotState.stopped ? 'stopped' : (plotState.paused ? 'paused' : 'running')}`;
+            }
+        }
+
+        function recordPlotFrame(snapshot) {
+            if (!plotState.recording || !snapshot || snapshot.sequence === plotState.lastRecordedSequence) {
+                return;
+            }
+
+            plotState.lastRecordedSequence = snapshot.sequence;
+            plotState.frames.push({
+                timestamp: new Date().toISOString(),
+                sequence: snapshot.sequence,
+                target_mac_address: snapshot.chart?.target_mac_address || '--',
+                series: (snapshot.chart?.series || []).map((series) => ({
+                    key: series.key,
+                    label: series.label,
+                    unit: series.unit,
+                    current_value: series.current_value,
+                    min_value: series.min_value,
+                    max_value: series.max_value,
+                    points: Array.isArray(series.points) ? [...series.points] : [],
+                })),
+            });
+        }
+
+        function renderChart(chart) {
+            cancelScheduledPlotRender();
+            plotState.lastIncomingChart = chart || null;
+            plotState.lastRenderedAt = Date.now();
+
+            const title = chart && chart.title ? chart.title : 'AP Plot Data';
+            const targetMac = chart && chart.target_mac_address ? chart.target_mac_address : '--';
+            const series = Array.isArray(chart && chart.series) ? chart.series : [];
+
+            setText('chart-title', `${title} (${targetMac})`);
+
+            const container = document.getElementById('plot-series-grid');
+            if (!container) {
+                return;
+            }
+
+            if (plotState.stopped) {
+                updatePlotToolbarState(series.length, 0);
+                container.innerHTML = '<div class="plot-series-empty">Stream stopped. Click Start to resume.</div>';
+                return;
+            }
+
+            if (series.length === 0) {
+                updatePlotToolbarState(0, 0);
+                container.innerHTML = '<div class="plot-series-empty">Waiting for plot data...</div>';
+                return;
+            }
+
+            const focusState = capturePlotControlFocusState();
+            const renderModel = buildCompositePlotLayout(chart);
+            container.innerHTML = renderModel.markup;
+            clearPlotHoverInfo();
+            updatePlotToolbarState(renderModel.allSeries.length, renderModel.visibleEntries.length);
+            bindPlotLegendEvents(chart);
+            bindPlotControlEvents(chart);
+            bindPlotControlPanelActions(chart);
+            restorePlotControlFocusState(focusState);
+            bindPlotSurfaceEvents(chart, renderModel);
+        }
+
+        function syncPlotChart(snapshot) {
+            const chart = snapshot && snapshot.chart ? snapshot.chart : null;
+            plotState.lastIncomingChart = chart;
+
+            if (plotState.recording && !plotState.paused && !plotState.stopped) {
+                recordPlotFrame(snapshot);
+            }
+
+            if (plotState.stopped) {
+                cancelScheduledPlotRender();
+                updatePlotToolbarState(chart?.series?.length ?? 0, 0);
+                return;
+            }
+
+            if (plotState.paused) {
+                cancelScheduledPlotRender();
+                updatePlotToolbarState(chart?.series?.length ?? 0);
+                return;
+            }
+
+            schedulePlotChartRender(chart);
+        }
+
+        function togglePlotRecording() {
+            if (plotState.recording) {
+                plotState.recording = false;
+                updatePlotToolbarState();
+                downloadPlotRecording();
+                return;
+            }
+
+            plotState.frames = [];
+            plotState.lastRecordedSequence = null;
+            plotState.recording = true;
+            updatePlotToolbarState();
+        }
+
+        function bindPlotToolbarButtons() {
+            const startButton = document.getElementById('plot-start-btn');
+            const pauseButton = document.getElementById('plot-pause-btn');
+            const stopButton = document.getElementById('plot-stop-btn');
+            const recordButton = document.getElementById('plot-record-btn');
+            const settingsButton = document.getElementById('plot-settings-toggle');
+
+            if (startButton && !startButton.dataset.bound) {
+                startButton.dataset.bound = 'true';
+                startButton.addEventListener('click', () => {
+                    plotState.paused = false;
+                    plotState.stopped = false;
+                    renderChart(plotState.lastIncomingChart);
+                });
+            }
+
+            if (pauseButton && !pauseButton.dataset.bound) {
+                pauseButton.dataset.bound = 'true';
+                pauseButton.addEventListener('click', () => {
+                    if (plotState.stopped) {
+                        return;
+                    }
+                    plotState.paused = true;
+                    cancelScheduledPlotRender();
+                    updatePlotToolbarState();
+                });
+            }
+
+            if (stopButton && !stopButton.dataset.bound) {
+                stopButton.dataset.bound = 'true';
+                stopButton.addEventListener('click', () => {
+                    plotState.stopped = true;
+                    plotState.paused = false;
+                    clearPlotHoverInfo();
+                    renderChart(plotState.lastIncomingChart);
+                });
+            }
+
+            if (recordButton && !recordButton.dataset.bound) {
+                recordButton.dataset.bound = 'true';
+                recordButton.addEventListener('click', togglePlotRecording);
+            }
+
+            if (settingsButton && !settingsButton.dataset.bound) {
+                settingsButton.dataset.bound = 'true';
+                settingsButton.addEventListener('click', () => {
+                    plotState.controlsOpen = !plotState.controlsOpen;
+                    renderChart(plotState.lastIncomingChart);
+                });
+            }
         }
 
         function populateChannelOptions(channels, currentIndex) {
@@ -924,13 +1835,25 @@
             offElement.classList.toggle('active', !isOn);
         }
 
-        function renderRfProfile() {
-            const hasRadioData = Boolean(
-                wirelessRuntimeCurrent?.local_mac_address
-                && wirelessRuntimeCurrent.local_mac_address !== '--'
+        function isRfRadioOnline(current = wirelessRuntimeCurrent) {
+            return Boolean(
+                current?.local_mac_address
+                && current.local_mac_address !== '--'
             );
+        }
 
-            setRfRadioState(hasRadioData);
+        function updateLiveStateIndicator(isOnline) {
+            const stateLabel = isOnline ? 'RF Radio online' : 'RF Radio offline';
+            liveState.classList.toggle('online', isOnline);
+            liveState.classList.toggle('offline', !isOnline);
+            liveState.setAttribute('aria-label', stateLabel);
+            liveState.title = stateLabel;
+        }
+
+        function renderRfProfile() {
+            const radioOnline = isRfRadioOnline();
+            setRfRadioState(radioOnline);
+            updateLiveStateIndicator(radioOnline);
         }
 
         function normalizeRfDeviceMac(value) {
@@ -970,11 +1893,28 @@
             updateSelectWidth(select);
         }
 
+        function renderRfSignalUserOptions(current) {
+            const select = document.getElementById('rf-signal-user');
+            if (!select) {
+                return;
+            }
+
+            select.innerHTML = rfSignalUserOptions.map((option) => (
+                `<option value="${option.value}">${escapeHtml(option.label)}</option>`
+            )).join('');
+
+            const selectedUser = current?.selected_signal_user ?? current?.detected_signal_user ?? 0;
+            select.value = `${selectedUser}`;
+            select.disabled = !current;
+            updateSelectWidth(select);
+        }
+
         function renderWirelessRuntime(payload) {
             if (!payload || !payload.available || !payload.current) {
                 wirelessRuntimeCurrent = null;
                 renderRfProfile();
                 renderRfDeviceOptions(null);
+                renderRfSignalUserOptions(null);
                 setText('runtime-mac', '--');
                 setText('runtime-compile-time', '--');
                 setText('runtime-software-version', '--');
@@ -995,6 +1935,7 @@
             wirelessRuntimeCurrent = current;
             renderRfProfile();
             renderRfDeviceOptions(current);
+            renderRfSignalUserOptions(current);
             setText('runtime-mac', current.local_mac_address || '--');
             setText('runtime-compile-time', current.compile_time || '--');
             setText('runtime-software-version', current.software_version || '--');
@@ -1047,6 +1988,81 @@
             const response = await fetch('/api/wireless/runtime', { cache: 'no-store' });
             const payload = await response.json();
             renderWirelessRuntime(payload);
+        }
+
+        async function loadPlotRefreshSettings() {
+            const response = await fetch('/api/wireless/plot/settings', { cache: 'no-store' });
+            const payload = await response.json();
+
+            if (!response.ok || payload.success === false) {
+                throw new Error(payload.message || `HTTP ${response.status}`);
+            }
+
+            const appliedValue = `${parsePlotUpdateIntervalMs(payload.update_interval_ms)}`;
+            const appliedSampleCount = `${parsePlotSampleCount(payload.sample_count)}`;
+            plotState.controls.updateIntervalMs = appliedValue;
+            plotState.controls.xMax = appliedSampleCount;
+            plotState.appliedUpdateIntervalMs = appliedValue;
+            plotState.appliedSampleCount = appliedSampleCount;
+
+            if (plotState.lastIncomingChart) {
+                renderChart(plotState.lastIncomingChart);
+            }
+
+            return payload;
+        }
+
+        async function applyPlotRefreshSettings(value) {
+            const normalizedValue = `${parsePlotUpdateIntervalMs(value)}`;
+            const normalizedSampleCount = `${parsePlotSampleCount(plotState.controls.xMax)}`;
+
+            if (
+                plotState.appliedUpdateIntervalMs === normalizedValue
+                && plotState.appliedSampleCount === normalizedSampleCount
+            ) {
+                return {
+                    success: true,
+                    update_interval_ms: Number(normalizedValue),
+                    sample_count: Number(normalizedSampleCount),
+                };
+            }
+
+            const response = await fetch('/api/wireless/plot/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    update_interval_ms: Number(normalizedValue),
+                    sample_count: Number(normalizedSampleCount),
+                }),
+            });
+            const payload = await response.json();
+
+            if (!response.ok || payload.success === false) {
+                throw new Error(payload.message || `HTTP ${response.status}`);
+            }
+
+            const appliedValue = `${parsePlotUpdateIntervalMs(payload.update_interval_ms)}`;
+            const appliedSampleCount = `${parsePlotSampleCount(payload.sample_count)}`;
+            plotState.controls.updateIntervalMs = appliedValue;
+            plotState.controls.xMax = appliedSampleCount;
+            plotState.appliedUpdateIntervalMs = appliedValue;
+            plotState.appliedSampleCount = appliedSampleCount;
+            return payload;
+        }
+
+        function syncPlotRefreshSettings(value, chart) {
+            applyPlotRefreshSettings(value)
+                .then(() => {
+                    if (chart || plotState.lastIncomingChart) {
+                        renderChart(chart || plotState.lastIncomingChart);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Failed to apply plot refresh settings:', error);
+                    loadPlotRefreshSettings().catch(() => {});
+                });
         }
 
         async function applyWirelessSetting(action, payload) {
@@ -1197,26 +2213,6 @@
             `).join('');
         }
 
-        function renderChart(chart) {
-            const title = chart && chart.title ? chart.title : 'AP Plot Data';
-            const target = chart && chart.target_mac_address ? chart.target_mac_address : '--';
-            const series = Array.isArray(chart && chart.series) ? chart.series : [];
-
-            setText('chart-title', `${title} - ${target}`);
-            setText('chart-target-device', `Target: ${target}`);
-            setText('chart-series-count', `Series: ${series.length}`);
-
-            const container = document.getElementById('plot-series-grid');
-            if (series.length === 0) {
-                container.innerHTML = '<div class="plot-series-empty">等待 Plot 数据...</div>';
-                return;
-            }
-
-            container.innerHTML = series
-                .map((seriesItem, index) => buildPlotSeriesCard(seriesItem, index))
-                .join('');
-        }
-
         function renderSnapshot(snapshot) {
             latestWirelessSnapshot = snapshot;
             setText('general-mac', snapshot.general.mac_address);
@@ -1234,9 +2230,7 @@
             renderRfProfile(snapshot);
             renderPairPanel(snapshot.connections);
             renderConnections(snapshot.connections);
-            renderChart(snapshot.chart);
-            liveState.textContent = `实时数据已连接 · 序号 ${snapshot.sequence}`;
-            liveState.classList.add('online');
+            syncPlotChart(snapshot);
         }
 
         async function loadInitialSnapshot() {
@@ -1252,10 +2246,7 @@
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-            socket.addEventListener('open', () => {
-                liveState.textContent = '实时数据通道已建立';
-                liveState.classList.add('online');
-            });
+            socket.addEventListener('open', () => {});
 
             socket.addEventListener('message', (event) => {
                 const snapshot = JSON.parse(event.data);
@@ -1263,15 +2254,10 @@
             });
 
             socket.addEventListener('close', () => {
-                liveState.textContent = '实时通道断开，3 秒后重连';
-                liveState.classList.remove('online');
                 window.setTimeout(connectWebSocket, 3000);
             });
 
-            socket.addEventListener('error', () => {
-                liveState.textContent = '实时通道异常';
-                liveState.classList.remove('online');
-            });
+            socket.addEventListener('error', () => {});
         }
 
         bindAutoApply(['control-channel-auto-on', 'control-channel-auto-off'], 'set_channel_mode', () => ({
@@ -1294,6 +2280,28 @@
                 }
 
                 queueDeviceSelection(selectedMac);
+            });
+        }
+
+        const rfSignalUserSelect = document.getElementById('rf-signal-user');
+        if (rfSignalUserSelect) {
+            rfSignalUserSelect.addEventListener('change', () => {
+                updateSelectWidth(rfSignalUserSelect);
+
+                const selectedUser = Number(rfSignalUserSelect.value);
+                const currentUser = Number(
+                    wirelessRuntimeCurrent?.selected_signal_user
+                    ?? wirelessRuntimeCurrent?.detected_signal_user
+                    ?? 0
+                );
+
+                if (selectedUser === currentUser) {
+                    return;
+                }
+
+                applyWirelessSetting('set_signal_user', { user: selectedUser }).catch((error) => {
+                    document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
+                });
             });
         }
 
@@ -1345,10 +2353,16 @@
             });
         });
 
+        bindPlotToolbarButtons();
+        updatePlotToolbarState(0, 0);
         switchWirelessSubTab('status');
 
+        loadPlotRefreshSettings().catch((error) => {
+            console.error('Failed to load plot refresh settings:', error);
+        });
+
         loadInitialSnapshot().catch((error) => {
-            liveState.textContent = `初始数据加载失败: ${error.message}`;
+            console.error('Initial wireless snapshot load failed:', error);
         }).finally(() => {
             connectWebSocket();
         });

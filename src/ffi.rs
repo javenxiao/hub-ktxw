@@ -13,7 +13,10 @@ use std::{
     ffi::{CStr, CString},
     os::raw::{c_char, c_int, c_uint, c_void},
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Mutex, OnceLock,
+    },
 };
 
 use libloading::Library;
@@ -25,6 +28,8 @@ const MAX_HOST_DEVICE_COUNT: usize = 32;
 
 #[cfg(target_os = "windows")]
 static SDK_CONSOLE_REDIRECT_LOCK: Mutex<()> = Mutex::new(());
+
+static PLOT_RAW_LDPC_FRAME_LOGGED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "windows")]
 extern "C" {
@@ -55,6 +60,8 @@ pub struct FfiRuntimeDiagnostics {
 pub struct BbQualitySummary {
     pub snr_linear: u16,
     pub snr_db: Option<i32>,
+    pub ldpc_err: u16,
+    pub ldpc_num: u16,
     pub gain_a: u8,
     pub gain_b: u8,
 }
@@ -66,6 +73,8 @@ pub struct BbLinkStatusSummary {
     pub rx_mcs: Option<u8>,
     pub pair_state: bool,
     pub snr_db: Option<i32>,
+    pub ldpc_err: Option<i32>,
+    pub ldpc_num: Option<i32>,
     pub signal_main: Option<i32>,
     pub signal_aux: Option<i32>,
     pub peer_mac_bytes: Option<[u8; BB_MAC_LEN]>,
@@ -81,6 +90,7 @@ pub struct BbGetStatusSummary {
     pub cfg_sbmp: u8,
     pub rt_sbmp: u8,
     pub active_user: Option<u8>,
+    pub detected_active_user: Option<u8>,
     pub mac_bytes: [u8; BB_MAC_LEN],
     pub mac_hex: String,
     pub frequency_khz: Option<u32>,
@@ -90,6 +100,8 @@ pub struct BbGetStatusSummary {
     pub link_state: Option<u8>,
     pub pair_state: Option<bool>,
     pub snr_db: Option<i32>,
+    pub ldpc_err: Option<i32>,
+    pub ldpc_num: Option<i32>,
     pub signal_main: Option<i32>,
     pub signal_aux: Option<i32>,
     pub peer_mac_bytes: Option<[u8; BB_MAC_LEN]>,
@@ -692,8 +704,20 @@ struct Ar8030Sdk {
 
 static SDK: OnceLock<Result<Ar8030Sdk, String>> = OnceLock::new();
 static PLOT_CACHE: OnceLock<Mutex<PlotHistoryCache>> = OnceLock::new();
+static PLOT_HISTORY_LIMIT: AtomicUsize = AtomicUsize::new(200);
 
-const PLOT_HISTORY_LIMIT: usize = 64;
+fn current_plot_history_limit() -> usize {
+    PLOT_HISTORY_LIMIT.load(Ordering::Relaxed).max(10)
+}
+
+pub fn set_plot_history_limit(limit: usize) {
+    let next_limit = limit.max(10);
+    PLOT_HISTORY_LIMIT.store(next_limit, Ordering::Relaxed);
+
+    if let Ok(mut cache) = plot_cache().lock() {
+        cache.trim_to_limit(next_limit);
+    }
+}
 
 #[derive(Default)]
 struct PlotHistoryCache {
@@ -753,6 +777,16 @@ impl PlotHistoryCache {
         append_plot_value(&mut self.mcs_rx, point.mcs_rx);
         append_plot_value(&mut self.fch_lock, point.fch_lock);
         self.sample_count = self.sample_count.saturating_add(1);
+    }
+
+    fn trim_to_limit(&mut self, limit: usize) {
+        trim_plot_buffer(&mut self.snr, limit);
+        trim_plot_buffer(&mut self.ldpc_err, limit);
+        trim_plot_buffer(&mut self.ldpc_num, limit);
+        trim_plot_buffer(&mut self.gain_a, limit);
+        trim_plot_buffer(&mut self.gain_b, limit);
+        trim_plot_buffer(&mut self.mcs_rx, limit);
+        trim_plot_buffer(&mut self.fch_lock, limit);
     }
 
     fn snapshot(&self) -> Option<BbPlotSnapshotSummary> {
@@ -1129,11 +1163,56 @@ fn reset_plot_cache(user: u8) {
     }
 }
 
+fn trim_plot_buffer(buffer: &mut VecDeque<i32>, limit: usize) {
+    while buffer.len() > limit {
+        buffer.pop_front();
+    }
+}
+
 fn append_plot_value(buffer: &mut VecDeque<i32>, value: i32) {
-    if buffer.len() >= PLOT_HISTORY_LIMIT {
+    if buffer.len() >= current_plot_history_limit() {
         buffer.pop_front();
     }
     buffer.push_back(value);
+}
+
+fn log_plot_ldpc_num_frame_once(event: &bb_event_plot_data_t) {
+    let plot_count = usize::from(event.plot_num.min(BB_PLOT_POINT_MAX as u8));
+    if plot_count == 0 {
+        return;
+    }
+
+    if PLOT_RAW_LDPC_FRAME_LOGGED
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+
+    let raw_ldpc_num = event
+        .plot_data
+        .iter()
+        .take(plot_count)
+        .enumerate()
+        .map(|(index, plot)| {
+            let bytes = plot.ldpc_num.to_ne_bytes();
+            format!(
+                "#{}=[0x{:02X},0x{:02X}]=>{}",
+                index,
+                bytes[0],
+                bytes[1],
+                plot.ldpc_num
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    eprintln!(
+        "Captured one raw plot frame for ldpc_num: user={}, plot_num={}, raw_ldpc_num={}",
+        event.user,
+        plot_count,
+        raw_ldpc_num
+    );
 }
 
 unsafe extern "C" fn handle_plot_event(arg: *mut c_void, _user: *mut c_void) {
@@ -1142,6 +1221,7 @@ unsafe extern "C" fn handle_plot_event(arg: *mut c_void, _user: *mut c_void) {
     }
 
     let event = unsafe { &*(arg as *const bb_event_plot_data_t) };
+    log_plot_ldpc_num_frame_once(event);
     if let Ok(mut cache) = plot_cache().lock() {
         cache.append_event(event);
     }
@@ -1390,7 +1470,7 @@ pub fn open_host_device_by_mac(host: *mut bb_host_t, target_mac: &str) -> Result
                 continue;
             }
 
-            let matches = match get_status(handle, BB_ALL_DATA_USER_BMP) {
+            let matches = match get_status(handle, BB_ALL_DATA_USER_BMP, None) {
                 Ok(status) => normalize_mac_string(&status.mac_hex) == normalized_target,
                 Err(_) => false,
             };
@@ -1408,7 +1488,11 @@ pub fn open_host_device_by_mac(host: *mut bb_host_t, target_mac: &str) -> Result
     })
 }
 
-pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetStatusSummary, String> {
+pub fn get_status(
+    handle: *mut bb_dev_handle_t,
+    user_bmp: u16,
+    preferred_user: Option<u8>,
+) -> Result<BbGetStatusSummary, String> {
     let sdk = sdk()?;
     let input = bb_get_status_in_t { user_bmp };
     let mut output = bb_get_status_out_t::default();
@@ -1421,12 +1505,16 @@ pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetSt
             &mut output as *mut bb_get_status_out_t as *mut c_void,
         ) {
             0 => {
-                let active_user = output
+                let detected_active_user = output
                     .user_status
                     .iter()
                     .enumerate()
                     .find(|(_, user)| user.tx_status.freq_khz != 0 || user.rx_status.freq_khz != 0)
-                    .map(|(index, user)| (index, user));
+                    .map(|(index, _)| index);
+                let preferred_user_index = preferred_user
+                    .filter(|user| usize::from(*user) < BB_DATA_USER_MAX)
+                    .map(usize::from);
+                let effective_user_index = preferred_user_index.or(detected_active_user);
                 let requested_slot_bmp = output.cfg_sbmp | output.rt_sbmp;
                 let pair_slots = get_pair_result_summary(sdk, handle).unwrap_or_else(|_| empty_slot_summaries());
                 let peer_qualities = if requested_slot_bmp == 0 {
@@ -1453,8 +1541,8 @@ pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetSt
                             output.rt_sbmp,
                             pair_slots.get(slot).cloned().flatten(),
                             peer_qualities.get(slot).cloned().flatten(),
-                            active_user
-                                .and_then(|(user_index, _)| {
+                            effective_user_index
+                                .and_then(|user_index| {
                                     if slot == 0 {
                                         user_qualities.get(user_index).cloned().flatten()
                                     } else {
@@ -1465,16 +1553,42 @@ pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetSt
                     })
                     .collect::<Vec<_>>();
                 let active_link = links.first();
+                let effective_user_status = effective_user_index
+                    .and_then(|user_index| output.user_status.get(user_index).copied());
+                let effective_user_quality = effective_user_index
+                    .and_then(|user_index| user_qualities.get(user_index).cloned().flatten());
+                let allow_link_fallback = preferred_user_index.is_none();
 
-                let frequency_khz = active_user.and_then(|(_, user)| preferred_frequency_khz(user));
-                let bandwidth = active_user.and_then(|(_, user)| preferred_bandwidth(user));
-                let tx_mcs = active_user.map(|(_, user)| user.tx_status.mcs);
+                let frequency_khz = effective_user_status.as_ref().and_then(preferred_frequency_khz);
+                let bandwidth = effective_user_status.as_ref().and_then(preferred_bandwidth);
+                let tx_mcs = if frequency_khz.is_some() {
+                    effective_user_status.map(|user| user.tx_status.mcs)
+                } else {
+                    None
+                };
                 let rx_mcs = active_link.and_then(|link| link.rx_mcs);
                 let link_state = active_link.map(|link| link.state);
                 let pair_state = active_link.map(|link| link.pair_state);
-                let snr_db = active_link.and_then(|link| link.snr_db);
-                let signal_main = active_link.and_then(|link| link.signal_main);
-                let signal_aux = active_link.and_then(|link| link.signal_aux);
+                let snr_db = effective_user_quality
+                    .as_ref()
+                    .and_then(|quality| quality.snr_db)
+                    .or_else(|| allow_link_fallback.then(|| active_link.and_then(|link| link.snr_db)).flatten());
+                let ldpc_err = effective_user_quality
+                    .as_ref()
+                    .map(|quality| i32::from(quality.ldpc_err))
+                    .or_else(|| allow_link_fallback.then(|| active_link.and_then(|link| link.ldpc_err)).flatten());
+                let ldpc_num = effective_user_quality
+                    .as_ref()
+                    .map(|quality| i32::from(quality.ldpc_num))
+                    .or_else(|| allow_link_fallback.then(|| active_link.and_then(|link| link.ldpc_num)).flatten());
+                let signal_main = effective_user_quality
+                    .as_ref()
+                    .map(|quality| i32::from(quality.gain_a))
+                    .or_else(|| allow_link_fallback.then(|| active_link.and_then(|link| link.signal_main)).flatten());
+                let signal_aux = effective_user_quality
+                    .as_ref()
+                    .map(|quality| i32::from(quality.gain_b))
+                    .or_else(|| allow_link_fallback.then(|| active_link.and_then(|link| link.signal_aux)).flatten());
                 let peer_mac_bytes = active_link.and_then(|link| link.peer_mac_bytes);
                 let peer_mac_hex = active_link.and_then(|link| link.peer_mac_hex.clone());
 
@@ -1485,7 +1599,8 @@ pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetSt
                     sync_master: output.sync_master,
                     cfg_sbmp: output.cfg_sbmp,
                     rt_sbmp: output.rt_sbmp,
-                    active_user: active_user.map(|(index, _)| index as u8),
+                    active_user: effective_user_index.map(|index| index as u8),
+                    detected_active_user: detected_active_user.map(|index| index as u8),
                     mac_bytes: output.mac.addr,
                     mac_hex: format_bb_mac(&output.mac),
                     frequency_khz,
@@ -1495,6 +1610,8 @@ pub fn get_status(handle: *mut bb_dev_handle_t, user_bmp: u16) -> Result<BbGetSt
                     link_state,
                     pair_state,
                     snr_db,
+                    ldpc_err,
+                    ldpc_num,
                     signal_main,
                     signal_aux,
                     peer_mac_bytes,
@@ -1711,6 +1828,10 @@ pub fn subscribe_plot_stream(handle: *mut bb_dev_handle_t, user: u8, cache_num: 
     }
 
     Ok(())
+}
+
+pub fn refresh_plot_stream(handle: *mut bb_dev_handle_t, user: u8, cache_num: u8) -> Result<(), String> {
+    set_plot_enabled(handle, user, true, cache_num)
 }
 
 pub fn unsubscribe_plot_stream(handle: *mut bb_dev_handle_t, user: u8) -> Result<(), String> {
@@ -2300,13 +2421,15 @@ fn get_user_quality_summary(
 }
 
 fn quality_from_sdk(quality: &bb_quality_t) -> Option<BbQualitySummary> {
-    if quality.snr == 0 && quality.gain_a == 0 && quality.gain_b == 0 {
+    if quality.snr == 0 && quality.ldpc_err == 0 && quality.ldpc_num == 0 && quality.gain_a == 0 && quality.gain_b == 0 {
         return None;
     }
 
     Some(BbQualitySummary {
         snr_linear: quality.snr,
         snr_db: snr_linear_to_db(quality.snr),
+        ldpc_err: quality.ldpc_err,
+        ldpc_num: quality.ldpc_num,
         gain_a: quality.gain_a,
         gain_b: quality.gain_b,
     })
@@ -2359,6 +2482,8 @@ fn summarize_link_status(
         },
         pair_state,
         snr_db: effective_quality.as_ref().and_then(|quality| quality.snr_db),
+        ldpc_err: effective_quality.as_ref().map(|quality| i32::from(quality.ldpc_err)),
+        ldpc_num: effective_quality.as_ref().map(|quality| i32::from(quality.ldpc_num)),
         signal_main: effective_quality.as_ref().map(|quality| quality.gain_a as i32),
         signal_aux: effective_quality.as_ref().map(|quality| quality.gain_b as i32),
         peer_mac_bytes,
