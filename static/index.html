@@ -260,18 +260,49 @@
             <section class="content-panel panel-wireless">
                 <div class="section-strip"></div>
                 <div class="panel-body wireless-page">
-                    <div class="sub-tabs" aria-label="无线二级栏目" role="tablist">
-                        <button class="sub-tab active" type="button" data-wireless-tab="status" role="tab" aria-selected="true" aria-controls="wireless-panel-status">Status</button>
-                        <button class="sub-tab" type="button" data-wireless-tab="rf" role="tab" aria-selected="false" aria-controls="wireless-panel-rf">RF</button>
-                    </div>
-
-                    <div class="page-header">
-                        <h1>Wireless Interfaces</h1>
+                    <div class="wireless-tab-row">
+                        <div class="sub-tabs" aria-label="无线二级栏目" role="tablist">
+                            <button class="sub-tab active" type="button" data-wireless-tab="status" role="tab" aria-selected="true" aria-controls="wireless-panel-status">Status</button>
+                            <button class="sub-tab" type="button" data-wireless-tab="rf" role="tab" aria-selected="false" aria-controls="wireless-panel-rf">RF Settings</button>
+                        </div>
                         <div class="live-state offline" id="live-state" role="img" aria-label="RF Radio offline" title="RF Radio offline"></div>
                     </div>
 
                     <div class="wireless-subpage active" id="wireless-panel-status" data-wireless-panel="status" role="tabpanel">
                         <section class="panel-box wireless-status-panel">
+                            <div class="wireless-runtime-notices" id="wireless-runtime-notices" aria-live="polite" hidden></div>
+
+                            <div class="sys-section rf-summary-section wireless-status-section rf-config-group-basic">
+                                        <h3 class="sys-section-title">Signal Source</h3>
+                                <table class="sys-table rf-summary-table">
+                                    <tbody>
+                                        <tr>
+                                            <td>Radio</td>
+                                            <td>
+                                                <div class="rf-toggle-display" aria-label="Radio state">
+                                                    <span class="rf-toggle-option rf-toggle-option-on active" id="rf-radio-state-on">On</span>
+                                                    <span class="rf-toggle-option rf-toggle-option-off" id="rf-radio-state-off">Off</span>
+                                                </div>
+                                            </td>
+                                            <td>Active Device</td>
+                                            <td>
+                                                <select id="rf-operation-mode" class="sys-input rf-mode-select" aria-label="Active device list">
+                                                    <option value="">--</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>Physical User</td>
+                                            <td colspan="3">
+                                                <select id="rf-signal-user" class="sys-input rf-mode-select" aria-label="Physical user selection">
+                                                    <option value="0">Physical User 0</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
                             <div class="sys-section rf-summary-section wireless-status-section">
                                 <h3 class="sys-section-title">General Status</h3>
                                 <table class="wireless-status-table wireless-overview-table">
@@ -328,12 +359,12 @@
                                 <div class="plot-toolbar">
                                     <div class="plot-toolbar-main">
                                         <div class="plot-toolbar-actions">
-                                            <button class="sys-button-primary plot-toolbar-button" id="plot-start-btn" type="button">Start</button>
-                                            <button class="sys-button-default plot-toolbar-button" id="plot-pause-btn" type="button">Pause</button>
-                                            <button class="sys-button-default plot-toolbar-button" id="plot-stop-btn" type="button">Stop</button>
-                                            <button class="sys-button-default plot-toolbar-button" id="plot-record-btn" type="button">Start Recording</button>
+                                            <button class="sys-button-primary plot-toolbar-button plot-toolbar-button-prominent" id="plot-start-btn" type="button">Start</button>
+                                            <button class="sys-button-default plot-toolbar-button plot-toolbar-button-prominent" id="plot-pause-btn" type="button">Pause</button>
+                                            <button class="sys-button-default plot-toolbar-button plot-toolbar-button-secondary" id="plot-stop-btn" type="button">Stop</button>
+                                            <button class="sys-button-default plot-toolbar-button plot-toolbar-button-secondary" id="plot-record-btn" type="button">Start Recording</button>
                                         </div>
-                                        <button class="sys-button-default plot-toolbar-button plot-settings-toggle" id="plot-settings-toggle" type="button" aria-expanded="false" aria-controls="plot-settings-panel">Axes</button>
+                                        <button class="sys-button-default plot-toolbar-button plot-toolbar-button-tertiary plot-settings-toggle" id="plot-settings-toggle" type="button" aria-expanded="false" aria-controls="plot-settings-panel">Axes</button>
                                     </div>
                                     <div class="plot-toolbar-state">
                                         <span class="plot-state-chip running" id="plot-stream-state">Streaming</span>
@@ -350,37 +381,6 @@
                     <div class="wireless-subpage" id="wireless-panel-rf" data-wireless-panel="rf" role="tabpanel" hidden>
                         <section class="panel-box rf-config-panel">
                             <div class="rf-config-box">
-                                <div class="sys-section rf-summary-section rf-config-group-basic">
-                                    <h3 class="sys-section-title">Basic Infomation</h3>
-                                    <table class="sys-table rf-summary-table">
-                                        <tbody>
-                                            <tr>
-                                                <td>Radio</td>
-                                                <td>
-                                                    <div class="rf-toggle-display" aria-label="Radio state">
-                                                        <span class="rf-toggle-option rf-toggle-option-on active" id="rf-radio-state-on">On</span>
-                                                        <span class="rf-toggle-option rf-toggle-option-off" id="rf-radio-state-off">Off</span>
-                                                    </div>
-                                                </td>
-                                                <td>Operation Device</td>
-                                                <td>
-                                                    <select id="rf-operation-mode" class="sys-input rf-mode-select" aria-label="Operation device list">
-                                                        <option value="">--</option>
-                                                    </select>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>Physical User</td>
-                                                <td colspan="3">
-                                                    <select id="rf-signal-user" class="sys-input rf-mode-select" aria-label="Physical user selection">
-                                                        <option value="0">Physical User 0</option>
-                                                    </select>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-
                                 <div class="sys-section rf-summary-section rf-config-group-band">
                                     <h3 class="sys-section-title">Frequency Band</h3>
                                     <table class="sys-table rf-summary-table">
@@ -1909,7 +1909,60 @@
             updateSelectWidth(select);
         }
 
+        function deriveWirelessRuntimeNotices(payload) {
+            const notices = [];
+
+            if (!payload?.available || !payload?.current) {
+                if (payload?.message) {
+                    notices.push(payload.message);
+                }
+                return notices;
+            }
+
+            const current = payload.current;
+            if (Array.isArray(current.warnings)) {
+                current.warnings.forEach((warning) => {
+                    if (warning) {
+                        notices.push(String(warning));
+                    }
+                });
+            }
+
+            const deviceCount = Array.isArray(current.available_devices) ? current.available_devices.length : 0;
+            if (deviceCount === 0) {
+                notices.push('No remote device is currently detected. Check the device connection or bb_host session.');
+            } else if (deviceCount === 1) {
+                notices.push('Only one remote device is currently detected. If multiple devices are expected, replug the device or refresh the bb_host session.');
+            }
+
+            return Array.from(new Set(notices.map((notice) => notice.trim()).filter(Boolean)));
+        }
+
+        function renderWirelessRuntimeNotices(payload) {
+            const noticeContainer = document.getElementById('wireless-runtime-notices');
+            if (!noticeContainer) {
+                return;
+            }
+
+            const notices = deriveWirelessRuntimeNotices(payload);
+            if (notices.length === 0) {
+                noticeContainer.hidden = true;
+                noticeContainer.innerHTML = '';
+                return;
+            }
+
+            noticeContainer.hidden = false;
+            noticeContainer.innerHTML = notices.map((notice) => `
+                <div class="wireless-runtime-notice" role="status">
+                    <span class="wireless-runtime-notice-badge">Notice</span>
+                    <span class="wireless-runtime-notice-text">${escapeHtml(notice)}</span>
+                </div>
+            `).join('');
+        }
+
         function renderWirelessRuntime(payload) {
+            renderWirelessRuntimeNotices(payload);
+
             if (!payload || !payload.available || !payload.current) {
                 wirelessRuntimeCurrent = null;
                 renderRfProfile();

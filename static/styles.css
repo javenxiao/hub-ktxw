@@ -453,7 +453,7 @@ body {
     color: var(--title);
 }
 
-.page-header {
+.wireless-tab-row {
     display: flex;
     justify-content: space-between;
     gap: 12px;
@@ -461,11 +461,9 @@ body {
     margin-bottom: 10px;
 }
 
-.wireless-page h1 {
-    margin: 0;
-    color: #000000;
-    font-size: 22px;
-    font-weight: 700;
+.wireless-tab-row .sub-tabs {
+    flex: 1;
+    margin-bottom: 0;
 }
 
 .live-state {
@@ -569,9 +567,53 @@ tbody td {
     padding: 6px 12px 12px;
 }
 
+.wireless-runtime-notices {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.wireless-runtime-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid #e2c276;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #fff8e8 0%, #fff2d1 100%);
+    color: #6f4f08;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+.wireless-runtime-notice-badge {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 52px;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(201, 135, 25, 0.14);
+    color: #8a5b00;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.wireless-runtime-notice-text {
+    font-size: 12px;
+    line-height: 1.45;
+}
+
 .wireless-status-section {
     margin-top: 8px;
     padding: 6px 12px 8px;
+}
+
+.wireless-status-panel > .rf-config-group-basic {
+    margin-top: 0;
 }
 
 .wireless-status-section:first-child {
@@ -829,57 +871,81 @@ tbody td {
 
 .plot-toolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 168px;
-    gap: 10px 6px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
     align-items: center;
-    padding-top: 6px;
+    padding-top: 4px;
 }
 
 .plot-toolbar-main {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    justify-content: flex-start;
+    gap: 12px;
     min-width: 0;
 }
 
 .plot-toolbar-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
 .plot-toolbar-button {
-    min-width: 88px;
-    padding: 5px 14px;
-    font-size: 13px;
-    font-weight: 700;
-    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    min-width: 70px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 999px;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .plot-toolbar-actions .plot-toolbar-button {
-    background: #f5f7fb;
-    border-color: #cfd8e3;
-    color: #546274;
+    background: #f8fafc;
+    border-color: #d8e0ea;
+    color: #5b697a;
 }
 
 .plot-toolbar-actions .plot-toolbar-button:hover:not(:disabled) {
-    background: #ebf0f6;
-    border-color: #b8c5d3;
+    background: #eef3f8;
+    border-color: #c2cedc;
     color: #243447;
-    transform: translateY(-1px);
 }
 
 .plot-toolbar-actions .plot-toolbar-button:disabled:not(.is-selected):not(.is-working) {
-    opacity: 0.62;
+    opacity: 0.58;
     cursor: default;
 }
 
 .plot-toolbar-actions .plot-toolbar-button.is-selected,
 .plot-toolbar-actions .plot-toolbar-button.is-working {
     color: #fff;
-    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.14);
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.12);
+}
+
+.plot-toolbar-button-prominent {
+    min-width: 88px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.plot-toolbar-actions #plot-start-btn.plot-toolbar-button-prominent {
+    background: linear-gradient(180deg, #eff8ff 0%, #dbeafe 100%);
+    border-color: #93c5fd;
+    color: #0f3a78;
+}
+
+.plot-toolbar-actions #plot-pause-btn.plot-toolbar-button-prominent {
+    background: linear-gradient(180deg, #fff8eb 0%, #feefd0 100%);
+    border-color: #e8c07d;
+    color: #7c5200;
+}
+
+.plot-toolbar-button-secondary {
+    min-width: 68px;
+    color: #6a7687;
 }
 
 #plot-start-btn.is-working {
@@ -907,17 +973,17 @@ tbody td {
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
-    justify-content: flex-start;
-    min-width: 168px;
+    justify-content: flex-end;
+    min-width: fit-content;
 }
 
 .plot-state-chip {
     display: inline-flex;
     align-items: center;
-    min-height: 28px;
-    padding: 0 12px;
+    min-height: 30px;
+    padding: 0 14px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 700;
     border: 1px solid transparent;
     white-space: nowrap;
@@ -1302,19 +1368,22 @@ tbody td {
 }
 
 .plot-settings-toggle {
-    min-width: 88px;
-    padding: 5px 14px;
-    border: 1px solid #6f88a4;
+    min-width: 62px;
+    padding: 4px 10px;
+    border: 1px dashed #9caec2;
     border-radius: 999px;
-    background: rgba(237, 243, 250, 0.94);
-    color: #0f2440;
-    font-size: 13px;
-    font-weight: 700;
+    background: rgba(248, 250, 252, 0.94);
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: none;
     cursor: pointer;
 }
 
 .plot-settings-toggle.is-open {
-    background: rgba(199, 216, 236, 0.96);
+    background: rgba(236, 242, 248, 0.98);
+    color: #475569;
+    border-color: #8fa3ba;
 }
 
 .plot-settings-panel {
@@ -1861,9 +1930,8 @@ tbody td {
         padding-right: 8px;
     }
 
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
+    .wireless-tab-row {
+        gap: 8px;
     }
 
     .panel-body {
@@ -1877,6 +1945,14 @@ tbody td {
 
     .plot-workbench {
         grid-template-columns: 1fr;
+    }
+
+    .plot-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .plot-toolbar-state {
+        justify-content: flex-start;
     }
 
     .plot-surface {
