@@ -1539,6 +1539,24 @@ tbody td {
     font-weight: 700;
 }
 
+.wireless-control-status[data-state="pending"] {
+    border-color: #bfd6f3;
+    background: #eef6ff;
+    color: #155dac;
+}
+
+.wireless-control-status[data-state="success"] {
+    border-color: #b9e2c0;
+    background: #edf9f0;
+    color: #1f7a3f;
+}
+
+.wireless-control-status[data-state="error"] {
+    border-color: #efc1bc;
+    background: #fff1f0;
+    color: #b42318;
+}
+
 .rf-config-panel {
     padding-bottom: 14px;
 }
@@ -1567,6 +1585,23 @@ tbody td {
     max-width: 100%;
     color: #17324d;
     font-weight: 700;
+}
+
+.sys-input:disabled {
+    background: #eef2f6;
+    color: #96a1ad;
+    border-color: #cfd7df;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.rf-boolean-option:has(input:disabled) {
+    color: #96a1ad;
+    cursor: not-allowed;
+}
+
+.rf-boolean-option input:disabled {
+    cursor: not-allowed;
 }
 
 .rf-toggle-display {

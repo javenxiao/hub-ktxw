@@ -188,6 +188,12 @@ pub struct BbPowerAutoSummary {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct BbBandwidthModeSummary {
+    pub slot: u8,
+    pub auto_mode: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BbPlotPointSummary {
     pub snr: i32,
     pub ldpc_err: i32,

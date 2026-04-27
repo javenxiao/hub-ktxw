@@ -134,6 +134,7 @@ struct WirelessRuntimeView {
     work_channel_index: Option<u8>,
     work_channel_frequency: String,
     channels: Vec<WirelessChannelOption>,
+    bandwidth_auto: Option<bool>,
     current_slot: Option<u8>,
     current_mcs_direction: String,
     current_mcs_auto: Option<bool>,
@@ -1529,6 +1530,7 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             .map(format_frequency_khz)
             .unwrap_or_else(|| "Unavailable".to_string()),
         channels,
+        bandwidth_auto: details.bandwidth_mode.as_ref().map(|info| info.auto_mode),
         current_slot: details.mcs_value.as_ref().map(|info| info.slot),
         current_mcs_direction: details
             .mcs_value

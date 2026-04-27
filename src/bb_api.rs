@@ -114,6 +114,7 @@ pub struct WirelessRuntimeDetails {
     pub system_info: Option<ffi::BbSystemInfoSummary>,
     pub band_info: Option<ffi::BbBandInfoSummary>,
     pub channel_info: Option<ffi::BbChannelInfoSummary>,
+    pub bandwidth_mode: Option<ffi::BbBandwidthModeSummary>,
     pub mcs_mode: Option<ffi::BbMcsModeSummary>,
     pub mcs_value: Option<ffi::BbMcsValueSummary>,
     pub power_mode: Option<ffi::BbPowerModeSummary>,
@@ -231,6 +232,7 @@ pub struct BasebandApi {
     plot_user: Option<u8>,
     active_device_mac: Option<String>,
     preferred_signal_users: HashMap<String, u8>,
+    bandwidth_mode_cache: HashMap<(String, u8), bool>,
     last_remote_device_switch_at: Option<Instant>,
     remote_device_handles: Vec<(String, usize)>,
 }
@@ -285,6 +287,19 @@ impl BasebandApi {
 
         self.active_device_mac = Some(active_mac.clone());
         self.remember_remote_handle(active_mac, self.device_handle);
+    }
+
+    fn cache_bandwidth_mode_for_active_device(&mut self, slot: u8, auto_mode: bool) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.bandwidth_mode_cache.insert((active_mac, slot), auto_mode);
+        }
+    }
+
+    fn cached_bandwidth_mode_for_current_device(&self, slot: u8) -> Option<ffi::BbBandwidthModeSummary> {
+        self.active_device_mac
+            .as_ref()
+            .and_then(|active_mac| self.bandwidth_mode_cache.get(&(active_mac.clone(), slot)).copied())
+            .map(|auto_mode| ffi::BbBandwidthModeSummary { slot, auto_mode })
     }
 
     fn preferred_signal_user_for_mac(&self, normalized_mac: &str) -> Option<u8> {
@@ -647,6 +662,7 @@ impl BasebandApi {
             plot_user: None,
             active_device_mac: None,
             preferred_signal_users: HashMap::new(),
+            bandwidth_mode_cache: HashMap::new(),
             last_remote_device_switch_at: None,
             remote_device_handles: Vec::new(),
         };
@@ -899,6 +915,7 @@ impl BasebandApi {
                 None
             }
         };
+        let bandwidth_mode = self.cached_bandwidth_mode_for_current_device(slot);
         let mcs_mode = match run_remote_sdk_call(is_remote, || ffi::get_mcs_mode(self.handle_ptr(), slot)) {
             Ok(value) => Some(value),
             Err(err) => {
@@ -941,6 +958,7 @@ impl BasebandApi {
             system_info,
             band_info,
             channel_info,
+            bandwidth_mode,
             mcs_mode,
             mcs_value,
             power_mode,
@@ -1106,13 +1124,17 @@ impl BasebandApi {
     pub fn set_bandwidth(&mut self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
         self.with_device_operation("set_bandwidth", |handle| {
             ffi::set_bandwidth(handle, slot, dir, bandwidth)
-        })
+        })?;
+        self.cache_bandwidth_mode_for_active_device(slot, false);
+        Ok(())
     }
 
     pub fn set_bandwidth_mode(&mut self, slot: u8, auto_mode: bool) -> Result<(), String> {
         self.with_device_operation("set_bandwidth_mode", |handle| {
             ffi::set_bandwidth_mode(handle, slot, auto_mode)
-        })
+        })?;
+        self.cache_bandwidth_mode_for_active_device(slot, auto_mode);
+        Ok(())
     }
 
     pub fn set_baseband_role(&mut self, role: u8) -> Result<(), String> {

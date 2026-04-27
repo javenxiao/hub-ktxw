@@ -466,6 +466,21 @@
                                         <table class="sys-table rf-summary-table">
                                             <tbody>
                                                 <tr>
+                                                    <td>Auto Mode</td>
+                                                    <td>
+                                                        <div class="rf-boolean-group" role="radiogroup" aria-label="Bandwidth automatic selection">
+                                                            <label class="rf-boolean-option" for="control-bandwidth-auto-on">
+                                                                <input id="control-bandwidth-auto-on" type="radio" name="control-bandwidth-auto" value="true">
+                                                                <span>On</span>
+                                                            </label>
+                                                            <label class="rf-boolean-option" for="control-bandwidth-auto-off">
+                                                                <input id="control-bandwidth-auto-off" type="radio" name="control-bandwidth-auto" value="false">
+                                                                <span>Off</span>
+                                                            </label>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                <tr>
                                                     <td>Slot</td>
                                                     <td>
                                                         <input id="control-bandwidth-slot" class="sys-input rf-input-mini" type="number" min="0" max="7" value="0">
@@ -613,7 +628,7 @@
                                     <div class="rf-pair-list" id="rf-pair-list"></div>
                                 </div>
                             </div>
-                            <p class="wireless-control-status" id="wireless-control-status">Most RF settings apply automatically. Role switching requires manual Apply.</p>
+                            <p class="wireless-control-status" id="wireless-control-status" data-state="idle">Most RF settings apply automatically. Role switching requires manual Apply.</p>
                         </section>
                     </div>
                 </div>
@@ -674,6 +689,16 @@
         let deviceSelectionInFlight = false;
         let roleSelectionDirty = false;
         let roleApplyInFlight = false;
+        let channelDirectionValue = 'rx';
+        let channelIndexValue = null;
+        let powerModeValue = null;
+        let powerDbValue = null;
+        let mcsSlotValue = null;
+        let mcsValueSelection = null;
+        let bandwidthSlotValue = null;
+        let bandwidthDirectionValue = 'rx';
+        let bandwidthValueSelection = null;
+        let bandwidthAutoMode = false;
         const rfSignalUserOptions = [
             { value: 0, label: 'Physical User 0' },
             { value: 1, label: 'Physical User 1' },
@@ -690,6 +715,24 @@
             { value: 0, label: 'AP' },
             { value: 1, label: 'DEV' },
         ];
+        const defaultWirelessControlStatusMessage = 'Most RF settings apply automatically. Role switching requires manual Apply.';
+        const wirelessActionLabels = {
+            select_device: 'Active Device',
+            set_signal_user: 'Physical User',
+            set_pair_mode: 'Pair State',
+            set_band_mode: 'Band Mode',
+            set_band: 'Frequency Band',
+            set_channel_mode: 'Channel Auto Mode',
+            set_channel: 'Channel',
+            set_bandwidth_mode: 'Bandwidth Auto Mode',
+            set_power_mode: 'Power Mode',
+            set_power_auto: 'Adaptive Power',
+            set_power: 'Power',
+            set_mcs_mode: 'MCS Auto Mode',
+            set_mcs: 'MCS',
+            set_bandwidth: 'Bandwidth',
+            set_role: 'Baseband Role',
+        };
         const runtimeNoticeOptions = {
             showNoDeviceNotice: true,
             showSingleDeviceNotice: false,
@@ -745,6 +788,20 @@
             if (element) {
                 element.textContent = value;
             }
+        }
+
+        function setWirelessControlStatus(message, state = 'idle') {
+            const statusElement = document.getElementById('wireless-control-status');
+            if (!statusElement) {
+                return;
+            }
+
+            statusElement.textContent = message || defaultWirelessControlStatusMessage;
+            statusElement.dataset.state = state;
+        }
+
+        function getWirelessActionLabel(action) {
+            return wirelessActionLabels[action] || action;
         }
 
         function formatBytes(bytes) {
@@ -855,9 +912,7 @@
                 button.addEventListener('click', () => {
                     const slot = Number(button.getAttribute('data-pair-slot'));
                     const pairStart = button.getAttribute('data-pair-start') === 'true';
-                    applyWirelessSetting('set_pair_mode', { slot, pair_start: pairStart }).catch((error) => {
-                        document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
-                    });
+                    applyWirelessSetting('set_pair_mode', { slot, pair_start: pairStart }).catch(() => {});
                 });
             });
         }
@@ -2011,8 +2066,7 @@
                     const payload = await response.json();
                     if (payload?.available && payload?.current) {
                         renderWirelessRuntime(payload);
-                        const statusElement = document.getElementById('wireless-control-status');
-                        statusElement.textContent = 'Device reconnected. Role switch flow completed.';
+                        setWirelessControlStatus('Baseband Role 已下发，设备已重新连接。', 'success');
                         return;
                     }
                 } catch (_) {
@@ -2020,8 +2074,7 @@
                 }
             }
 
-            const statusElement = document.getElementById('wireless-control-status');
-            statusElement.textContent = 'Role switch submitted. Device may still be rebooting; please refresh runtime in a few seconds.';
+            setWirelessControlStatus('Baseband Role 已下发，设备可能仍在重启，请稍后刷新状态。', 'pending');
         }
 
         function deriveWirelessRuntimeNotices(payload) {
@@ -2099,6 +2152,10 @@
                 document.getElementById('control-mcs-auto-manual').checked = false;
                 document.getElementById('control-power-auto-on').checked = false;
                 document.getElementById('control-power-auto-off').checked = false;
+                updateChannelControlsState();
+                updatePowerControlsState();
+                updateMcsControlsState();
+                updateBandwidthControlsState();
                 return;
             }
 
@@ -2113,7 +2170,7 @@
             setText('runtime-software-version', current.software_version || '--');
             setText('runtime-firmware-version', current.firmware_version || '--');
 
-            populateChannelOptions(current.channels, current.work_channel_index);
+            populateChannelOptions(current.channels, channelIndexValue ?? current.work_channel_index);
 
             if (!controlDefaultsInitialized) {
                 if (current.band_auto === true) {
@@ -2130,29 +2187,50 @@
                 } else {
                     document.getElementById('control-channel-auto-off').checked = true;
                 }
-                document.getElementById('control-channel-direction').value = 'rx';
-                document.getElementById('control-power-mode').value = current.current_power_mode.toLowerCase().startsWith('open') ? 'openloop' : 'closeloop';
+                document.getElementById('control-channel-direction').value = channelDirectionValue;
+                document.getElementById('control-power-mode').value = powerModeValue ?? (current.current_power_mode.toLowerCase().startsWith('open') ? 'openloop' : 'closeloop');
                 if ((current.current_power_auto ?? true) === true) {
                     document.getElementById('control-power-auto-on').checked = true;
                 } else {
                     document.getElementById('control-power-auto-off').checked = true;
                 }
-                document.getElementById('control-power-db').value = current.current_power_dbm ?? 20;
-                document.getElementById('control-mcs-slot').value = String(current.current_slot ?? 0);
+                document.getElementById('control-power-db').value = powerDbValue ?? (current.current_power_dbm ?? 20);
+                document.getElementById('control-mcs-slot').value = String(mcsSlotValue ?? current.current_slot ?? 0);
                 if ((current.current_mcs_auto ?? true) === true) {
                     document.getElementById('control-mcs-auto-auto').checked = true;
                 } else {
                     document.getElementById('control-mcs-auto-manual').checked = true;
                 }
-                document.getElementById('control-mcs-value').value = String(current.current_mcs_value ?? 0);
-                document.getElementById('control-bandwidth-slot').value = current.current_slot ?? 0;
-                document.getElementById('control-bandwidth-direction').value = 'rx';
-                if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
+                document.getElementById('control-mcs-value').value = String(mcsValueSelection ?? current.current_mcs_value ?? 0);
+                bandwidthAutoMode = current.bandwidth_auto ?? bandwidthAutoMode;
+                if (bandwidthAutoMode) {
+                    document.getElementById('control-bandwidth-auto-on').checked = true;
+                } else {
+                    document.getElementById('control-bandwidth-auto-off').checked = true;
+                }
+                document.getElementById('control-bandwidth-slot').value = bandwidthSlotValue ?? current.current_slot ?? 0;
+                document.getElementById('control-bandwidth-direction').value = bandwidthDirectionValue;
+                if (bandwidthValueSelection !== null && bandwidthValueSelection !== undefined) {
+                    document.getElementById('control-bandwidth-value').value = String(bandwidthValueSelection);
+                } else if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
                     document.getElementById('control-bandwidth-value').value = String(current.bandwidth_code);
                 }
+
+                channelIndexValue = getSelectedChannelIndex();
+                powerModeValue = document.getElementById('control-power-mode').value;
+                powerDbValue = Number(document.getElementById('control-power-db').value);
+                mcsSlotValue = Number(document.getElementById('control-mcs-slot').value);
+                mcsValueSelection = Number(document.getElementById('control-mcs-value').value);
+                bandwidthSlotValue = Number(document.getElementById('control-bandwidth-slot').value);
+                bandwidthDirectionValue = document.getElementById('control-bandwidth-direction').value;
+                bandwidthValueSelection = Number(document.getElementById('control-bandwidth-value').value);
                 controlDefaultsInitialized = true;
             }
 
+            updateChannelControlsState();
+            updatePowerControlsState();
+            updateMcsControlsState();
+            updateBandwidthControlsState();
             updateRfSelectWidths();
         }
 
@@ -2237,36 +2315,41 @@
                 });
         }
 
-        async function applyWirelessSetting(action, payload) {
-            const statusElement = document.getElementById('wireless-control-status');
-            statusElement.textContent = `Applying ${action} ...`;
+        async function applyWirelessSetting(action, payload, options = {}) {
+            const actionLabel = options.actionLabel || getWirelessActionLabel(action);
+            setWirelessControlStatus(options.pendingMessage || `${actionLabel} 修改中...`, 'pending');
 
-            const response = await fetch('/api/wireless/runtime/apply', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ action, ...payload }),
-            });
-            const result = await response.json();
-
-            statusElement.textContent = result.message || '设置请求已返回';
-            if (result.current) {
-                controlDefaultsInitialized = false;
-                renderWirelessRuntime({
-                    available: true,
-                    message: result.message,
-                    current: result.current,
+            try {
+                const response = await fetch('/api/wireless/runtime/apply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ action, ...payload }),
                 });
+                const result = await response.json();
+
+                if (!response.ok || result.success === false) {
+                    throw new Error(result.message || `HTTP ${response.status}`);
+                }
+
+                setWirelessControlStatus(options.successMessage || `${actionLabel} 已下发`, 'success');
+
+                if (result.current) {
+                    controlDefaultsInitialized = false;
+                    renderWirelessRuntime({
+                        available: true,
+                        message: result.message,
+                        current: result.current,
+                    });
+                }
+
+                await loadInitialSnapshot().catch(() => {});
+                return result;
+            } catch (error) {
+                setWirelessControlStatus(`${actionLabel} 下发失败: ${error.message}`, 'error');
+                throw error;
             }
-
-            await loadInitialSnapshot().catch(() => {});
-
-             if (!response.ok || result.success === false) {
-                throw new Error(result.message || `HTTP ${response.status}`);
-            }
-
-            return result;
         }
 
         async function flushQueuedDeviceSelection() {
@@ -2313,13 +2396,11 @@
 
             pendingDeviceSelectionMac = normalizedMac;
             if (deviceSelectionInFlight) {
-                document.getElementById('wireless-control-status').textContent = 'Device switch queued ...';
+                setWirelessControlStatus('Active Device 修改已排队，等待前一次下发完成...', 'pending');
                 return;
             }
 
-            flushQueuedDeviceSelection().catch((error) => {
-                document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
-            });
+            flushQueuedDeviceSelection().catch(() => {});
         }
 
         function getSelectedPowerAuto() {
@@ -2328,6 +2409,186 @@
 
         function getSelectedChannelAuto() {
             return document.querySelector('input[name="control-channel-auto"]:checked')?.value === 'true';
+        }
+
+        function getSelectedBandwidthAuto() {
+            return document.querySelector('input[name="control-bandwidth-auto"]:checked')?.value === 'true';
+        }
+
+        function getSelectedChannelDirection() {
+            return document.getElementById('control-channel-direction').value;
+        }
+
+        function getSelectedChannelIndex() {
+            return Number(document.getElementById('control-channel-index').value);
+        }
+
+        function getSelectedPowerMode() {
+            return document.getElementById('control-power-mode').value;
+        }
+
+        function getSelectedPowerDb() {
+            return Number(document.getElementById('control-power-db').value);
+        }
+
+        function getSelectedMcsSlot() {
+            return Number(document.getElementById('control-mcs-slot').value);
+        }
+
+        function getSelectedMcsValue() {
+            return Number(document.getElementById('control-mcs-value').value);
+        }
+
+        function getSelectedBandwidthSlot() {
+            return Number(document.getElementById('control-bandwidth-slot').value);
+        }
+
+        function getSelectedBandwidthDirection() {
+            return document.getElementById('control-bandwidth-direction').value;
+        }
+
+        function getSelectedBandwidthValue() {
+            return Number(document.getElementById('control-bandwidth-value').value);
+        }
+
+        function setRfControlsDisabled(controlIds, disabled) {
+            controlIds.forEach((controlId) => {
+                const control = document.getElementById(controlId);
+                if (!control) {
+                    return;
+                }
+
+                control.disabled = disabled;
+                if (control.tagName === 'SELECT') {
+                    updateSelectWidth(control);
+                }
+            });
+        }
+
+        function updateChannelControlsState() {
+            setRfControlsDisabled([
+                'control-channel-direction',
+                'control-channel-index',
+            ], getSelectedChannelAuto());
+        }
+
+        async function applyChannelSettings() {
+            if (getSelectedChannelAuto()) {
+                return;
+            }
+
+            channelDirectionValue = getSelectedChannelDirection();
+            channelIndexValue = getSelectedChannelIndex();
+            await applyWirelessSetting('set_channel', {
+                direction: channelDirectionValue,
+                channel_index: channelIndexValue,
+            });
+        }
+
+        async function applyChannelAutoMode(autoMode) {
+            await applyWirelessSetting('set_channel_mode', { auto_mode: autoMode });
+
+            if (!autoMode) {
+                await applyChannelSettings();
+            }
+        }
+
+        function updatePowerControlsState() {
+            setRfControlsDisabled([
+                'control-power-mode',
+                'control-power-db',
+            ], getSelectedPowerAuto());
+        }
+
+        async function applyPowerSettings() {
+            if (getSelectedPowerAuto()) {
+                return;
+            }
+
+            powerModeValue = getSelectedPowerMode();
+            powerDbValue = getSelectedPowerDb();
+            await applyWirelessSetting('set_power_mode', {
+                power_mode: powerModeValue,
+            });
+            await applyWirelessSetting('set_power', {
+                user: Number(wirelessRuntimeCurrent?.current_power_user ?? 0),
+                power_dbm: powerDbValue,
+            });
+        }
+
+        async function applyPowerAutoMode(autoMode) {
+            await applyWirelessSetting('set_power_auto', { auto_mode: autoMode });
+
+            if (!autoMode) {
+                await applyPowerSettings();
+            }
+        }
+
+        function updateMcsControlsState() {
+            setRfControlsDisabled([
+                'control-mcs-value',
+                'control-mcs-slot',
+            ], getSelectedMcsAuto());
+        }
+
+        async function applyMcsSettings() {
+            if (getSelectedMcsAuto()) {
+                return;
+            }
+
+            mcsSlotValue = getSelectedMcsSlot();
+            mcsValueSelection = getSelectedMcsValue();
+            await applyWirelessSetting('set_mcs', {
+                slot: mcsSlotValue,
+                mcs: mcsValueSelection,
+            });
+        }
+
+        async function applyMcsAutoMode(autoMode) {
+            mcsSlotValue = getSelectedMcsSlot();
+            await applyWirelessSetting('set_mcs_mode', {
+                slot: mcsSlotValue,
+                auto_mode: autoMode,
+            });
+
+            if (!autoMode) {
+                await applyMcsSettings();
+            }
+        }
+
+        function updateBandwidthControlsState() {
+            const isAuto = getSelectedBandwidthAuto();
+            bandwidthAutoMode = isAuto;
+            setRfControlsDisabled([
+                'control-bandwidth-slot',
+                'control-bandwidth-direction',
+                'control-bandwidth-value',
+            ], isAuto);
+        }
+
+        async function applyBandwidthAutoMode(autoMode) {
+            bandwidthAutoMode = autoMode;
+            bandwidthSlotValue = getSelectedBandwidthSlot();
+            await applyWirelessSetting('set_bandwidth_mode', { slot: bandwidthSlotValue, auto_mode: autoMode });
+
+            if (!autoMode) {
+                await applyBandwidthSettings();
+            }
+        }
+
+        async function applyBandwidthSettings() {
+            if (getSelectedBandwidthAuto()) {
+                return;
+            }
+
+            bandwidthSlotValue = getSelectedBandwidthSlot();
+            bandwidthDirectionValue = getSelectedBandwidthDirection();
+            bandwidthValueSelection = getSelectedBandwidthValue();
+            await applyWirelessSetting('set_bandwidth', {
+                slot: bandwidthSlotValue,
+                direction: bandwidthDirectionValue,
+                bandwidth: bandwidthValueSelection,
+            });
         }
 
         async function applyBandSelection() {
@@ -2353,12 +2614,14 @@
                 }
 
                 control.addEventListener(eventName, () => {
+                    if (control.disabled) {
+                        return;
+                    }
+
                     if (control.tagName === 'SELECT') {
                         updateSelectWidth(control);
                     }
-                    applyWirelessSetting(action, buildPayload()).catch((error) => {
-                        document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
-                    });
+                    applyWirelessSetting(action, buildPayload()).catch(() => {});
                 });
             });
         }
@@ -2432,9 +2695,15 @@
             socket.addEventListener('error', () => {});
         }
 
-        bindAutoApply(['control-channel-auto-on', 'control-channel-auto-off'], 'set_channel_mode', () => ({
-            auto_mode: getSelectedChannelAuto(),
-            }));
+        document.querySelectorAll('input[name="control-channel-auto"]').forEach((radio) => {
+            radio.addEventListener('change', async () => {
+                updateChannelControlsState();
+                try {
+                    await applyChannelAutoMode(getSelectedChannelAuto());
+                } catch (_) {
+                }
+            });
+        });
 
         const rfOperationModeSelect = document.getElementById('rf-operation-mode');
         if (rfOperationModeSelect) {
@@ -2471,9 +2740,7 @@
                     return;
                 }
 
-                applyWirelessSetting('set_signal_user', { user: selectedUser }).catch((error) => {
-                    document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
-                });
+                applyWirelessSetting('set_signal_user', { user: selectedUser }).catch(() => {});
             });
         }
 
@@ -2503,14 +2770,13 @@
                 updateRfBasebandRoleApplyState();
 
                 try {
-                    const statusElement = document.getElementById('wireless-control-status');
-                    statusElement.textContent = `Submitting role switch to ${targetRole} ...`;
-                    await applyWirelessSetting('set_role', { role });
-                    statusElement.textContent = 'Role switch accepted. Device is rebooting, waiting for reconnection ...';
+                    await applyWirelessSetting('set_role', { role }, {
+                        pendingMessage: `Baseband Role 修改中，目标 ${targetRole} ...`,
+                        successMessage: 'Baseband Role 已下发，设备重启中，等待重新连接...',
+                    });
                     roleSelectionDirty = false;
                     await waitForRuntimeRecovery();
-                } catch (error) {
-                    document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
+                } catch (_) {
                 } finally {
                     roleApplyInFlight = false;
                     updateRfBasebandRoleApplyState();
@@ -2520,45 +2786,142 @@
 
         document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
             radio.addEventListener('change', () => {
-                applyBandSelection().catch((error) => {
-                    document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
-                });
+                applyBandSelection().catch(() => {});
             });
         });
 
-        bindAutoApply(['control-channel-direction', 'control-channel-index'], 'set_channel', () => ({
-                direction: document.getElementById('control-channel-direction').value,
-                channel_index: Number(document.getElementById('control-channel-index').value),
-            }));
+        ['control-channel-direction', 'control-channel-index'].forEach((controlId) => {
+            const control = document.getElementById(controlId);
+            if (!control) {
+                return;
+            }
 
-        bindAutoApply(['control-power-mode'], 'set_power_mode', () => ({
-                power_mode: document.getElementById('control-power-mode').value,
-            }));
+            control.addEventListener('change', async () => {
+                if (control.disabled) {
+                    return;
+                }
 
-        bindAutoApply(['control-power-auto-on', 'control-power-auto-off'], 'set_power_auto', () => ({
-            auto_mode: getSelectedPowerAuto(),
-            }));
+                if (control.tagName === 'SELECT') {
+                    updateSelectWidth(control);
+                }
 
-        bindAutoApply(['control-power-db'], 'set_power', () => ({
-            user: Number(wirelessRuntimeCurrent?.current_power_user ?? 0),
-                power_dbm: Number(document.getElementById('control-power-db').value),
-            }));
+                if (controlId === 'control-channel-direction') {
+                    channelDirectionValue = getSelectedChannelDirection();
+                }
 
-        bindAutoApply(['control-mcs-slot', 'control-mcs-auto-auto', 'control-mcs-auto-manual'], 'set_mcs_mode', () => ({
-                slot: Number(document.getElementById('control-mcs-slot').value),
-            auto_mode: getSelectedMcsAuto(),
-            }));
+                try {
+                    await applyChannelSettings();
+                } catch (_) {
+                }
+            });
+        });
 
-        bindAutoApply(['control-mcs-slot', 'control-mcs-value'], 'set_mcs', () => ({
-                slot: Number(document.getElementById('control-mcs-slot').value),
-                mcs: Number(document.getElementById('control-mcs-value').value),
-            }));
+        document.querySelectorAll('input[name="control-power-auto"]').forEach((radio) => {
+            radio.addEventListener('change', async () => {
+                updatePowerControlsState();
+                try {
+                    await applyPowerAutoMode(getSelectedPowerAuto());
+                } catch (_) {
+                }
+            });
+        });
 
-        bindAutoApply(['control-bandwidth-slot', 'control-bandwidth-direction', 'control-bandwidth-value'], 'set_bandwidth', () => ({
-                slot: Number(document.getElementById('control-bandwidth-slot').value),
-                direction: document.getElementById('control-bandwidth-direction').value,
-                bandwidth: Number(document.getElementById('control-bandwidth-value').value),
-            }));
+        ['control-power-mode', 'control-power-db'].forEach((controlId) => {
+            const control = document.getElementById(controlId);
+            if (!control) {
+                return;
+            }
+
+            control.addEventListener('change', async () => {
+                if (control.disabled) {
+                    return;
+                }
+
+                if (control.tagName === 'SELECT') {
+                    updateSelectWidth(control);
+                }
+
+                powerModeValue = getSelectedPowerMode();
+                powerDbValue = getSelectedPowerDb();
+
+                try {
+                    await applyPowerSettings();
+                } catch (_) {
+                }
+            });
+        });
+
+        document.querySelectorAll('input[name="control-mcs-auto"]').forEach((radio) => {
+            radio.addEventListener('change', async () => {
+                updateMcsControlsState();
+                try {
+                    await applyMcsAutoMode(getSelectedMcsAuto());
+                } catch (_) {
+                }
+            });
+        });
+
+        ['control-mcs-slot', 'control-mcs-value'].forEach((controlId) => {
+            const control = document.getElementById(controlId);
+            if (!control) {
+                return;
+            }
+
+            control.addEventListener('change', async () => {
+                if (control.disabled) {
+                    return;
+                }
+
+                if (control.tagName === 'SELECT') {
+                    updateSelectWidth(control);
+                }
+
+                mcsSlotValue = getSelectedMcsSlot();
+                mcsValueSelection = getSelectedMcsValue();
+
+                try {
+                    await applyMcsSettings();
+                } catch (_) {
+                }
+            });
+        });
+
+        document.querySelectorAll('input[name="control-bandwidth-auto"]').forEach((radio) => {
+            radio.addEventListener('change', async () => {
+                const autoMode = getSelectedBandwidthAuto();
+                updateBandwidthControlsState();
+                try {
+                    await applyBandwidthAutoMode(autoMode);
+                } catch (_) {
+                }
+            });
+        });
+
+        ['control-bandwidth-slot', 'control-bandwidth-direction', 'control-bandwidth-value'].forEach((controlId) => {
+            const control = document.getElementById(controlId);
+            if (!control) {
+                return;
+            }
+
+            control.addEventListener('change', async () => {
+                if (control.disabled) {
+                    return;
+                }
+
+                if (control.tagName === 'SELECT') {
+                    updateSelectWidth(control);
+                }
+
+                bandwidthSlotValue = getSelectedBandwidthSlot();
+                bandwidthDirectionValue = getSelectedBandwidthDirection();
+                bandwidthValueSelection = getSelectedBandwidthValue();
+
+                try {
+                    await applyBandwidthSettings();
+                } catch (_) {
+                }
+            });
+        });
 
         wirelessSubTabs.forEach((tab) => {
             tab.addEventListener('click', () => {
