@@ -1115,6 +1115,13 @@ impl BasebandApi {
         })
     }
 
+    pub fn set_baseband_role(&mut self, role: u8) -> Result<(), String> {
+        self.with_device_operation("set_baseband_role", |handle| {
+            ffi::set_baseband_role(handle, role)?;
+            ffi::reboot_device(handle, 2000)
+        })
+    }
+
     pub fn set_signal_user_preference(&mut self, user: u8) -> Result<(), String> {
         if usize::from(user) >= ffi::BB_DATA_USER_MAX {
             return Err(format!(
@@ -1358,6 +1365,11 @@ impl BasebandManager {
     pub fn set_bandwidth_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.set_bandwidth_mode(slot, auto_mode)
+    }
+
+    pub fn set_baseband_role(&self, role: u8) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_baseband_role(role)
     }
 
     /// 发送数据到 SOC

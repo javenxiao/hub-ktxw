@@ -284,16 +284,26 @@
                                                     <span class="rf-toggle-option rf-toggle-option-off" id="rf-radio-state-off">Off</span>
                                                 </div>
                                             </td>
+                                            <td>Baseband Role</td>
+                                            <td>
+                                                <div class="signal-source-role-controls">
+                                                    <select id="rf-baseband-role" class="sys-input rf-mode-select rf-input-short" aria-label="Baseband role selection" disabled>
+                                                        <option value="0">AP</option>
+                                                        <option value="1">DEV</option>
+                                                    </select>
+                                                    <button class="sys-button-default signal-source-role-apply" id="rf-baseband-role-apply" type="button" disabled>Apply</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
                                             <td>Active Device</td>
                                             <td>
                                                 <select id="rf-operation-mode" class="sys-input rf-mode-select" aria-label="Active device list">
                                                     <option value="">--</option>
                                                 </select>
                                             </td>
-                                        </tr>
-                                        <tr>
                                             <td>Physical User</td>
-                                            <td colspan="3">
+                                            <td>
                                                 <select id="rf-signal-user" class="sys-input rf-mode-select" aria-label="Physical user selection">
                                                     <option value="0">Physical User 0</option>
                                                 </select>
@@ -340,8 +350,8 @@
                                             <th>Tx Mod</th>
                                             <th>Rx Mod</th>
                                             <th>SNR (dB)</th>
-                                            <th>Signal Level</th>
-                                            <th>RSSI Graph</th>
+                                            <th>Signal</th>
+                                            <th>RSSI</th>
                                         </tr>
                                     </thead>
                                     <tbody id="connection-table-body">
@@ -603,7 +613,7 @@
                                     <div class="rf-pair-list" id="rf-pair-list"></div>
                                 </div>
                             </div>
-                            <p class="wireless-control-status" id="wireless-control-status">RF settings apply automatically when values change.</p>
+                            <p class="wireless-control-status" id="wireless-control-status">Most RF settings apply automatically. Role switching requires manual Apply.</p>
                         </section>
                     </div>
                 </div>
@@ -662,6 +672,8 @@
         let controlDefaultsInitialized = false;
         let pendingDeviceSelectionMac = null;
         let deviceSelectionInFlight = false;
+        let roleSelectionDirty = false;
+        let roleApplyInFlight = false;
         const rfSignalUserOptions = [
             { value: 0, label: 'Physical User 0' },
             { value: 1, label: 'Physical User 1' },
@@ -674,6 +686,15 @@
             { value: 8, label: 'Physical User BR/CS' },
             { value: 9, label: 'Physical User BR2/CS2' },
         ];
+        const rfBasebandRoleOptions = [
+            { value: 0, label: 'AP' },
+            { value: 1, label: 'DEV' },
+        ];
+        const runtimeNoticeOptions = {
+            showNoDeviceNotice: true,
+            showSingleDeviceNotice: false,
+            showIoctlWarnings: false,
+        };
         const plotPalette = ['#3155d4', '#d84d3f', '#2b8a3e', '#0f766e', '#8b5cf6', '#ca8a04', '#0ea5e9'];
         const plotState = {
             paused: false,
@@ -1909,6 +1930,100 @@
             updateSelectWidth(select);
         }
 
+        function resolveCurrentBasebandRole(current) {
+            if (!current) return null;
+            const mode = (current.operation_mode || '').toUpperCase();
+            if (mode.includes('AP')) return 0;
+            if (mode.includes('DEV')) return 1;
+            return null;
+        }
+
+        function renderRfBasebandRoleOptions(current) {
+            const select = document.getElementById('rf-baseband-role');
+            const applyBtn = document.getElementById('rf-baseband-role-apply');
+            if (!select || !applyBtn) {
+                return;
+            }
+
+            if (select.options.length !== rfBasebandRoleOptions.length) {
+                select.innerHTML = rfBasebandRoleOptions.map((option) => (
+                    `<option value="${option.value}">${escapeHtml(option.label)}</option>`
+                )).join('');
+            }
+
+            const currentRole = resolveCurrentBasebandRole(current);
+            if (currentRole !== null && !roleSelectionDirty && !roleApplyInFlight) {
+                select.value = `${currentRole}`;
+            }
+            select.disabled = !current;
+            updateSelectWidth(select);
+            updateRfBasebandRoleApplyState(current);
+        }
+
+        function updateRfBasebandRoleApplyState(current = wirelessRuntimeCurrent) {
+            const select = document.getElementById('rf-baseband-role');
+            const applyBtn = document.getElementById('rf-baseband-role-apply');
+            const hint = document.getElementById('rf-baseband-role-hint');
+            if (!select || !applyBtn) {
+                return;
+            }
+
+            if (!current) {
+                roleSelectionDirty = false;
+                applyBtn.disabled = true;
+                if (hint) {
+                    hint.textContent = 'The device will reboot after applying.';
+                }
+                return;
+            }
+
+            const currentRole = resolveCurrentBasebandRole(current);
+            const selectedRole = Number(select.value);
+            const hasPendingChange = currentRole !== null && selectedRole !== currentRole;
+            roleSelectionDirty = hasPendingChange;
+            applyBtn.disabled = !hasPendingChange || roleApplyInFlight;
+
+            if (roleApplyInFlight) {
+                if (hint) {
+                    hint.textContent = 'Role switch has been submitted. Device is rebooting, please wait for reconnection.';
+                }
+                return;
+            }
+
+            if (hasPendingChange) {
+                const targetRole = selectedRole === 0 ? 'AP' : 'DEV';
+                if (hint) {
+                    hint.textContent = `Pending role change to ${targetRole}. Click Apply to reboot and apply.`;
+                }
+            } else {
+                if (hint) {
+                    hint.textContent = 'The device will reboot after applying.';
+                }
+            }
+        }
+
+        async function waitForRuntimeRecovery() {
+            for (let attempt = 1; attempt <= 15; attempt += 1) {
+                await new Promise((resolve) => window.setTimeout(resolve, 2000));
+
+                try {
+                    const response = await fetch('/api/wireless/runtime', { cache: 'no-store' });
+                    const payload = await response.json();
+                    if (payload?.available && payload?.current) {
+                        renderWirelessRuntime(payload);
+                        const statusElement = document.getElementById('wireless-control-status');
+                        statusElement.textContent = 'Device reconnected. Role switch flow completed.';
+                        return;
+                    }
+                } catch (_) {
+                    // Ignore transient errors while device is rebooting.
+                }
+            }
+
+            const statusElement = document.getElementById('wireless-control-status');
+            statusElement.textContent = 'Role switch submitted. Device may still be rebooting; please refresh runtime in a few seconds.';
+        }
+
         function deriveWirelessRuntimeNotices(payload) {
             const notices = [];
 
@@ -1922,16 +2037,18 @@
             const current = payload.current;
             if (Array.isArray(current.warnings)) {
                 current.warnings.forEach((warning) => {
-                    if (warning) {
-                        notices.push(String(warning));
-                    }
+                    if (!warning) return;
+                    const text = String(warning);
+                    if (!runtimeNoticeOptions.showIoctlWarnings && text.includes('failed with code:')) return;
+                    notices.push(text);
                 });
             }
 
             const deviceCount = Array.isArray(current.available_devices) ? current.available_devices.length : 0;
-            if (deviceCount === 0) {
+            if (runtimeNoticeOptions.showNoDeviceNotice && deviceCount === 0) {
                 notices.push('No remote device is currently detected. Check the device connection or bb_host session.');
-            } else if (deviceCount === 1) {
+            }
+            if (runtimeNoticeOptions.showSingleDeviceNotice && deviceCount === 1) {
                 notices.push('Only one remote device is currently detected. If multiple devices are expected, replug the device or refresh the bb_host session.');
             }
 
@@ -1968,6 +2085,7 @@
                 renderRfProfile();
                 renderRfDeviceOptions(null);
                 renderRfSignalUserOptions(null);
+                renderRfBasebandRoleOptions(null);
                 setText('runtime-mac', '--');
                 setText('runtime-compile-time', '--');
                 setText('runtime-software-version', '--');
@@ -1989,6 +2107,7 @@
             renderRfProfile();
             renderRfDeviceOptions(current);
             renderRfSignalUserOptions(current);
+            renderRfBasebandRoleOptions(current);
             setText('runtime-mac', current.local_mac_address || '--');
             setText('runtime-compile-time', current.compile_time || '--');
             setText('runtime-software-version', current.software_version || '--');
@@ -2355,6 +2474,47 @@
                 applyWirelessSetting('set_signal_user', { user: selectedUser }).catch((error) => {
                     document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
                 });
+            });
+        }
+
+        const rfBasebandRoleSelect = document.getElementById('rf-baseband-role');
+        if (rfBasebandRoleSelect) {
+            rfBasebandRoleSelect.addEventListener('change', () => {
+                updateSelectWidth(rfBasebandRoleSelect);
+                updateRfBasebandRoleApplyState();
+            });
+        }
+
+        const rfBasebandRoleApply = document.getElementById('rf-baseband-role-apply');
+        if (rfBasebandRoleApply) {
+            rfBasebandRoleApply.addEventListener('click', async () => {
+                if (!wirelessRuntimeCurrent) {
+                    return;
+                }
+
+                const role = Number(rfBasebandRoleSelect.value);
+                const targetRole = role === 0 ? 'AP' : 'DEV';
+                const confirmed = window.confirm(`Switch baseband role to ${targetRole}? The device will reboot immediately.`);
+                if (!confirmed) {
+                    return;
+                }
+
+                roleApplyInFlight = true;
+                updateRfBasebandRoleApplyState();
+
+                try {
+                    const statusElement = document.getElementById('wireless-control-status');
+                    statusElement.textContent = `Submitting role switch to ${targetRole} ...`;
+                    await applyWirelessSetting('set_role', { role });
+                    statusElement.textContent = 'Role switch accepted. Device is rebooting, waiting for reconnection ...';
+                    roleSelectionDirty = false;
+                    await waitForRuntimeRecovery();
+                } catch (error) {
+                    document.getElementById('wireless-control-status').textContent = `Apply failed: ${error.message}`;
+                } finally {
+                    roleApplyInFlight = false;
+                    updateRfBasebandRoleApplyState();
+                }
             });
         }
 

@@ -656,6 +656,30 @@ pub struct bb_set_bandwidth_mode_t {
     pub mode: u8,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_orig_cfg_t {
+    pub role: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_reboot_t {
+    pub delay_ms: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_prj_dispatch_in_t {
+    pub data: [u8; 256],
+}
+
+impl Default for bb_set_prj_dispatch_in_t {
+    fn default() -> Self {
+        Self { data: [0; 256] }
+    }
+}
+
 type BbInitFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
 type BbDeinitFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
 type BbStartFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
@@ -823,6 +847,8 @@ pub const BB_DATA_USER_MAX: usize = 10;
 pub const BB_ALL_DATA_USER_BMP: u16 = ((1_u32 << BB_DATA_USER_MAX) - 1) as u16;
 pub const BB_DIR_TX: u8 = 0;
 pub const BB_DIR_RX: u8 = 1;
+pub const BB_ROLE_AP: u8 = 0;
+pub const BB_ROLE_DEV: u8 = 1;
 
 // Socket 选项标志
 pub const BB_SOCK_FLAG_RX: u32 = 1 << 0;
@@ -906,7 +932,12 @@ pub const BB_SET_MCS: u32 = bb_request(BB_REQ_SET, 13);
 pub const BB_SET_BANDWIDTH: u32 = bb_request(BB_REQ_SET, 22);
 pub const BB_SET_BANDWIDTH_MODE: u32 = bb_request(BB_REQ_SET, 32);
 pub const BB_SET_LOCAL_MAC: u32 = bb_request(BB_REQ_SET, 33);
+pub const BB_SET_SYS_REBOOT: u32 = bb_request(BB_REQ_SET, 14);
 pub const BB_SET_PLOT: u32 = bb_request(BB_REQ_SET, 103);
+pub const BB_SET_ORIG_CFG: u32 = bb_request(BB_REQ_SET, 113);
+pub const BB_SET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_SET, 200);
+
+pub const PRJ_CMD_SET_ROLE: u8 = 0;
 
 pub const BB_EVENT_PLOT_DATA: i32 = 3;
 
@@ -2101,6 +2132,43 @@ pub fn set_bandwidth_mode(handle: *mut bb_dev_handle_t, slot: u8, auto_mode: boo
         ) {
             0 => Ok(()),
             e => Err(format!("bb_ioctl(BB_SET_BANDWIDTH_MODE) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn set_baseband_role(handle: *mut bb_dev_handle_t, role: u8) -> Result<(), String> {
+    let sdk = sdk()?;
+    let mut input = bb_set_prj_dispatch_in_t::default();
+
+    // prj_rpc_hdr_t: cmdid(u8) + padding[3] + payload
+    input.data[0] = PRJ_CMD_SET_ROLE;
+    input.data[4] = role;
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_PRJ_DISPATCH as c_uint,
+            &input as *const bb_set_prj_dispatch_in_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_PRJ_DISPATCH:PRJ_CMD_SET_ROLE) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn reboot_device(handle: *mut bb_dev_handle_t, delay_ms: u32) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_reboot_t { delay_ms };
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_SYS_REBOOT as c_uint,
+            &input as *const bb_set_reboot_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_SYS_REBOOT) failed with code: {}", e)),
         }
     }
 }

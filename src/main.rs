@@ -177,6 +177,7 @@ struct WirelessSettingRequest {
     power_dbm: Option<u8>,
     bandwidth: Option<u8>,
     power_mode: Option<String>,
+    role: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -612,6 +613,10 @@ async fn apply_wireless_setting(
                 let dir = parse_direction(request.direction.as_deref().unwrap_or("rx"))?;
                 baseband.set_bandwidth(request.slot.unwrap_or(default_slot), dir, bandwidth)
             }),
+        "set_role" => request
+            .role
+            .ok_or_else(|| "role is required".to_string())
+            .and_then(|role| baseband.set_baseband_role(role)),
         _ => Err(format!("Unsupported wireless setting action: {}", request.action)),
     };
 
@@ -620,10 +625,15 @@ async fn apply_wireless_setting(
             refresh_snapshot_from_baseband(&state, &baseband).await;
             refresh_runtime_from_baseband(&state, &baseband).await;
             let current = state.wireless_runtime.read().await.current.clone();
+            let message = if request.action == "set_role" {
+                "Baseband role switch requested; device rebooting to apply the new role".to_string()
+            } else {
+                format!("Wireless setting action '{}' applied successfully", request.action)
+            };
 
             Json(WirelessSettingResponse {
                 success: true,
-                message: format!("Wireless setting action '{}' applied successfully", request.action),
+                message,
                 current,
             })
         }
@@ -1436,7 +1446,14 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
                         _ => "Unknown".to_string(),
                     }
                 } else if device.role_label == "Unknown" {
-                    "Unknown".to_string()
+                    // role_label is always "Unknown" from list_host_devices (SDK only exposes MAC).
+                    // When the RF link is not yet established (peer_mac_hex absent), infer the
+                    // opposite role from the current device: AP peer is DEV and vice-versa.
+                    match details.status.role {
+                        0 => "DEV".to_string(),
+                        1 => "AP".to_string(),
+                        _ => "Unknown".to_string(),
+                    }
                 } else {
                     device.role_label.clone()
                 };
