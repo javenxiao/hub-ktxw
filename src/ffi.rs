@@ -2527,14 +2527,25 @@ fn summarize_link_status(
     user_quality: Option<BbQualitySummary>,
 ) -> Option<BbLinkStatusSummary> {
     let pair_state = decode_pair_state(link.rx_mcs_pair_state);
+    let slot_live = link.state != 0 || pair_state;
     let direct_peer_mac_bytes = if is_zero_mac(&link.peer_mac.addr) {
         None
     } else {
         Some(link.peer_mac.addr)
     };
-    let pair_quality = pair_slot.as_ref().and_then(|slot_summary| slot_summary.quality.clone());
+    let pair_quality = if slot_live {
+        pair_slot.as_ref().and_then(|slot_summary| slot_summary.quality.clone())
+    } else {
+        None
+    };
     let effective_quality = peer_quality.or(pair_quality).or(user_quality);
-    let peer_mac_bytes = direct_peer_mac_bytes.or_else(|| pair_slot.as_ref().and_then(|slot_summary| slot_summary.peer_mac_bytes));
+    let peer_mac_bytes = direct_peer_mac_bytes.or_else(|| {
+        if slot_live {
+            pair_slot.as_ref().and_then(|slot_summary| slot_summary.peer_mac_bytes)
+        } else {
+            None
+        }
+    });
     let slot_mask = 1_u8.checked_shl(slot as u32).unwrap_or(0);
     let slot_declared = (cfg_sbmp & slot_mask) != 0 || (rt_sbmp & slot_mask) != 0;
 
@@ -2544,7 +2555,13 @@ fn summarize_link_status(
 
     let peer_mac_hex = peer_mac_bytes
         .map(|addr| format_bb_mac(&bb_mac_t { addr }))
-        .or_else(|| pair_slot.and_then(|slot_summary| slot_summary.peer_mac_hex));
+        .or_else(|| {
+            if slot_live {
+                pair_slot.and_then(|slot_summary| slot_summary.peer_mac_hex)
+            } else {
+                None
+            }
+        });
 
     Some(BbLinkStatusSummary {
         slot,

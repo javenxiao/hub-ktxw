@@ -7,7 +7,6 @@ use crate::ffi;
 
 const REMOTE_SDK_CALL_GAP: Duration = Duration::from_millis(20);
 const REMOTE_DEVICE_SWITCH_GAP: Duration = Duration::from_millis(1200);
-const DEFAULT_PLOT_EVENT_CACHE_NUM: u8 = 5;
 const BB_USER_0: u8 = 0;
 static REMOTE_SDK_LAST_CALL_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
@@ -650,6 +649,7 @@ impl BasebandApi {
     /// 获取或初始化全局基带 API 实例
     pub fn get_with_health() -> (Self, BasebandHealthStatus) {
         let remote_host = remote_host_config_from_env();
+        let mut health = BasebandHealthStatus::new();
         let mut api = BasebandApi {
             initialized: false,
             started: false,
@@ -666,7 +666,6 @@ impl BasebandApi {
             last_remote_device_switch_at: None,
             remote_device_handles: Vec::new(),
         };
-        let mut health = BasebandHealthStatus::new();
 
         if let Some(remote_host) = remote_host {
             let host_addr = remote_host.address.clone();
@@ -697,22 +696,6 @@ impl BasebandApi {
                     health.status_read.success = true;
                     health.status_read.message = "bb_ioctl(BB_GET_STATUS) succeeded".to_string();
                     health.effective_mode = "hardware-remote-bb-host".to_string();
-
-                    let plot_user = api
-                        .preferred_signal_user_for_active_device()
-                        .unwrap_or_else(|| resolve_plot_user(&outcome.status));
-                    if let Err(err) = api.enable_plot_stream(plot_user) {
-                        tracing::warn!(
-                            "Failed to enable plot stream in remote bb_host mode for user {}: {}",
-                            plot_user,
-                            err
-                        );
-                    } else {
-                        tracing::info!(
-                            "Enabled plot stream in remote bb_host mode for user {}",
-                            plot_user
-                        );
-                    }
 
                     health.runtime.status_snapshot = Some(outcome.status);
                 }
@@ -806,46 +789,6 @@ impl BasebandApi {
 
         ffi::start(self.handle_ptr())?;
         self.started = true;
-        Ok(())
-    }
-
-    pub fn enable_plot_stream(&mut self, user: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        if self.plot_subscription_active && self.plot_user == Some(user) {
-            ffi::refresh_plot_stream(self.handle_ptr(), user, DEFAULT_PLOT_EVENT_CACHE_NUM)?;
-            return Ok(());
-        }
-
-        if self.plot_subscription_active {
-            if let Some(previous_user) = self.plot_user {
-                let _ = ffi::unsubscribe_plot_stream(self.handle_ptr(), previous_user);
-            }
-            self.plot_subscription_active = false;
-            self.plot_user = None;
-        }
-
-        ffi::subscribe_plot_stream(self.handle_ptr(), user, DEFAULT_PLOT_EVENT_CACHE_NUM)?;
-        self.plot_subscription_active = true;
-        self.plot_user = Some(user);
-        Ok(())
-    }
-
-    pub fn rebind_plot_stream(&mut self, user: u8) -> Result<(), String> {
-        if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
-
-        let previous_user = self.plot_user.unwrap_or(user);
-        let _ = ffi::unsubscribe_plot_stream(self.handle_ptr(), previous_user);
-        self.plot_subscription_active = false;
-        self.plot_user = None;
-
-        ffi::subscribe_plot_stream(self.handle_ptr(), user, DEFAULT_PLOT_EVENT_CACHE_NUM)?;
-        self.plot_subscription_active = true;
-        self.plot_user = Some(user);
         Ok(())
     }
 
@@ -982,14 +925,6 @@ impl BasebandApi {
         }
     }
 
-    pub fn get_plot_snapshot(&self) -> Option<ffi::BbPlotSnapshotSummary> {
-        if !self.initialized {
-            return None;
-        }
-
-        ffi::latest_plot_snapshot()
-    }
-
     fn switch_remote_device_once(&mut self, target_mac: &str, normalized_target: &str) -> Result<(), String> {
         if self.initialized && self.active_device_mac.as_deref() == Some(normalized_target) {
             return Ok(());
@@ -1008,17 +943,13 @@ impl BasebandApi {
             self.initialized = true;
             self.active_device_mac = Some(normalized_target.to_string());
 
-            let cached_status = run_remote_sdk_call(true, || {
+            run_remote_sdk_call(true, || {
                 ffi::get_status(
                     self.handle_ptr(),
                     ffi::BB_ALL_DATA_USER_BMP,
                     self.preferred_signal_user_for_mac(normalized_target),
                 )
             })?;
-
-            if let Err(err) = self.enable_plot_stream(resolve_plot_user(&cached_status)) {
-                tracing::warn!("Failed to enable plot stream after cached device switch: {}", err);
-            }
 
             return Ok(());
         }
@@ -1058,10 +989,6 @@ impl BasebandApi {
         self.active_device_mac = Some(normalized_target.to_string());
         self.remember_current_device(&new_status);
         self.remember_remote_handle(Self::normalize_mac(&new_status.mac_hex), self.device_handle);
-
-        if let Err(err) = self.enable_plot_stream(resolve_plot_user(&new_status)) {
-            tracing::warn!("Failed to enable plot stream after device switch: {}", err);
-        }
 
         Ok(())
     }
@@ -1163,7 +1090,7 @@ impl BasebandApi {
         };
 
         self.preferred_signal_users.insert(active_device_mac, user);
-        self.rebind_plot_stream(user)
+        Ok(())
     }
 
 }
@@ -1238,15 +1165,6 @@ impl BasebandManager {
 
         match api.start() {
             Ok(()) => {
-                let plot_user = api
-                    .get_status_summary()
-                    .map(|status| resolve_plot_user(&status))
-                    .unwrap_or(BB_USER_0);
-
-                if let Err(err) = api.enable_plot_stream(plot_user) {
-                    tracing::warn!("Failed to enable plot stream in local SDK mode: {}", err);
-                }
-
                 health.start.success = true;
                 health.start.message = "bb_start succeeded".to_string();
                 health.effective_mode = "hardware-local-sdk".to_string();
@@ -1302,21 +1220,6 @@ impl BasebandManager {
     pub fn get_health_status(&self) -> BasebandHealthStatus {
         let mut api = self.api.lock().unwrap();
         api.get_health_status()
-    }
-
-    pub fn get_plot_snapshot(&self) -> Option<ffi::BbPlotSnapshotSummary> {
-        let api = self.api.lock().unwrap();
-        api.get_plot_snapshot()
-    }
-
-    pub fn ensure_plot_stream(&self, user: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.enable_plot_stream(user)
-    }
-
-    pub fn rebind_plot_stream(&self, user: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.rebind_plot_stream(user)
     }
 
     pub fn set_signal_user_preference(&self, user: u8) -> Result<(), String> {

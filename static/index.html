@@ -364,7 +364,7 @@
                         </section>
 
                         <section class="chart-panel">
-                            <h2 class="sys-section-title chart-panel-title" id="chart-title">AP Plot Data (--)</h2>
+                            <h2 class="sys-section-title chart-panel-title" id="chart-title">RSSI Graph (--)</h2>
                             <div class="chart-box">
                                 <div class="plot-toolbar">
                                     <div class="plot-toolbar-main">
@@ -626,6 +626,7 @@
                                 <div class="sys-section rf-summary-section rf-pair-section">
                                     <h3 class="sys-section-title">Pair</h3>
                                     <div class="rf-pair-list" id="rf-pair-list"></div>
+                                    <p class="rf-pair-note">Red dot means pairing is in progress. Green dot means the slot is paired. Click Pair again to start a new matching attempt for the slot.</p>
                                 </div>
                             </div>
                             <p class="wireless-control-status" id="wireless-control-status" data-state="idle">Most RF settings apply automatically. Role switching requires manual Apply.</p>
@@ -699,6 +700,10 @@
         let bandwidthDirectionValue = 'rx';
         let bandwidthValueSelection = null;
         let bandwidthAutoMode = false;
+        const pairMacDraftBySlot = new Map();
+        const pairPendingBySlot = new Map();
+        const pairStopOverrideBySlot = new Map();
+        const pairPendingGraceMs = 2500;
         const rfSignalUserOptions = [
             { value: 0, label: 'Physical User 0' },
             { value: 1, label: 'Physical User 1' },
@@ -854,42 +859,114 @@
         }
 
         function normalizePairMac(macAddress) {
-            const normalized = String(macAddress || '').replaceAll(':', '').trim();
-            return normalized || '00000000';
+            const normalized = String(macAddress || '').trim().replaceAll(':', '').replaceAll('-', '');
+            return /^[0-9a-fA-F]{8}$/.test(normalized) ? normalized.toUpperCase() : '00000000';
         }
 
-        function buildPairStatus(slotConnection) {
+        function findPairConnection(slotIndex, connections = latestWirelessSnapshot?.connections) {
+            return Array.isArray(connections)
+                ? connections.find((connection) => parseConnectionSlot(connection.link_slot) === slotIndex) || null
+                : null;
+        }
+
+        function buildPairStatus(slotIndex, slotConnection) {
             if (!slotConnection) {
+                pairPendingBySlot.delete(slotIndex);
+                pairStopOverrideBySlot.delete(slotIndex);
                 return 'idle';
             }
 
             const pairState = String(slotConnection.pair_state || '').toLowerCase();
             const linkState = String(slotConnection.link_state || '').toLowerCase();
             const macValue = normalizePairMac(slotConnection.mac_address);
+            const hasPeerMac = macValue !== '00000000';
+            const pairingActive = Boolean(slotConnection.pairing_active);
+            const isLinked = linkState.includes('connect') || linkState.includes('lock');
+            const pending = pairPendingBySlot.get(slotIndex);
+            const stopOverride = pairStopOverrideBySlot.get(slotIndex);
 
-            if (pairState.includes('pairing')) {
+            if (stopOverride) {
+                if (hasPeerMac || !pairingActive || Date.now() >= stopOverride.expiresAt) {
+                    pairStopOverrideBySlot.delete(slotIndex);
+                } else {
+                    pairPendingBySlot.delete(slotIndex);
+                    return 'idle';
+                }
+            }
+
+            if (pending) {
+                const successObserved = hasPeerMac && (pairState.includes('paired') || isLinked);
+                const hasNewPeerMac = hasPeerMac && macValue !== pending.previousMac;
+
+                if (hasNewPeerMac || (successObserved && Date.now() >= pending.expiresAt)) {
+                    pairPendingBySlot.delete(slotIndex);
+                    return 'paired';
+                }
+
+                if (Date.now() < pending.expiresAt) {
+                    return 'pairing';
+                }
+
+                pairPendingBySlot.delete(slotIndex);
+            }
+
+            if (hasPeerMac && pairState.includes('paired')) {
+                return 'paired';
+            }
+            if (hasPeerMac && isLinked) {
+                return 'paired';
+            }
+            if (pairingActive) {
                 return 'pairing';
             }
-            if (pairState.includes('paired')) {
-                return 'paired';
-            }
-            if (macValue !== '00000000' && (linkState.includes('connect') || linkState.includes('lock') || pairState.includes('stable'))) {
-                return 'paired';
+            if (pairState.includes('pairing')) {
+                return 'pairing';
             }
             return 'idle';
         }
 
-        function buildPairRow(slotIndex, slotConnection) {
-            const status = buildPairStatus(slotConnection);
+        function buildPairMacFieldState(slotIndex, slotConnection, status) {
             const macValue = normalizePairMac(slotConnection?.mac_address);
+            const hasDraft = pairMacDraftBySlot.has(slotIndex);
+            const draftValue = hasDraft ? pairMacDraftBySlot.get(slotIndex) : null;
+
+            if (status === 'pairing') {
+                return {
+                    value: '匹配中...',
+                    readOnly: false,
+                    className: ' is-pairing',
+                };
+            }
+
+            const displayValue = hasDraft
+                ? draftValue
+                : macValue !== '00000000'
+                    ? macValue
+                    : '无匹配设备';
+
+            return {
+                value: displayValue,
+                readOnly: false,
+                className: status === 'paired' && macValue !== '00000000'
+                    ? ' is-paired'
+                    : displayValue === '无匹配设备'
+                        ? ' is-empty'
+                        : '',
+            };
+        }
+
+        function buildPairRow(slotIndex, slotConnection) {
+            const status = buildPairStatus(slotIndex, slotConnection);
             const isPairing = status === 'pairing';
-            const buttonLabel = isPairing ? 'Stop' : 'Pair';
+            const macFieldState = buildPairMacFieldState(slotIndex, slotConnection, status);
+            const pairStart = !isPairing;
+            const buttonStateClass = isPairing ? ' is-pairing' : '';
             return `
                 <div class="rf-pair-row">
-                    <div class="rf-pair-user">User ${slotIndex + 1}</div>
+                    <div class="rf-pair-user">Slot ${slotIndex}</div>
                     <span class="rf-pair-dot ${status}" aria-hidden="true"></span>
-                    <div class="rf-pair-mac">${escapeHtml(macValue)}</div>
-                    <button class="sys-button-default rf-pair-button" type="button" data-pair-slot="${slotIndex}" data-pair-start="${String(!isPairing)}">${buttonLabel}</button>
+                    <input class="sys-input rf-pair-mac-input${macFieldState.className}" type="text" data-pair-mac-slot="${slotIndex}" value="${escapeHtml(macFieldState.value)}" ${macFieldState.readOnly ? 'readonly aria-readonly="true"' : ''}>
+                    <button class="sys-button-default rf-pair-button${buttonStateClass}" type="button" data-pair-slot="${slotIndex}" data-pair-start="${String(pairStart)}">${isPairing ? 'Stop' : 'Pair'}</button>
                 </div>
             `;
         }
@@ -906,15 +983,71 @@
                     .filter(([slot]) => slot !== null)
             );
 
-            container.innerHTML = Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex))).join('');
+            const markup = Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex))).join('');
+            if (container.dataset.renderedMarkup !== markup) {
+                container.innerHTML = markup;
+                container.dataset.renderedMarkup = markup;
+            }
 
-            container.querySelectorAll('[data-pair-slot]').forEach((button) => {
-                button.addEventListener('click', () => {
+            if (!container.dataset.bound) {
+                container.dataset.bound = 'true';
+                container.addEventListener('input', (event) => {
+                    const input = event.target instanceof Element
+                        ? event.target.closest('[data-pair-mac-slot]')
+                        : null;
+                    if (!input) {
+                        return;
+                    }
+
+                    const slot = Number(input.getAttribute('data-pair-mac-slot'));
+                    if (!Number.isFinite(slot)) {
+                        return;
+                    }
+
+                    pairMacDraftBySlot.set(slot, input.value);
+                });
+
+                container.addEventListener('click', (event) => {
+                    const button = event.target instanceof Element
+                        ? event.target.closest('[data-pair-slot]')
+                        : null;
+                    if (!button) {
+                        return;
+                    }
+
+                    if (button.matches(':disabled')) {
+                        return;
+                    }
+
                     const slot = Number(button.getAttribute('data-pair-slot'));
                     const pairStart = button.getAttribute('data-pair-start') === 'true';
-                    applyWirelessSetting('set_pair_mode', { slot, pair_start: pairStart }).catch(() => {});
+                    if (!Number.isFinite(slot)) {
+                        return;
+                    }
+
+                    if (pairStart) {
+                        const currentConnection = findPairConnection(slot);
+                        pairStopOverrideBySlot.delete(slot);
+                        pairPendingBySlot.set(slot, {
+                            previousMac: normalizePairMac(currentConnection?.mac_address),
+                            expiresAt: Date.now() + pairPendingGraceMs,
+                        });
+                        pairMacDraftBySlot.delete(slot);
+                    } else {
+                        pairPendingBySlot.delete(slot);
+                        pairStopOverrideBySlot.set(slot, {
+                            expiresAt: Date.now() + pairPendingGraceMs,
+                        });
+                    }
+
+                    renderPairPanel(latestWirelessSnapshot?.connections);
+                    applyWirelessSetting('set_pair_mode', { slot, pair_start: pairStart }).catch(() => {
+                        pairPendingBySlot.delete(slot);
+                        pairStopOverrideBySlot.delete(slot);
+                        renderPairPanel(latestWirelessSnapshot?.connections);
+                    });
                 });
-            });
+            }
         }
 
         function toPolylinePoints(values, width, height, minValue, maxValue, startX, startY, endX, endY) {
@@ -961,7 +1094,7 @@
         }
 
         function getPlotSeriesLabel(series, index) {
-            return String(series?.label || series?.key || `series_${index + 1}`);
+            return String(series?.label || series?.key || `series_${index + 1}`).toUpperCase();
         }
 
         function getPlotSeriesColor(index) {
@@ -1162,7 +1295,7 @@
                 <button class="plot-legend-item ${isVisible ? '' : 'is-muted'}" type="button" data-plot-key="${escapeHtml(key)}">
                     <span class="plot-legend-swatch" style="background:${color}"></span>
                     <span class="plot-legend-copy">
-                        <span class="plot-legend-label">${escapeHtml(label)}</span>
+                        <span class="plot-legend-label">${escapeHtml(label)}<span class="plot-legend-range-inline"> ${escapeHtml(rangeText)}</span></span>
                         <span class="plot-legend-range">${escapeHtml(rangeText)}</span>
                     </span>
                     <span class="plot-legend-value">${escapeHtml(currentValue)}</span>
@@ -1255,7 +1388,7 @@
             const visibleEntries = allEntries.filter((entry) => plotState.visibility.get(entry.key) !== false);
             const pointCount = Math.max(...allEntries.map(({ series }) => Array.isArray(series.points) ? series.points.length : 0), 0);
             const [autoRangeMin, autoRangeMax] = resolveCompositeRange(visibleEntries.map(({ series }) => series));
-            const controlSettings = resolvePlotControlSettings(chart && chart.title ? chart.title : 'AP Plot Data', autoRangeMin, autoRangeMax, sampleCount);
+            const controlSettings = resolvePlotControlSettings(chart && chart.title ? chart.title : 'RSSI Graph', autoRangeMin, autoRangeMax, sampleCount);
             const hasChartTitle = Boolean(controlSettings.chartTitle);
             const xAxisTicks = buildAxisTicks(controlSettings.xMin, controlSettings.xMax, 6);
             const plotBox = {
@@ -1314,6 +1447,8 @@
                 ? '<div class="plot-workbench-empty">All series are hidden. Re-enable them from the legend.</div>'
                 : '';
 
+            const legendDenseClass = allSeries.length > 8 ? ' is-dense' : '';
+
             return {
                 pointCount,
                 plotBox,
@@ -1321,7 +1456,7 @@
                 visibleEntries,
                 allSeries,
                 markup: `
-                    <div class="plot-workbench">
+                    <div class="plot-workbench${legendDenseClass}">
                         <div class="plot-stage">
                             <div class="plot-surface" id="plot-surface">
                                 <svg class="plot-composite-svg" viewBox="0 0 980 440" preserveAspectRatio="none" role="img" aria-label="Multi-series trend chart">
@@ -1342,7 +1477,7 @@
                             </div>
                         </div>
                         <aside class="plot-legend-sidebar" id="plot-legend-sidebar">
-                            <div class="plot-legend-list">
+                            <div class="plot-legend-list${legendDenseClass}">
                                 ${legendMarkup || '<div class="plot-series-empty">No series data</div>'}
                             </div>
                         </aside>
@@ -1504,16 +1639,31 @@
             const closeButton = document.getElementById('plot-settings-close');
             if (closeButton && !closeButton.dataset.bound) {
                 closeButton.dataset.bound = 'true';
-                closeButton.addEventListener('click', () => {
+                const closePanel = () => {
                     plotState.controlsOpen = false;
                     renderChart(chart || plotState.lastIncomingChart);
+                };
+
+                closeButton.addEventListener('pointerdown', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closePanel();
+                });
+
+                closeButton.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    closePanel();
                 });
             }
 
             const resetButton = document.getElementById('plot-settings-reset');
             if (resetButton && !resetButton.dataset.bound) {
                 resetButton.dataset.bound = 'true';
-                resetButton.addEventListener('click', () => {
+                const resetPanel = () => {
                     plotState.controls.xMin = '0';
                     plotState.controls.xMax = '200';
                     plotState.controls.yMin = '0';
@@ -1521,6 +1671,21 @@
                     plotState.controls.updateIntervalMs = '1000';
                     renderChart(chart || plotState.lastIncomingChart);
                     syncPlotRefreshSettings(plotState.controls.updateIntervalMs, chart || plotState.lastIncomingChart);
+                };
+
+                resetButton.addEventListener('pointerdown', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    resetPanel();
+                });
+
+                resetButton.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    resetPanel();
                 });
             }
         }
@@ -1729,7 +1894,7 @@
             plotState.lastIncomingChart = chart || null;
             plotState.lastRenderedAt = Date.now();
 
-            const title = chart && chart.title ? chart.title : 'AP Plot Data';
+            const title = chart && chart.title ? chart.title : 'RSSI Graph';
             const targetMac = chart && chart.target_mac_address ? chart.target_mac_address : '--';
             const series = Array.isArray(chart && chart.series) ? chart.series : [];
 

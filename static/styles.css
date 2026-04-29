@@ -1322,6 +1322,22 @@ tbody td {
     text-align: left;
 }
 
+.plot-workbench.is-dense .plot-legend-sidebar {
+    gap: 4px;
+}
+
+.plot-legend-list.is-dense {
+    gap: 2px;
+}
+
+.plot-workbench.is-dense .plot-legend-item {
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+    column-gap: 5px;
+    row-gap: 1px;
+    align-items: start;
+    padding: 4px 2px 4px 4px;
+}
+
 .plot-legend-item.is-muted {
     opacity: 0.42;
 }
@@ -1331,6 +1347,11 @@ tbody td {
     width: 10px;
     height: 10px;
     border-radius: 2px;
+}
+
+.plot-workbench.is-dense .plot-legend-swatch {
+    width: 8px;
+    height: 8px;
 }
 
 .plot-legend-copy {
@@ -1349,6 +1370,26 @@ tbody td {
     text-overflow: ellipsis;
 }
 
+.plot-legend-range-inline {
+    display: none;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.plot-workbench.is-dense .plot-legend-label {
+    font-size: 10px;
+    line-height: 1.1;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+}
+
+.plot-workbench.is-dense .plot-legend-range-inline {
+    display: inline;
+}
+
 .plot-legend-range {
     color: #64748b;
     font-size: 10px;
@@ -1356,6 +1397,10 @@ tbody td {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.plot-workbench.is-dense .plot-legend-range {
+    display: none;
 }
 
 .plot-legend-value {
@@ -1369,6 +1414,13 @@ tbody td {
     font-weight: 800;
     line-height: 1.05;
     white-space: nowrap;
+}
+
+.plot-workbench.is-dense .plot-legend-value {
+    min-width: 34px;
+    font-size: 15px;
+    grid-row: 1;
+    align-self: start;
 }
 
 .plot-settings-dock {
@@ -1786,7 +1838,7 @@ tbody td {
 
 .rf-pair-row {
     display: grid;
-    grid-template-columns: 56px 16px 128px 66px;
+    grid-template-columns: 56px 16px minmax(0, 1fr) 66px;
     gap: 6px;
     align-items: center;
 }
@@ -1809,15 +1861,16 @@ tbody td {
 }
 
 .rf-pair-dot.pairing {
-    background: #f2dd00;
+    background: #cf2727;
 }
 
 .rf-pair-dot.idle {
     background: #8a8f96;
 }
 
-.rf-pair-mac {
-    min-height: 24px;
+.rf-pair-mac-input {
+    width: 100%;
+    min-height: 28px;
     padding: 3px 6px;
     border: 1px solid #c2c7ce;
     background: #ffffff;
@@ -1825,6 +1878,21 @@ tbody td {
     font-family: Consolas, 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.2;
+    box-sizing: border-box;
+}
+
+.rf-pair-mac-input.is-paired {
+    color: #0f5f18;
+    font-weight: 700;
+}
+
+.rf-pair-mac-input.is-empty {
+    color: #7b8794;
+}
+
+.rf-pair-mac-input.is-pairing {
+    color: #9e1e1e;
+    font-weight: 700;
 }
 
 .rf-pair-button {
@@ -1832,6 +1900,25 @@ tbody td {
     width: 100%;
     padding: 3px 0;
 }
+
+.rf-pair-button.is-pairing {
+    background: #fde4e4;
+    color: #9e1e1e;
+    border-color: #d85f5f;
+    font-weight: 700;
+}
+
+.rf-pair-button.is-pairing:hover {
+    background: #f9caca;
+}
+
+.rf-pair-note {
+    margin: 10px 0 0;
+    color: #5a6776;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 
 .rf-summary-table .rf-input-short {
     width: 120px;
