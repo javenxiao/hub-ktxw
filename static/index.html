@@ -47,9 +47,9 @@
                                 </select>
                             </div>
                             <div class="console-context-card console-context-card-role">
-                                <span class="console-context-label">Baseband Role</span>
+                                <span class="console-context-label">Role</span>
                                 <div class="signal-source-role-controls console-context-role-controls">
-                                    <select id="rf-baseband-role" class="sys-input rf-mode-select console-context-select" aria-label="Baseband role selection" disabled>
+                                    <select id="rf-baseband-role" class="sys-input rf-mode-select console-context-select" aria-label="Role selection" disabled>
                                         <option value="0">AP</option>
                                         <option value="1">DEV</option>
                                     </select>
@@ -759,7 +759,7 @@
             set_mcs_mode: 'MCS Auto Mode',
             set_mcs: 'MCS',
             set_bandwidth: 'Bandwidth',
-            set_role: 'Baseband Role',
+            set_role: 'Role',
         };
         const runtimeNoticeOptions = {
             showNoDeviceNotice: true,
@@ -2118,10 +2118,30 @@
 
             const optionTexts = Array.from(select.options).map((option) => option.text || '');
             const selectedText = select.options[select.selectedIndex]?.text || '';
-            const longestText = optionTexts.reduce((maxLen, text) => Math.max(maxLen, text.length), 0);
-            const baseLength = Math.max(selectedText.length, longestText);
-            const widthCh = Math.max(7, Math.min(baseLength + 5, 40));
-            select.style.width = `${widthCh}ch`;
+            const baseText = optionTexts.reduce((longest, text) => (
+                text.length > longest.length ? text : longest
+            ), selectedText);
+            const computedStyle = window.getComputedStyle(select);
+            const canvas = updateSelectWidth.canvas || (updateSelectWidth.canvas = document.createElement('canvas'));
+            const context = canvas.getContext('2d');
+
+            if (!context) {
+                return;
+            }
+
+            context.font = computedStyle.font;
+
+            const textWidth = Math.ceil(context.measureText(baseText).width);
+            const horizontalPadding =
+                parseFloat(computedStyle.paddingLeft || '0')
+                + parseFloat(computedStyle.paddingRight || '0');
+            const borderWidth =
+                parseFloat(computedStyle.borderLeftWidth || '0')
+                + parseFloat(computedStyle.borderRightWidth || '0');
+            const chromeAllowance = 28;
+            const widthPx = Math.max(72, Math.min(textWidth + horizontalPadding + borderWidth + chromeAllowance, 420));
+
+            select.style.width = `${widthPx}px`;
         }
 
         function getSelectedMcsAuto() {
@@ -2287,7 +2307,7 @@
                     const payload = await response.json();
                     if (payload?.available && payload?.current) {
                         renderWirelessRuntime(payload);
-                        setWirelessControlStatus('Baseband Role 已下发，设备已重新连接。', 'success');
+                        setWirelessControlStatus('Role 已下发，设备已重新连接。', 'success');
                         return;
                     }
                 } catch (_) {
@@ -2295,7 +2315,7 @@
                 }
             }
 
-            setWirelessControlStatus('Baseband Role 已下发，设备可能仍在重启，请稍后刷新状态。', 'pending');
+            setWirelessControlStatus('Role 已下发，设备可能仍在重启，请稍后刷新状态。', 'pending');
         }
 
         function deriveWirelessRuntimeNotices(payload) {
@@ -2982,7 +3002,7 @@
 
                 const role = Number(rfBasebandRoleSelect.value);
                 const targetRole = role === 0 ? 'AP' : 'DEV';
-                const confirmed = window.confirm(`Switch baseband role to ${targetRole}? The device will reboot immediately.`);
+                const confirmed = window.confirm(`Switch role to ${targetRole}? The device will reboot immediately.`);
                 if (!confirmed) {
                     return;
                 }
@@ -2992,8 +3012,8 @@
 
                 try {
                     await applyWirelessSetting('set_role', { role }, {
-                        pendingMessage: `Baseband Role 修改中，目标 ${targetRole} ...`,
-                        successMessage: 'Baseband Role 已下发，设备重启中，等待重新连接...',
+                        pendingMessage: `Role 修改中，目标 ${targetRole} ...`,
+                        successMessage: 'Role 已下发，设备重启中，等待重新连接...',
                     });
                     roleSelectionDirty = false;
                     await waitForRuntimeRecovery();

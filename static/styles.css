@@ -490,8 +490,8 @@ body {
 
 .console-context-select.sys-input {
     min-width: 0;
-    width: clamp(150px, 10vw, 208px);
-    max-width: clamp(150px, 10vw, 208px);
+    width: auto;
+    max-width: none;
     flex: none;
     padding: 7px 10px;
     border-radius: 10px;
@@ -511,8 +511,8 @@ body {
 
 .console-context-role-controls .console-context-select.sys-input {
     min-width: 0;
-    width: clamp(96px, 7vw, 120px);
-    max-width: clamp(96px, 7vw, 120px);
+    width: auto;
+    max-width: none;
 }
 
 .console-context-role-controls .signal-source-role-apply {
@@ -929,8 +929,15 @@ body {
     padding: 10px 12px 12px;
 }
 
+.chart-panel {
+    padding: 16px 18px 14px;
+    border: 1px solid #e4ebf2;
+    border-radius: 18px;
+    box-shadow: 0 12px 24px rgba(31, 42, 58, 0.04);
+}
+
 .chart-box {
-    padding: 0 12px 12px;
+    padding: 0;
 }
 
 .panel-box h2,
@@ -1008,7 +1015,11 @@ tbody td {
 }
 
 .wireless-status-panel {
-    padding: 6px 12px 12px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 6px 0 12px;
 }
 
 .wireless-runtime-notices {
@@ -1297,31 +1308,27 @@ tbody td {
     stroke: #3152cb;
 }
 
-.chart-panel {
+.chart-panel h2 {
     padding: 0;
 }
 
-.chart-panel h2 {
-    padding: 8px 10px 0;
-}
-
 .chart-panel .chart-panel-title {
-    margin: 8px 10px 0;
-    padding: 2px 0 2px 8px;
-    color: #1565c0;
+    margin: 0 0 12px;
+    padding: 0 0 10px;
+    color: #2d4258;
     font-size: 15px;
-    font-weight: bold;
-    background: linear-gradient(90deg, #e3f2fd 60%, #fff 100%);
-    border-left: 4px solid #1976d2;
-    border-bottom: 1.5px solid #e0e6ef;
+    font-weight: 700;
+    background: transparent;
+    border-left: none;
+    border-bottom: 1px solid #edf1f5;
     text-align: left;
     letter-spacing: 0.2px;
-    box-shadow: 0 1px 0 0 #e0e6ef;
-    border-radius: 3px 0 0 3px;
+    box-shadow: none;
+    border-radius: 0;
 }
 
 .chart-box {
-    padding: 2px 10px 14px;
+    padding: 0;
 }
 
 .plot-toolbar {
@@ -2488,20 +2495,38 @@ tbody td {
     }
 
     .console-topbar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
         padding: 10px 12px;
         border-radius: 14px;
     }
 
-    .console-topbar-left,
-    .console-topbar-center,
-    .console-topbar-right {
-        width: 100%;
+    .console-topbar-left {
+        grid-column: 1;
+        grid-row: 1;
+        width: auto;
         justify-content: flex-start;
         gap: 12px;
     }
 
     .console-topbar-center {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        width: 100%;
         min-width: 0;
+        justify-content: flex-start;
+        gap: 12px;
+    }
+
+    .console-topbar-right {
+        grid-column: 2;
+        grid-row: 1;
+        width: auto;
+        justify-content: flex-end;
+        justify-self: end;
+        align-self: center;
+        gap: 8px;
+        flex-wrap: nowrap;
     }
 
     .console-brand {
@@ -2528,26 +2553,32 @@ tbody td {
     }
 
     .console-context-card:not(:first-child) {
+        border-inline-start: none;
         border-top: 1px solid #d8e1ec;
         padding-top: 12px;
+        padding-inline-start: 0;
     }
 
     .console-context-card-role {
         grid-column: auto;
+        border-inline-start: none;
+        padding-inline-start: 0;
     }
 
     .console-context-role-controls {
         width: 100%;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: max-content auto;
         align-items: center;
+        justify-content: space-between;
         justify-items: start;
         flex-wrap: nowrap;
     }
 
     .console-context-role-controls .console-context-select.sys-input {
-        width: 100%;
-        max-width: none;
+        width: auto;
+        min-width: 110px;
+        max-width: calc(100% - 88px);
         text-align: left;
         text-align-last: left;
     }
@@ -2556,10 +2587,17 @@ tbody td {
         justify-self: end;
     }
 
-    .console-status-chip,
+    .console-status-chip {
+        width: auto;
+        justify-content: flex-end;
+        flex: none;
+    }
+
     .console-user-strip {
-        width: 100%;
-        justify-content: flex-start;
+        width: auto;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        min-width: 0;
     }
 
     .console-user-strip {
@@ -2762,14 +2800,16 @@ tbody td {
 
     .console-context-role-controls {
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: max-content auto;
         gap: 8px;
-        justify-items: stretch;
+        justify-content: space-between;
+        justify-items: start;
     }
 
     .console-context-role-controls .console-context-select.sys-input {
-        width: 100%;
-        max-width: none;
+        width: auto;
+        min-width: 110px;
+        max-width: calc(100% - 88px);
         text-align: left;
         text-align-last: left;
     }
