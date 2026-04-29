@@ -1,23 +1,24 @@
 /* Wireless 二级标签卡片风格 */
 .sub-tabs {
     display: flex;
-    gap: 0;
+    flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 18px;
     margin-top: 8px;
 }
 .sub-tab {
-    min-width: 70px;
-    padding: 6px 24px 6px 24px;
-    font-size: 15px;
-    font-weight: normal;
-    color: #888;
-    background: #f5f6fa;
-    border: 1px solid #c2c7ce;
-    border-bottom: none;
-    border-radius: 6px 6px 0 0;
-    margin-right: 2px;
+    min-width: 0;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #5f7185;
+    background: #f4f7fa;
+    border: 1px solid #dfe6ee;
+    border-bottom: 1px solid #dfe6ee;
+    border-radius: 999px;
+    margin-right: 0;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s, font-weight 0.15s;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
     box-sizing: border-box;
     position: relative;
     z-index: 0;
@@ -26,46 +27,47 @@
     margin-right: 0;
 }
 .sub-tab.active {
-    background: #fff;
-    color: #222;
-    font-weight: bold;
-    border: 1px solid #c2c7ce;
-    border-bottom: 1px solid #fff;
+    background: linear-gradient(180deg, #f8fbf1 0%, #ecf7d8 100%);
+    color: #314b1d;
+    font-weight: 700;
+    border: 1px solid #d5e7b8;
+    box-shadow: 0 10px 20px rgba(128, 166, 51, 0.08);
     z-index: 2;
 }
 .panel-wireless .panel-body {
-    border-top: 1px solid #c2c7ce;
-    border-radius: 0 0 8px 8px;
+    border: 1px solid #cfd7e2;
+    border-radius: 18px;
     background: #fff;
-    box-shadow: 0 2px 8px 0 rgba(44,62,80,0.06);
-    margin-top: -1px;
+    box-shadow: 0 16px 28px rgba(29, 52, 80, 0.08);
+    margin-top: 0;
 }
 .panel-system .panel-body.sys-bg {
-    border-radius: 0 8px 8px 8px;
-    border-top: 1px solid #c2c7ce;
-    margin-top: -1px;
+    border-radius: 18px;
+    border: 1px solid #cfd7e2;
+    margin-top: 0;
 }
 /* System 二级导航栏样式 */
 .sys-subnav {
     display: flex;
-    gap: 0;
+    flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 18px;
     margin-top: 8px;
     padding: 0;
 }
 .sys-subnav-item {
-    min-width: 80px;
-    padding: 6px 24px 6px 24px;
-    font-size: 15px;
-    font-weight: normal;
-    color: #888;
-    background: #f5f6fa;
-    border: 1px solid #c2c7ce;
-    border-radius: 6px 6px 0 0;
-    margin-right: 1px;
+    min-width: 0;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #5f7185;
+    background: #f4f7fa;
+    border: 1px solid #dfe6ee;
+    border-radius: 999px;
+    margin-right: 0;
     cursor: pointer;
-    border-bottom: none;
-    transition: background 0.15s, color 0.15s, font-weight 0.15s;
+    border-bottom: 1px solid #dfe6ee;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
     user-select: none;
     position: relative;
     z-index: 0;
@@ -74,18 +76,18 @@
     margin-right: 0;
 }
 .sys-subnav-item.active {
-    background: #fff;
-    color: #222;
-    font-weight: bold;
-    border: 1px solid #c2c7ce;
-    border-bottom: 1px solid #fff;
+    background: linear-gradient(180deg, #f8fbf1 0%, #ecf7d8 100%);
+    color: #314b1d;
+    font-weight: 700;
+    border: 1px solid #d5e7b8;
+    box-shadow: 0 10px 20px rgba(128, 166, 51, 0.08);
     z-index: 2;
 }
 /* System 信息背景和分隔线样式 */
 .sys-bg {
-    background: #f4f7fb;
-    border-radius: 8px;
-    box-shadow: 0 2px 12px 0 rgba(44, 62, 80, 0.07);
+    background: linear-gradient(180deg, #f9fbfd 0%, #f4f7fb 100%);
+    border-radius: 24px;
+    box-shadow: none;
     padding: 24px 24px 18px 24px;
     margin-top: 18px;
     font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
@@ -94,10 +96,11 @@
     margin-bottom: 0;
     padding-bottom: 0;
     background: #fff;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px 0 rgba(44, 62, 80, 0.04);
+    border: 1px solid #e4ebf2;
+    border-radius: 18px;
+    box-shadow: 0 12px 24px rgba(31, 42, 58, 0.04);
     margin-top: 18px;
-    padding: 12px 18px 10px 18px;
+    padding: 16px 18px 14px 18px;
 }
 .sys-divider {
     border: none;
@@ -129,17 +132,17 @@
 }
 .sys-section-title {
     font-size: 15px;
-    font-weight: bold;
-    color: #1565c0;
-    background: linear-gradient(90deg, #e3f2fd 60%, #fff 100%);
-    margin: 0 0 8px 0;
-    padding: 2px 0 2px 8px;
-    border-left: 4px solid #1976d2;
-    border-bottom: 1.5px solid #e0e6ef;
+    font-weight: 700;
+    color: #2d4258;
+    background: transparent;
+    margin: 0 0 12px 0;
+    padding: 0 0 10px;
+    border-left: none;
+    border-bottom: 1px solid #edf1f5;
     text-align: left;
     letter-spacing: 0.2px;
-    box-shadow: 0 1px 0 0 #e0e6ef;
-    border-radius: 3px 0 0 3px;
+    box-shadow: none;
+    border-radius: 0;
 }
 /* System 实时刷新提示样式 */
 .sys-refresh-tip {
@@ -318,16 +321,19 @@
 body {
     margin: 0;
     min-height: 100vh;
-    padding: 18px;
-    background: var(--page-bg);
-    color: #1c1c1c;
-    font-family: Tahoma, Arial, sans-serif;
+    padding: 16px;
+    background:
+        radial-gradient(circle at top left, rgba(176, 214, 77, 0.14), transparent 18%),
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.72), transparent 24%),
+        linear-gradient(180deg, #f4f5f7 0%, #edf1f5 100%);
+    color: #233241;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
     font-size: 12px;
     line-height: 1.35;
 }
 
 .console-frame {
-    width: min(100%, 780px);
+    width: min(100%, 1680px);
     margin: 0 auto;
     background: transparent;
     border: none;
@@ -340,6 +346,366 @@ body {
     border: none;
 }
 
+.sidebar-toggle-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.console-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.console-topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px 18px;
+    padding: 10px 16px;
+    border: 1px solid #dbe3ec;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 251, 254, 0.96) 100%);
+    box-shadow: 0 18px 38px rgba(31, 42, 58, 0.06);
+}
+
+.console-topbar-left,
+.console-topbar-center,
+.console-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.console-topbar-center {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+}
+
+.console-topbar-right {
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    justify-self: end;
+}
+
+.console-menu-toggle {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 10px;
+    border-radius: 11px;
+    background: linear-gradient(180deg, #2f65d2 0%, #214da8 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+    transition: gap 0.2s ease, padding 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.console-menu-toggle span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 999px;
+    background: #ffffff;
+    transition: width 0.2s ease, height 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+
+#sidebar-collapsed:checked ~ .console-shell .console-menu-toggle {
+    flex-direction: row;
+    gap: 4px;
+    padding: 0 12px;
+    background: linear-gradient(180deg, #35414d 0%, #242d36 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+#sidebar-collapsed:checked ~ .console-shell .console-menu-toggle span {
+    width: 3px;
+    height: 16px;
+}
+
+.console-brand {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.console-brand-logo {
+    width: 112px;
+    height: 56px;
+    display: block;
+    object-fit: contain;
+}
+
+.console-context-bar {
+    width: auto;
+    max-width: 100%;
+    display: grid;
+    grid-template-columns: max-content max-content max-content;
+    gap: 0 16px;
+    align-items: stretch;
+    justify-content: end;
+    justify-self: end;
+    padding: 12px 14px 12px 18px;
+    border: 1px solid #e1e8f0;
+    border-radius: 20px;
+    background: linear-gradient(180deg, #fafbfd 0%, #f4f7fb 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.console-context-card {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.console-context-card:not(:first-child) {
+    border-inline-start: 1px solid #d8e1ec;
+    padding-inline-start: 18px;
+}
+
+.console-context-card-role {
+    min-width: 0;
+}
+
+.console-context-label {
+    color: #50657b;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.console-context-select.sys-input {
+    min-width: 0;
+    width: clamp(150px, 10vw, 208px);
+    max-width: clamp(150px, 10vw, 208px);
+    flex: none;
+    padding: 7px 10px;
+    border-radius: 10px;
+    border-color: #cdd8e5;
+    background: #ffffff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.console-context-role-controls {
+    display: flex;
+    align-items: center;
+    flex: none;
+    flex-wrap: nowrap;
+    min-width: 0;
+    gap: 10px;
+}
+
+.console-context-role-controls .console-context-select.sys-input {
+    min-width: 0;
+    width: clamp(96px, 7vw, 120px);
+    max-width: clamp(96px, 7vw, 120px);
+}
+
+.console-context-role-controls .signal-source-role-apply {
+    flex: none;
+}
+
+@media (max-width: 1480px) {
+    .console-topbar-center {
+        justify-content: stretch;
+    }
+
+    .console-context-bar {
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 18px;
+        justify-content: stretch;
+        justify-self: stretch;
+    }
+
+    .console-context-card {
+        grid-template-columns: auto minmax(0, 1fr);
+        border-inline-start: none;
+        padding-inline-start: 0;
+    }
+
+    .console-context-select.sys-input {
+        width: 100%;
+        max-width: 100%;
+        flex: 1 1 auto;
+    }
+
+    .console-context-role-controls {
+        flex: 1 1 auto;
+    }
+
+    .console-context-role-controls .console-context-select.sys-input {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .console-context-card:nth-child(2n) {
+        border-inline-start: 1px solid #d8e1ec;
+        padding-inline-start: 18px;
+    }
+
+    .console-context-card-role {
+        grid-column: 1 / -1;
+        border-top: 1px solid #d8e1ec;
+        padding-top: 14px;
+    }
+}
+
+@media (max-width: 1180px) {
+    .console-context-bar {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .console-context-card,
+    .console-context-card:nth-child(2n) {
+        border-inline-start: none;
+        padding-inline-start: 0;
+    }
+
+    .console-context-card:not(:first-child) {
+        border-top: 1px solid #d8e1ec;
+        padding-top: 12px;
+    }
+
+    .console-context-card-role {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 1360px) {
+    .console-topbar {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .console-topbar-center {
+        grid-column: 1 / -1;
+        order: 3;
+    }
+
+    .console-topbar-right {
+        order: 2;
+        align-self: center;
+    }
+
+    .console-user-strip {
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 980px) {
+    .console-topbar {
+        grid-template-columns: 1fr;
+    }
+
+    .console-topbar-left,
+    .console-topbar-center,
+    .console-topbar-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .console-topbar-right {
+        justify-self: stretch;
+        gap: 12px;
+    }
+
+    .console-status-chip {
+        flex: none;
+    }
+
+    .console-user-strip {
+        justify-content: flex-start;
+    }
+
+    .console-divider {
+        display: none;
+    }
+
+    .wireless-status-table-scroll .wireless-overview-table {
+        min-width: 680px;
+    }
+
+    .wireless-status-table-scroll-connection .connection-table {
+        min-width: 860px;
+    }
+}
+
+.console-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.console-status-label {
+    color: #34495f;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.console-user-strip {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: #596e83;
+    font-size: 13px;
+}
+
+.console-product-name,
+.console-user-name {
+    font-weight: 600;
+}
+
+.console-product-name {
+    color: #6a7d90;
+}
+
+.console-user-action {
+    color: #7dad2b;
+    font-weight: 700;
+}
+
+.console-divider {
+    width: 1px;
+    height: 16px;
+    background: #d4dde6;
+}
+
+.console-layout {
+    display: grid;
+    grid-template-columns: fit-content(208px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+.sidebar-drawer-backdrop {
+    display: none;
+}
+
+.console-content {
+    min-width: 0;
+}
+
 .tab-input {
     position: absolute;
     opacity: 0;
@@ -348,65 +714,129 @@ body {
 
 .top-tabs {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0;
-    padding: 0;
-    background: transparent;
-    border-bottom: none;
+    flex-direction: column;
+    gap: 10px;
+    width: min(100%, max-content);
+    padding: 16px 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+    border: 1px solid #dbe3ec;
+    border-radius: 24px;
+    box-shadow: 0 18px 36px rgba(31, 42, 58, 0.06);
+    position: sticky;
+    top: 18px;
+    justify-self: start;
 }
 
 .tab-label {
-    min-width: 90px;
-    padding: 6px 20px 6px 20px;
-    background: #1a3a52;
-    color: #87ceeb;
-    font-size: 15px;
-    font-weight: bold;
+    width: 100%;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    background: #f5f7fa;
+    color: #495d74;
+    font-size: 14px;
+    font-weight: 600;
     line-height: 1.4;
     cursor: pointer;
     user-select: none;
-    border: 1px solid #0d1f2d;
-    border-radius: 6px 6px 0 0;
-    margin-right: 1px;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    margin-right: 0;
     position: relative;
     z-index: 0;
-    border-bottom: none;
-    transition: background 0.2s, color 0.2s;
+    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     box-sizing: border-box;
 }
 
-.tab-label:last-child {
-    margin-right: 0;
+.tab-label:hover {
+    background: #ffffff;
+    border-color: #d8e1ea;
+    box-shadow: 0 10px 18px rgba(37, 51, 70, 0.05);
+}
+
+.tab-icon {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    border-radius: 9px;
+    background: #edf2f6;
+    color: #597087;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+}
+
+.tab-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.tab-text {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .content-panel {
     display: none;
+    min-width: 0;
 }
 
-#tab-system:checked ~ .top-tabs label[for="tab-system"],
-#tab-network:checked ~ .top-tabs label[for="tab-network"],
-#tab-wireless:checked ~ .top-tabs label[for="tab-wireless"],
-#tab-firewall:checked ~ .top-tabs label[for="tab-firewall"],
-#tab-serial:checked ~ .top-tabs label[for="tab-serial"],
-#tab-diag:checked ~ .top-tabs label[for="tab-diag"],
-#tab-admin:checked ~ .top-tabs label[for="tab-admin"] {
-    background: #fff;
-    color: #222;
-    border: 1px solid #c2c7ce;
-    border-bottom: 1px solid #fff;
-    font-weight: bold;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+#tab-system:checked ~ .console-shell .top-tabs label[for="tab-system"],
+#tab-network:checked ~ .console-shell .top-tabs label[for="tab-network"],
+#tab-wireless:checked ~ .console-shell .top-tabs label[for="tab-wireless"],
+#tab-firewall:checked ~ .console-shell .top-tabs label[for="tab-firewall"],
+#tab-serial:checked ~ .console-shell .top-tabs label[for="tab-serial"],
+#tab-diag:checked ~ .console-shell .top-tabs label[for="tab-diag"],
+#tab-admin:checked ~ .console-shell .top-tabs label[for="tab-admin"] {
+    background: linear-gradient(180deg, #f8fbf1 0%, #ebf6d7 100%);
+    color: #314b1d;
+    border: 1px solid #d5e7b8;
+    font-weight: 700;
+    box-shadow: 0 12px 24px rgba(128, 166, 51, 0.12);
     z-index: 2;
+    transform: translateY(-1px);
 }
 
-#tab-system:checked ~ .panel-system,
-#tab-network:checked ~ .panel-network,
-#tab-wireless:checked ~ .panel-wireless,
-#tab-firewall:checked ~ .panel-firewall,
-#tab-serial:checked ~ .panel-serial,
-#tab-diag:checked ~ .panel-diag,
-#tab-admin:checked ~ .panel-admin {
+#tab-system:checked ~ .console-shell .top-tabs label[for="tab-system"] .tab-icon,
+#tab-network:checked ~ .console-shell .top-tabs label[for="tab-network"] .tab-icon,
+#tab-wireless:checked ~ .console-shell .top-tabs label[for="tab-wireless"] .tab-icon,
+#tab-firewall:checked ~ .console-shell .top-tabs label[for="tab-firewall"] .tab-icon,
+#tab-serial:checked ~ .console-shell .top-tabs label[for="tab-serial"] .tab-icon,
+#tab-diag:checked ~ .console-shell .top-tabs label[for="tab-diag"] .tab-icon,
+#tab-admin:checked ~ .console-shell .top-tabs label[for="tab-admin"] .tab-icon {
+    background: #95c843;
+    color: #ffffff;
+}
+
+#tab-system:checked ~ .console-shell .panel-system,
+#tab-network:checked ~ .console-shell .panel-network,
+#tab-wireless:checked ~ .console-shell .panel-wireless,
+#tab-firewall:checked ~ .console-shell .panel-firewall,
+#tab-serial:checked ~ .console-shell .panel-serial,
+#tab-diag:checked ~ .console-shell .panel-diag,
+#tab-admin:checked ~ .console-shell .panel-admin {
     display: block;
+}
+
+#sidebar-collapsed:checked ~ .console-shell .console-layout {
+    grid-template-columns: 1fr;
+}
+
+#sidebar-collapsed:checked ~ .console-shell .top-tabs {
+    display: none;
 }
 
 .section-strip {
@@ -414,12 +844,11 @@ body {
 }
 
 .panel-body {
-    padding: 10px 12px 14px;
-    border: 1px solid #c2c7ce;
-    border-top: none;
-    border-radius: 0 0 6px 6px;
-    background: #fff;
-    box-shadow: 0 2px 8px 0 rgba(44,62,80,0.06);
+    padding: 18px 20px 22px;
+    border: 1px solid #dde5ee;
+    border-radius: 24px;
+    background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+    box-shadow: 0 18px 34px rgba(31, 42, 58, 0.06);
 }
 
 .placeholder-panel {
@@ -434,29 +863,33 @@ body {
 
 .sub-tabs {
     display: flex;
-    gap: 2px;
+    flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 12px;
 }
 
 .sub-tab {
-    min-width: 52px;
-    padding: 3px 9px;
-    border: 1px solid var(--line-strong);
-    border-bottom: 0;
-    background: #f4f5f5;
-    color: #7a8794;
+    min-width: 0;
+    padding: 9px 16px;
+    border: 1px solid #dfe6ee;
+    border-bottom: 1px solid #dfe6ee;
+    background: #f4f7fa;
+    color: #5f7185;
+    border-radius: 999px;
     font-weight: 700;
 }
 
 .sub-tab.active {
-    background: #ffffff;
-    color: var(--title);
+    background: linear-gradient(180deg, #f8fbf1 0%, #ecf7d8 100%);
+    color: #314b1d;
+    border-color: #d5e7b8;
 }
 
 .wireless-tab-row {
     display: flex;
-    justify-content: space-between;
-    gap: 12px;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
     align-items: center;
     margin-bottom: 10px;
 }
@@ -551,6 +984,17 @@ tbody td {
     overflow-x: visible;
 }
 
+.wireless-status-table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.wireless-status-table-scroll .wireless-status-table {
+    margin: 0;
+}
+
 .connection-table {
     width: 100%;
     min-width: 0;
@@ -610,10 +1054,6 @@ tbody td {
 .wireless-status-section {
     margin-top: 8px;
     padding: 6px 12px 8px;
-}
-
-.wireless-status-panel > .rf-config-group-basic {
-    margin-top: 0;
 }
 
 .wireless-status-section:first-child {
@@ -1656,43 +2096,6 @@ tbody td {
     cursor: not-allowed;
 }
 
-.rf-toggle-display {
-    display: inline-flex;
-    border: 1px solid #c9d0d7;
-    border-radius: 3px;
-    overflow: hidden;
-    background: #f4f5ef;
-}
-
-.rf-toggle-option {
-    min-width: 48px;
-    padding: 2px 10px;
-    text-align: center;
-    color: #7a8794;
-    border-right: 1px solid #c9d0d7;
-    background: #f7f8f2;
-    font-weight: 700;
-}
-
-.rf-toggle-option:last-child {
-    border-right: none;
-}
-
-.rf-toggle-option.active {
-    background: #ffffff;
-    color: #17324d;
-}
-
-.rf-toggle-option-on.active {
-    background: #e6f7ec;
-    color: #1f7a3f;
-}
-
-.rf-toggle-option-off.active {
-    background: #fdeaea;
-    color: #b42318;
-}
-
 .rf-config-row {
     display: grid;
     grid-template-columns: 190px minmax(0, 1fr);
@@ -1773,11 +2176,6 @@ tbody td {
     border-bottom: none;
 }
 
-.rf-config-group-basic .rf-summary-table td {
-    padding-left: 6px;
-    padding-right: 6px;
-}
-
 .rf-summary-section .sys-section-title {
     margin-bottom: 2px;
     border-bottom: none;
@@ -1792,18 +2190,6 @@ tbody td {
 }
 
 .rf-summary-table td:nth-child(2) {
-    color: #223;
-    font-weight: 400;
-}
-
-.rf-config-group-basic .rf-summary-table td:nth-child(3) {
-    width: 118px;
-    color: #223;
-    font-size: 15px;
-    font-weight: 400;
-}
-
-.rf-config-group-basic .rf-summary-table td:nth-child(4) {
     color: #223;
     font-weight: 400;
 }
@@ -1966,12 +2352,6 @@ tbody td {
     outline-offset: 1px;
 }
 
-.signal-source-role-hint {
-    color: #6a7687;
-    font-size: 12px;
-    line-height: 1.35;
-}
-
 .rf-config-label {
     color: #17324d;
     font-size: 13px;
@@ -2103,13 +2483,226 @@ tbody td {
         width: 100%;
     }
 
+    .console-shell {
+        gap: 12px;
+    }
+
+    .console-topbar {
+        padding: 10px 12px;
+        border-radius: 14px;
+    }
+
+    .console-topbar-left,
+    .console-topbar-center,
+    .console-topbar-right {
+        width: 100%;
+        justify-content: flex-start;
+        gap: 12px;
+    }
+
+    .console-topbar-center {
+        min-width: 0;
+    }
+
+    .console-brand {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .console-brand-logo {
+        width: 112px;
+    }
+
+    .console-context-bar {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .console-context-card,
+    .console-context-card:nth-child(2n) {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        border-inline-start: none;
+        padding-inline-start: 0;
+    }
+
+    .console-context-card:not(:first-child) {
+        border-top: 1px solid #d8e1ec;
+        padding-top: 12px;
+    }
+
+    .console-context-card-role {
+        grid-column: auto;
+    }
+
+    .console-context-role-controls {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        justify-items: start;
+        flex-wrap: nowrap;
+    }
+
+    .console-context-role-controls .console-context-select.sys-input {
+        width: 100%;
+        max-width: none;
+        text-align: left;
+        text-align-last: left;
+    }
+
+    .console-context-role-controls .signal-source-role-apply {
+        justify-self: end;
+    }
+
+    .console-status-chip,
+    .console-user-strip {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .console-user-strip {
+        gap: 8px;
+        font-size: 12px;
+    }
+
+    .console-layout {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
     .top-tabs {
-        gap: 1px;
+        position: static;
+        flex-direction: row;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 10px;
+        border-radius: 14px;
     }
 
     .tab-label {
+        width: auto;
+        min-width: max-content;
         padding-left: 8px;
         padding-right: 8px;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .console-layout {
+        grid-template-columns: 1fr;
+    }
+.sidebar-drawer-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(33, 43, 54, 0.28);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 34;
+    }
+
+    .top-tabs {
+        position: fixed;
+        top: 88px;
+        left: 12px;
+        width: min(280px, calc(100vw - 24px));
+        max-height: calc(100vh - 110px);
+        overflow-y: auto;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px;
+        border-radius: 20px;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-10px) scale(0.98);
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+        z-index: 40;
+    }
+
+    .tab-label {
+        width: 100%;
+        min-width: 0;
+    }
+
+    #sidebar-collapsed:not(:checked) ~ .console-shell .top-tabs {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .sidebar-drawer-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .top-tabs {
+        display: flex;
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0) scale(1);
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .tab-label {
+        justify-content: flex-start;
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .tab-text {
+        display: inline;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .console-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .console-menu-toggle {
+        position: relative;
+        z-index: 41;
+    }
+
+    #sidebar-collapsed:not(:checked) ~ .console-shell .console-menu-toggle {
+        flex-direction: row;
+        gap: 4px;
+        padding: 0 12px;
+        background: linear-gradient(180deg, #35414d 0%, #242d36 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    #sidebar-collapsed:not(:checked) ~ .console-shell .console-menu-toggle span {
+        width: 3px;
+        height: 16px;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .console-menu-toggle {
+        flex-direction: column;
+        gap: 5px;
+        padding: 0 11px;
+        background: linear-gradient(180deg, #2f65d2 0%, #214da8 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .console-menu-toggle span {
+        width: 18px;
+        height: 2px;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .top-tabs {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .tab-label {
+        justify-content: flex-start;
+    }
+
+    #sidebar-collapsed:checked ~ .console-shell .tab-text {
+        display: inline;
     }
 
     .wireless-tab-row {
@@ -2118,6 +2711,18 @@ tbody td {
 
     .panel-body {
         overflow-x: auto;
+    }
+
+    .wireless-status-table-scroll {
+        padding-bottom: 2px;
+    }
+
+    .wireless-status-table-scroll .wireless-overview-table {
+        min-width: 640px;
+    }
+
+    .wireless-status-table-scroll-connection .connection-table {
+        min-width: 860px;
     }
 
     .chart-legend {
@@ -2150,55 +2755,126 @@ tbody td {
         gap: 8px;
     }
 
-    .rf-config-group-card {
-        padding: 10px;
+    .console-context-card-role {
+        border-inline-start: none;
+        padding-inline-start: 0;
     }
 
-    .rf-summary-table td:first-child,
-    .rf-summary-table td:last-child {
-        display: block;
-        width: auto;
+    .console-context-role-controls {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        justify-items: stretch;
     }
 
-    .rf-config-group-basic .rf-summary-table td {
-        display: block;
-        width: auto;
+    .console-context-role-controls .console-context-select.sys-input {
+        width: 100%;
+        max-width: none;
+        text-align: left;
+        text-align-last: left;
+    }
+
+    .console-context-role-controls .signal-source-role-apply {
+        justify-self: end;
+    }
+
+    .top-tabs {
+        top: 82px;
+        left: 8px;
+        width: min(268px, calc(100vw - 16px));
+        max-height: calc(100vh - 96px);
+        gap: 8px;
+        padding: 12px;
+        border-radius: 18px;
+    }
+
+    .tab-label {
+        width: 100%;
+        min-width: 0;
+        padding-left: 12px;
+        padding-right: 12px;
     }
 
     .rf-summary-pair {
         grid-template-columns: 1fr;
-        gap: 4px;
+        gap: 12px;
+    }
+
+    .rf-summary-section {
+        padding-left: 10px;
+        padding-right: 10px;
     }
 
     .rf-pair-row {
-        grid-template-columns: 52px 14px minmax(0, 1fr) 60px;
-        gap: 4px;
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .rf-summary-table {
+        min-width: 0;
+        table-layout: auto;
+    }
+
+    .rf-summary-table tbody,
+    .rf-summary-table tr,
+    .rf-summary-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .rf-summary-table tr {
+        padding: 0 0 12px;
+        border-bottom: none;
+    }
+
+    .rf-summary-table tr:last-child {
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .rf-summary-table td {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .rf-summary-table td:first-child {
+        padding-bottom: 4px;
+        color: #526476;
+        font-size: 14px;
+        font-weight: 400;
+    }
+
+    .rf-summary-table td:last-child {
+        padding-top: 0;
     }
 
     .rf-summary-table .rf-input-wide {
         width: 100%;
-        min-width: 140px;
+        min-width: 0;
     }
 
+    .rf-summary-table .sys-input,
+    .rf-summary-table select.sys-input,
     .rf-input-mini,
     .rf-input-short,
     .rf-input-medium,
     .rf-input-wide {
-        width: auto;
-        min-width: 140px;
-        flex: 1 1 140px;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        flex: none;
     }
 
     .rf-boolean-group {
-        gap: 14px;
+        gap: 12px;
         flex-wrap: wrap;
     }
 
     .rf-band-group {
-        gap: 14px;
+        gap: 12px;
     }
 
     table {
-        min-width: 720px;
+        min-width: 0;
     }
 }
