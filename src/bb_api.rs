@@ -1009,7 +1009,22 @@ impl BasebandApi {
     }
 
     pub fn set_pair_mode(&mut self, start: bool, slot_bmp: u8) -> Result<(), String> {
-        self.with_device_operation("set_pair_mode", |handle| ffi::set_pair_mode(handle, start, slot_bmp))
+        self.set_pair_mode_with_blacklist(start, slot_bmp, &[])
+    }
+
+    pub fn set_pair_mode_with_blacklist(
+        &mut self,
+        start: bool,
+        slot_bmp: u8,
+        black_list: &[String],
+    ) -> Result<(), String> {
+        self.with_device_operation("set_pair_mode", |handle| {
+            ffi::set_pair_mode(handle, start, slot_bmp, black_list)
+        })
+    }
+
+    pub fn get_pair_candidates(&mut self, slot: u8) -> Result<Vec<String>, String> {
+        self.with_device_operation("get_pair_candidates", |handle| ffi::get_pair_candidates(handle, slot))
     }
 
     pub fn set_channel_mode(&mut self, auto_mode: bool) -> Result<(), String> {
@@ -1230,6 +1245,21 @@ impl BasebandManager {
     pub fn set_pair_mode(&self, start: bool, slot_bmp: u8) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.set_pair_mode(start, slot_bmp)
+    }
+
+    pub fn set_pair_mode_with_blacklist(
+        &self,
+        start: bool,
+        slot_bmp: u8,
+        black_list: &[String],
+    ) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_pair_mode_with_blacklist(start, slot_bmp, black_list)
+    }
+
+    pub fn get_pair_candidates(&self, slot: u8) -> Result<Vec<String>, String> {
+        let mut api = self.api.lock().unwrap();
+        api.get_pair_candidates(slot)
     }
 
     pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {

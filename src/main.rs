@@ -169,6 +169,7 @@ struct WirelessSettingRequest {
     auto_mode: Option<bool>,
     device_mac: Option<String>,
     pair_start: Option<bool>,
+    pair_target_mac: Option<String>,
     slot: Option<u8>,
     user: Option<u8>,
     target_band: Option<u8>,
@@ -226,6 +227,7 @@ struct ConnectionStatus {
     link_state: String,
     pair_state: String,
     pairing_active: bool,
+    candidate_macs: Vec<String>,
     mac_address: String,
     tx_mod: String,
     rx_mod: String,
@@ -559,6 +561,60 @@ async fn apply_wireless_setting(
                 if slot_bmp == 0 {
                     return Err(format!("Unsupported slot '{}'; expected 0-7", slot));
                 }
+
+                if !pair_start {
+                    return baseband.set_pair_mode(pair_start, slot_bmp);
+                }
+
+                let requested_target = request
+                    .pair_target_mac
+                    .as_deref()
+                    .map(normalize_device_mac)
+                    .filter(|mac| !mac.is_empty());
+
+                if let Some(target_mac) = requested_target {
+                    let candidates = baseband.get_pair_candidates(slot)?;
+                    let normalized_candidates = candidates
+                        .iter()
+                        .map(|mac| (normalize_device_mac(mac), mac.clone()))
+                        .filter(|(normalized, _)| !normalized.is_empty())
+                        .collect::<Vec<_>>();
+
+                    if normalized_candidates.is_empty() {
+                        return Err(format!("No candidate DEV detected for slot {}", slot));
+                    }
+
+                    if !normalized_candidates.iter().any(|(normalized, _)| *normalized == target_mac) {
+                        return Err(format!(
+                            "Target DEV '{}' is not in the current candidate list for slot {}",
+                            target_mac,
+                            slot
+                        ));
+                    }
+
+                    let black_list = normalized_candidates
+                        .into_iter()
+                        .filter_map(|(normalized, original)| {
+                            if normalized == target_mac {
+                                None
+                            } else {
+                                Some(original)
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    if black_list.len() > ffi::BB_BLACK_LIST_SIZE {
+                        return Err(format!(
+                            "Targeted pair for slot {} would require blacklisting {} DEV devices, exceeding SDK limit {}",
+                            slot,
+                            black_list.len(),
+                            ffi::BB_BLACK_LIST_SIZE
+                        ));
+                    }
+
+                    return baseband.set_pair_mode_with_blacklist(pair_start, slot_bmp, &black_list);
+                }
+
                 baseband.set_pair_mode(pair_start, slot_bmp)
             }),
         "set_channel_mode" => request
@@ -1039,6 +1095,7 @@ fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> Wireless
                 "Stable".to_string()
             },
             pairing_active: sequence % 5 == 0,
+            candidate_macs: vec!["00:0F:92:FA".to_string(), "00:0F:92:FB".to_string()],
             mac_address: "00:0F:92:FA:37:C5".to_string(),
             tx_mod: if sequence % 2 == 0 {
                 "QPSK FEC 1/2".to_string()
@@ -1163,6 +1220,7 @@ fn build_hardware_snapshot(
                 link_state: format_link_state(link.state).to_string(),
                 pair_state: format_pair_state(link),
                 pairing_active: link.pair_state,
+                candidate_macs: link.candidate_macs.clone(),
                 mac_address: link
                     .peer_mac_hex
                     .clone()

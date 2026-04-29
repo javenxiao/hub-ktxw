@@ -72,6 +72,7 @@ pub struct BbLinkStatusSummary {
     pub state: u8,
     pub rx_mcs: Option<u8>,
     pub pair_state: bool,
+    pub candidate_macs: Vec<String>,
     pub snr_db: Option<i32>,
     pub ldpc_err: Option<i32>,
     pub ldpc_num: Option<i32>,
@@ -345,6 +346,28 @@ impl Default for bb_get_pair_out_t {
             slot_bmp: 0,
             peer_mac: [bb_mac_t::default(); BB_SLOT_MAX],
             quality: [bb_quality_t::default(); BB_SLOT_MAX],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_get_candidates_in_t {
+    pub slot: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_get_candidates_out_t {
+    pub mac_num: u8,
+    pub mac_tab: [bb_mac_t; BB_CONFIG_MAX_SLOT_CANDIDATE],
+}
+
+impl Default for bb_get_candidates_out_t {
+    fn default() -> Self {
+        Self {
+            mac_num: 0,
+            mac_tab: [bb_mac_t::default(); BB_CONFIG_MAX_SLOT_CANDIDATE],
         }
     }
 }
@@ -845,6 +868,7 @@ pub const BB_REG_PAGE_SIZE: usize = 256;
 pub const BB_CFG_PAGE_SIZE: usize = 1024;
 pub const BB_PLOT_POINT_MAX: usize = 10;
 pub const BB_BLACK_LIST_SIZE: usize = 3;
+pub const BB_CONFIG_MAX_SLOT_CANDIDATE: usize = 5;
 pub const BB_RC_FREQ_NUM: usize = 4;
 pub const BB_SOCK_INFO_NUM: usize = 8;
 pub const BB_REMOTE_CMD_WAIT_MAX: usize = 8;
@@ -1571,12 +1595,21 @@ pub fn get_status(
                     .iter()
                     .enumerate()
                     .filter_map(|(slot, link)| {
+                        let slot_mask = 1_u8.checked_shl(slot as u32).unwrap_or(0);
+                        let slot_declared = (output.cfg_sbmp & slot_mask) != 0 || (output.rt_sbmp & slot_mask) != 0;
+                        let candidate_macs = if slot_declared {
+                            get_pair_candidates(handle, slot as u8).unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        };
+
                         summarize_link_status(
                             slot,
                             link,
                             output.cfg_sbmp,
                             output.rt_sbmp,
                             pair_slots.get(slot).cloned().flatten(),
+                            candidate_macs,
                             peer_qualities.get(slot).cloned().flatten(),
                             effective_user_index
                                 .and_then(|user_index| {
@@ -1893,12 +1926,30 @@ pub fn latest_plot_snapshot() -> Option<BbPlotSnapshotSummary> {
     plot_cache().lock().ok().and_then(|cache| cache.snapshot())
 }
 
-pub fn set_pair_mode(handle: *mut bb_dev_handle_t, start: bool, slot_bmp: u8) -> Result<(), String> {
+pub fn set_pair_mode(
+    handle: *mut bb_dev_handle_t,
+    start: bool,
+    slot_bmp: u8,
+    black_list: &[String],
+) -> Result<(), String> {
     let sdk = sdk()?;
+    if black_list.len() > BB_BLACK_LIST_SIZE {
+        return Err(format!(
+            "Pair blacklist supports at most {} MACs, received {}",
+            BB_BLACK_LIST_SIZE,
+            black_list.len()
+        ));
+    }
+
+    let mut black_list_input = [bb_mac_t::default(); BB_BLACK_LIST_SIZE];
+    for (index, mac) in black_list.iter().enumerate() {
+        black_list_input[index] = parse_bb_mac(mac)?;
+    }
+
     let input = bb_set_pair_mode_t {
         start: u8::from(start),
         slot_bmp,
-        black_list: [bb_mac_t::default(); BB_BLACK_LIST_SIZE],
+        black_list: black_list_input,
     };
 
     unsafe {
@@ -1910,6 +1961,33 @@ pub fn set_pair_mode(handle: *mut bb_dev_handle_t, start: bool, slot_bmp: u8) ->
         ) {
             0 => Ok(()),
             e => Err(format!("bb_ioctl(BB_SET_PAIR_MODE) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn get_pair_candidates(handle: *mut bb_dev_handle_t, slot: u8) -> Result<Vec<String>, String> {
+    let sdk = sdk()?;
+    let input = bb_get_candidates_in_t { slot };
+    let mut output = bb_get_candidates_out_t::default();
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_GET_CANDIDATES as c_uint,
+            &input as *const bb_get_candidates_in_t as *const c_void,
+            &mut output as *mut bb_get_candidates_out_t as *mut c_void,
+        ) {
+            0 => {
+                let candidate_count = usize::from(output.mac_num).min(BB_CONFIG_MAX_SLOT_CANDIDATE);
+                Ok(output
+                    .mac_tab
+                    .iter()
+                    .take(candidate_count)
+                    .filter(|mac| !is_zero_mac(&mac.addr))
+                    .map(format_bb_mac)
+                    .collect())
+            }
+            e => Err(format!("bb_ioctl(BB_GET_CANDIDATES) failed with code: {}", e)),
         }
     }
 }
@@ -2185,6 +2263,25 @@ fn format_bb_mac(mac: &bb_mac_t) -> String {
         .map(|value| format!("{:02X}", value))
         .collect::<Vec<_>>()
         .join(":")
+}
+
+fn parse_bb_mac(value: &str) -> Result<bb_mac_t, String> {
+    let normalized = normalize_mac_string(value);
+    if normalized.len() != BB_MAC_LEN * 2 {
+        return Err(format!(
+            "Invalid MAC '{}'; expected {} hex digits",
+            value,
+            BB_MAC_LEN * 2
+        ));
+    }
+
+    let mut addr = [0_u8; BB_MAC_LEN];
+    for (index, chunk) in normalized.as_bytes().chunks(2).enumerate() {
+        let hex = std::str::from_utf8(chunk).map_err(|_| format!("Invalid MAC '{}'", value))?;
+        addr[index] = u8::from_str_radix(hex, 16).map_err(|_| format!("Invalid MAC '{}'", value))?;
+    }
+
+    Ok(bb_mac_t { addr })
 }
 
 fn format_dev_info_mac(info: &bb_dev_info_t) -> Option<String> {
@@ -2523,6 +2620,7 @@ fn summarize_link_status(
     cfg_sbmp: u8,
     rt_sbmp: u8,
     pair_slot: Option<PairSlotSummary>,
+    candidate_macs: Vec<String>,
     peer_quality: Option<BbQualitySummary>,
     user_quality: Option<BbQualitySummary>,
 ) -> Option<BbLinkStatusSummary> {
@@ -2572,6 +2670,7 @@ fn summarize_link_status(
             Some(decode_rx_mcs(link.rx_mcs_pair_state))
         },
         pair_state,
+        candidate_macs,
         snr_db: effective_quality.as_ref().and_then(|quality| quality.snr_db),
         ldpc_err: effective_quality.as_ref().map(|quality| i32::from(quality.ldpc_err)),
         ldpc_num: effective_quality.as_ref().map(|quality| i32::from(quality.ldpc_num)),

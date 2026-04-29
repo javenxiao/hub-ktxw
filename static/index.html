@@ -626,7 +626,7 @@
                                 <div class="sys-section rf-summary-section rf-pair-section">
                                     <h3 class="sys-section-title">Pair</h3>
                                     <div class="rf-pair-list" id="rf-pair-list"></div>
-                                    <p class="rf-pair-note">Red dot means pairing is in progress. Green dot means the slot is paired. Click Pair again to start a new matching attempt for the slot.</p>
+                                    <p class="rf-pair-note">Red dot means pairing is in progress. Green dot means the slot is paired. Enter or select a DEV MAC in the box to target a specific device; leave the box unchanged to keep automatic matching.</p>
                                 </div>
                             </div>
                             <p class="wireless-control-status" id="wireless-control-status" data-state="idle">Most RF settings apply automatically. Role switching requires manual Apply.</p>
@@ -863,6 +863,34 @@
             return /^[0-9a-fA-F]{8}$/.test(normalized) ? normalized.toUpperCase() : '00000000';
         }
 
+        function formatPairMacDisplay(macAddress) {
+            const normalized = normalizePairMac(macAddress);
+            if (normalized === '00000000') {
+                return '';
+            }
+
+            const colonSeparated = String(macAddress || '').trim().toUpperCase().replaceAll('-', ':');
+            if (/^[0-9A-F]{2}(?::[0-9A-F]{2}){3}$/.test(colonSeparated)) {
+                return colonSeparated;
+            }
+
+            return normalized.match(/.{1,2}/g)?.join(':') || normalized;
+        }
+
+        function buildPairCandidateOptions(slotConnection) {
+            const seen = new Set();
+            return (Array.isArray(slotConnection?.candidate_macs) ? slotConnection.candidate_macs : [])
+                .map((mac) => formatPairMacDisplay(mac))
+                .filter((mac) => {
+                    const normalized = normalizePairMac(mac);
+                    if (normalized === '00000000' || seen.has(normalized)) {
+                        return false;
+                    }
+                    seen.add(normalized);
+                    return true;
+                });
+        }
+
         function findPairConnection(slotIndex, connections = latestWirelessSnapshot?.connections) {
             return Array.isArray(connections)
                 ? connections.find((connection) => parseConnectionSlot(connection.link_slot) === slotIndex) || null
@@ -927,6 +955,7 @@
 
         function buildPairMacFieldState(slotIndex, slotConnection, status) {
             const macValue = normalizePairMac(slotConnection?.mac_address);
+            const displayMacValue = formatPairMacDisplay(slotConnection?.mac_address);
             const hasDraft = pairMacDraftBySlot.has(slotIndex);
             const draftValue = hasDraft ? pairMacDraftBySlot.get(slotIndex) : null;
 
@@ -940,8 +969,8 @@
 
             const displayValue = hasDraft
                 ? draftValue
-                : macValue !== '00000000'
-                    ? macValue
+                : displayMacValue
+                    ? displayMacValue
                     : '无匹配设备';
 
             return {
@@ -959,13 +988,16 @@
             const status = buildPairStatus(slotIndex, slotConnection);
             const isPairing = status === 'pairing';
             const macFieldState = buildPairMacFieldState(slotIndex, slotConnection, status);
+            const candidateOptions = buildPairCandidateOptions(slotConnection);
+            const candidateListId = `rf-pair-candidates-${slotIndex}`;
             const pairStart = !isPairing;
             const buttonStateClass = isPairing ? ' is-pairing' : '';
             return `
                 <div class="rf-pair-row">
                     <div class="rf-pair-user">Slot ${slotIndex}</div>
                     <span class="rf-pair-dot ${status}" aria-hidden="true"></span>
-                    <input class="sys-input rf-pair-mac-input${macFieldState.className}" type="text" data-pair-mac-slot="${slotIndex}" value="${escapeHtml(macFieldState.value)}" ${macFieldState.readOnly ? 'readonly aria-readonly="true"' : ''}>
+                    <input class="sys-input rf-pair-mac-input${macFieldState.className}" type="text" data-pair-mac-slot="${slotIndex}" value="${escapeHtml(macFieldState.value)}" ${candidateOptions.length ? `list="${candidateListId}"` : ''} ${macFieldState.readOnly ? 'readonly aria-readonly="true"' : ''}>
+                    ${candidateOptions.length ? `<datalist id="${candidateListId}">${candidateOptions.map((mac) => `<option value="${escapeHtml(mac)}"></option>`).join('')}</datalist>` : ''}
                     <button class="sys-button-default rf-pair-button${buttonStateClass}" type="button" data-pair-slot="${slotIndex}" data-pair-start="${String(pairStart)}">${isPairing ? 'Stop' : 'Pair'}</button>
                 </div>
             `;
@@ -1025,6 +1057,18 @@
                         return;
                     }
 
+                    const targetInput = container.querySelector(`[data-pair-mac-slot="${slot}"]`);
+                    const rawPairTarget = targetInput instanceof HTMLInputElement ? targetInput.value.trim() : '';
+                    const normalizedPairTarget = normalizePairMac(rawPairTarget);
+                    const wantsTargetedPair = rawPairTarget !== ''
+                        && rawPairTarget !== '无匹配设备'
+                        && rawPairTarget !== '匹配中...';
+
+                    if (pairStart && wantsTargetedPair && normalizedPairTarget === '00000000') {
+                        setWirelessControlStatus('Pair DEV MAC 格式无效，需为 4 字节 MAC', 'error');
+                        return;
+                    }
+
                     if (pairStart) {
                         const currentConnection = findPairConnection(slot);
                         pairStopOverrideBySlot.delete(slot);
@@ -1041,7 +1085,12 @@
                     }
 
                     renderPairPanel(latestWirelessSnapshot?.connections);
-                    applyWirelessSetting('set_pair_mode', { slot, pair_start: pairStart }).catch(() => {
+                    const payload = { slot, pair_start: pairStart };
+                    if (pairStart && normalizedPairTarget !== '00000000') {
+                        payload.pair_target_mac = normalizedPairTarget;
+                    }
+
+                    applyWirelessSetting('set_pair_mode', payload).catch(() => {
                         pairPendingBySlot.delete(slot);
                         pairStopOverrideBySlot.delete(slot);
                         renderPairPanel(latestWirelessSnapshot?.connections);
