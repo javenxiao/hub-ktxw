@@ -5,6 +5,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     extract::{
+        Query,
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
@@ -26,7 +27,12 @@ use tower_http::{
 };
 use tracing::{error, info, warn};
 
-use bb_api::{BasebandHealthStatus, BasebandManager, WirelessRuntimeDetails};
+use bb_api::{
+    BasebandHealthStatus,
+    BasebandManager,
+    WirelessConfigurationDetails,
+    WirelessRuntimeDetails,
+};
 use ffi::BbGetStatusSummary;
 
 const DEFAULT_RUST_LOG: &str = "info";
@@ -187,6 +193,67 @@ struct WirelessSettingResponse {
     success: bool,
     message: String,
     current: Option<WirelessRuntimeView>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WirelessConfigurationQuery {
+    mode: Option<u8>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WirelessConfigurationRequest {
+    action: String,
+    mode: Option<u8>,
+    config_text: Option<String>,
+    role: Option<u8>,
+    band_bitmap: Option<u8>,
+    power_mode: Option<u8>,
+    power_auto: Option<bool>,
+    power_initial_dbm: Option<u8>,
+    power_min_dbm: Option<u8>,
+    power_max_dbm: Option<u8>,
+    mac_address: Option<String>,
+    slot_macs: Option<Vec<WirelessConfigurationSlotMacRequest>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WirelessConfigurationSlotMacRequest {
+    slot: u8,
+    mac_address: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessConfigurationSlotMacView {
+    slot: u8,
+    mac_address: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessConfigurationView {
+    mode: u8,
+    mode_label: String,
+    config_text: String,
+    config_total_length: Option<u16>,
+    config_total_crc16: Option<u16>,
+    role: Option<u8>,
+    band_bitmap: Option<u8>,
+    power_mode: Option<u8>,
+    power_auto: Option<bool>,
+    power_initial_dbm: Option<u8>,
+    power_min_dbm: Option<u8>,
+    power_max_dbm: Option<u8>,
+    local_mac_address: String,
+    ap_mac_address: String,
+    slot_macs: Vec<WirelessConfigurationSlotMacView>,
+    warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessConfigurationResponse {
+    available: bool,
+    success: bool,
+    message: String,
+    current: Option<WirelessConfigurationView>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -404,6 +471,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/wireless/status", get(get_wireless_status))
         .route("/api/wireless/runtime", get(get_wireless_runtime))
         .route("/api/wireless/runtime/apply", post(apply_wireless_setting))
+        .route("/api/wireless/configuration", get(get_wireless_configuration))
+        .route("/api/wireless/configuration/apply", post(apply_wireless_configuration))
         .route(
             "/api/wireless/plot/settings",
             get(get_plot_refresh_settings).post(apply_plot_refresh_settings),
@@ -445,6 +514,43 @@ async fn get_wireless_status(State(state): State<Arc<AppState>>) -> Json<Wireles
 
 async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<WirelessRuntimeResponse> {
     Json(state.wireless_runtime.read().await.clone())
+}
+
+async fn get_wireless_configuration(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<WirelessConfigurationQuery>,
+) -> Json<WirelessConfigurationResponse> {
+    let mode = match parse_configuration_mode(query.mode.unwrap_or(0)) {
+        Ok(value) => value,
+        Err(err) => {
+            return Json(WirelessConfigurationResponse {
+                available: state.baseband.is_some(),
+                success: false,
+                message: err,
+                current: None,
+            });
+        }
+    };
+
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(configuration_unavailable_response(
+            "Baseband SDK not available; wireless configuration requires real hardware mode".to_string(),
+        ));
+    };
+
+    let response = match baseband.get_wireless_configuration_details(mode) {
+        Ok(details) => configuration_response_from_details(
+            &details,
+            "Wireless configuration fetched successfully".to_string(),
+        ),
+        Err(err) => configuration_failure_response(
+            true,
+            format!("Failed to fetch wireless configuration: {}", err),
+            None,
+        ),
+    };
+
+    Json(response)
 }
 
 async fn get_plot_refresh_settings(
@@ -699,6 +805,147 @@ async fn apply_wireless_setting(
             message: err,
             current: cached_current.or_else(|| current.as_ref().map(build_wireless_runtime_view)),
         }),
+    }
+}
+
+async fn apply_wireless_configuration(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<WirelessConfigurationRequest>,
+) -> Json<WirelessConfigurationResponse> {
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(configuration_unavailable_response(
+            "Baseband SDK not available; cannot apply wireless configuration in simulator mode".to_string(),
+        ));
+    };
+
+    let mode = match parse_configuration_mode(request.mode.unwrap_or(0)) {
+        Ok(value) => value,
+        Err(err) => return Json(configuration_failure_response(true, err, None)),
+    };
+
+    let baseband = Arc::clone(baseband);
+    let mut current_details = None;
+
+    if request.action == "set_power" && request.power_mode.is_none() {
+        match baseband.get_wireless_configuration_details(mode) {
+            Ok(details) => current_details = Some(details),
+            Err(err) => {
+                return Json(configuration_failure_response(
+                    true,
+                    format!("Failed to read current MiniDB power before applying update: {}", err),
+                    None,
+                ));
+            }
+        }
+    }
+
+    let result = match request.action.as_str() {
+        "save_config" => request
+            .config_text
+            .as_deref()
+            .ok_or_else(|| "config_text is required".to_string())
+            .and_then(|config_text| baseband.set_configuration_text(config_text)),
+        "reset_config" => baseband.reset_configuration(),
+        "reset_minidb" => baseband.reset_minidb(),
+        "restore_factory" => baseband.restore_factory_settings(),
+        "set_role" => request
+            .role
+            .ok_or_else(|| "role is required".to_string())
+            .and_then(parse_configuration_role)
+            .and_then(|role| baseband.set_minidb_role(role)),
+        "set_band" => request
+            .band_bitmap
+            .ok_or_else(|| "band_bitmap is required".to_string())
+            .and_then(parse_configuration_band_bitmap)
+            .and_then(|band_bitmap| baseband.set_minidb_band(band_bitmap)),
+        "set_power" => {
+            let power_mode = request
+                .power_mode
+                .or_else(|| current_details.as_ref().and_then(|details| details.power.as_ref().map(|power| power.pwr_mode)))
+                .ok_or_else(|| "power_mode is required".to_string());
+            let power_auto = request.power_auto.ok_or_else(|| "power_auto is required".to_string());
+            let power_initial_dbm = request
+                .power_initial_dbm
+                .ok_or_else(|| "power_initial_dbm is required".to_string());
+            let power_min_dbm = request
+                .power_min_dbm
+                .ok_or_else(|| "power_min_dbm is required".to_string());
+            let power_max_dbm = request
+                .power_max_dbm
+                .ok_or_else(|| "power_max_dbm is required".to_string());
+
+            power_mode.and_then(|power_mode| {
+                power_auto.and_then(|power_auto| {
+                    power_initial_dbm.and_then(|power_initial_dbm| {
+                        power_min_dbm.and_then(|power_min_dbm| {
+                            power_max_dbm.and_then(|power_max_dbm| {
+                                baseband.set_minidb_power(ffi::bb_phy_pwr_basic_t {
+                                    pwr_mode: power_mode,
+                                    pwr_init: power_initial_dbm,
+                                    pwr_auto: u8::from(power_auto),
+                                    pwr_min: power_min_dbm,
+                                    pwr_max: power_max_dbm,
+                                })
+                            })
+                        })
+                    })
+                })
+            })
+        }
+        "set_local_mac" => request
+            .mac_address
+            .as_deref()
+            .ok_or_else(|| "mac_address is required".to_string())
+            .and_then(|mac_address| baseband.set_minidb_local_mac(mac_address)),
+        "set_ap_mac" => request
+            .mac_address
+            .as_deref()
+            .ok_or_else(|| "mac_address is required".to_string())
+            .and_then(|mac_address| baseband.set_minidb_ap_mac(mac_address)),
+        "set_slot_macs" => request
+            .slot_macs
+            .as_ref()
+            .ok_or_else(|| "slot_macs is required".to_string())
+            .and_then(|slot_macs| {
+                if slot_macs.is_empty() {
+                    return Err("slot_macs cannot be empty".to_string());
+                }
+
+                for entry in slot_macs {
+                    if usize::from(entry.slot) >= ffi::BB_SLOT_MAX {
+                        return Err(format!("Unsupported slot '{}'; expected 0-7", entry.slot));
+                    }
+
+                    baseband.set_minidb_slot_mac(entry.slot, &entry.mac_address)?;
+                }
+
+                Ok(())
+            }),
+        _ => Err(format!("Unsupported wireless configuration action: {}", request.action)),
+    };
+
+    match result {
+        Ok(()) => {
+            refresh_snapshot_from_baseband(&state, &baseband).await;
+            refresh_runtime_from_baseband(&state, &baseband).await;
+            let refreshed = baseband.get_wireless_configuration_details(mode).ok();
+            let current = refreshed.as_ref().map(build_wireless_configuration_view);
+
+            Json(WirelessConfigurationResponse {
+                available: true,
+                success: true,
+                message: wireless_configuration_action_message(&request.action).to_string(),
+                current,
+            })
+        }
+        Err(err) => {
+            let fallback_details = current_details.or_else(|| baseband.get_wireless_configuration_details(mode).ok());
+            Json(configuration_failure_response(
+                true,
+                err,
+                fallback_details.as_ref().map(build_wireless_configuration_view),
+            ))
+        }
     }
 }
 
@@ -1720,6 +1967,72 @@ fn runtime_unavailable_response(message: String) -> WirelessRuntimeResponse {
     }
 }
 
+fn build_wireless_configuration_view(details: &WirelessConfigurationDetails) -> WirelessConfigurationView {
+    WirelessConfigurationView {
+        mode: details.mode,
+        mode_label: format_configuration_mode(details.mode).to_string(),
+        config_text: details
+            .config_file
+            .as_ref()
+            .map(|config| config.content.clone())
+            .unwrap_or_default(),
+        config_total_length: details.config_file.as_ref().map(|config| config.total_length),
+        config_total_crc16: details.config_file.as_ref().map(|config| config.total_crc16),
+        role: details.role,
+        band_bitmap: details.band_bitmap,
+        power_mode: details.power.as_ref().map(|power| power.pwr_mode),
+        power_auto: details.power.as_ref().map(|power| power.pwr_auto),
+        power_initial_dbm: details.power.as_ref().map(|power| power.pwr_init),
+        power_min_dbm: details.power.as_ref().map(|power| power.pwr_min),
+        power_max_dbm: details.power.as_ref().map(|power| power.pwr_max),
+        local_mac_address: details.local_mac_address.clone().unwrap_or_default(),
+        ap_mac_address: details.ap_mac_address.clone().unwrap_or_default(),
+        slot_macs: details
+            .slot_macs
+            .iter()
+            .map(|slot_mac| WirelessConfigurationSlotMacView {
+                slot: slot_mac.slot,
+                mac_address: slot_mac.mac_address.clone().unwrap_or_default(),
+            })
+            .collect(),
+        warnings: details.warnings.clone(),
+    }
+}
+
+fn configuration_response_from_details(
+    details: &WirelessConfigurationDetails,
+    message: String,
+) -> WirelessConfigurationResponse {
+    WirelessConfigurationResponse {
+        available: true,
+        success: true,
+        message,
+        current: Some(build_wireless_configuration_view(details)),
+    }
+}
+
+fn configuration_unavailable_response(message: String) -> WirelessConfigurationResponse {
+    WirelessConfigurationResponse {
+        available: false,
+        success: false,
+        message,
+        current: None,
+    }
+}
+
+fn configuration_failure_response(
+    available: bool,
+    message: String,
+    current: Option<WirelessConfigurationView>,
+) -> WirelessConfigurationResponse {
+    WirelessConfigurationResponse {
+        available,
+        success: false,
+        message,
+        current,
+    }
+}
+
 async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<BasebandManager>) {
     if let Ok(status) = baseband.get_status_snapshot() {
         let previous = state.snapshot.read().await.clone();
@@ -1774,6 +2087,52 @@ fn parse_band(value: u8) -> Result<u8, String> {
     match value {
         0..=2 => Ok(value),
         other => Err(format!("Unsupported target_band '{}'; expected 0(600M), 1(2.4G), or 2(5.8G)", other)),
+    }
+}
+
+fn parse_configuration_mode(value: u8) -> Result<u8, String> {
+    match value {
+        0..=2 => Ok(value),
+        other => Err(format!("Unsupported configuration mode '{}'; expected 0-2", other)),
+    }
+}
+
+fn parse_configuration_role(value: u8) -> Result<u8, String> {
+    match value {
+        ffi::BB_ROLE_AP | ffi::BB_ROLE_DEV => Ok(value),
+        other => Err(format!("Unsupported role '{}'; expected 0(AP) or 1(DEV)", other)),
+    }
+}
+
+fn parse_configuration_band_bitmap(value: u8) -> Result<u8, String> {
+    match value {
+        0x01 | 0x02 | 0x04 | 0x07 => Ok(value),
+        other => Err(format!("Unsupported band_bitmap '{}'; expected 0x01, 0x02, 0x04 or 0x07", other)),
+    }
+}
+
+fn format_configuration_mode(mode: u8) -> &'static str {
+    match mode {
+        0 => "Auto",
+        1 => "Memory",
+        2 => "Flash",
+        _ => "Unknown",
+    }
+}
+
+fn wireless_configuration_action_message(action: &str) -> &'static str {
+    match action {
+        "save_config" => "Configuration saved",
+        "reset_config" => "Flash configuration cleared",
+        "reset_minidb" => "MiniDB configuration cleared",
+        "restore_factory" => "Factory settings restored",
+        "set_role" => "MiniDB role updated",
+        "set_band" => "MiniDB band updated",
+        "set_power" => "MiniDB power updated",
+        "set_local_mac" => "MiniDB local MAC updated",
+        "set_ap_mac" => "MiniDB AP MAC updated",
+        "set_slot_macs" => "MiniDB slot MAC updated",
+        _ => "Wireless configuration updated",
     }
 }
 
