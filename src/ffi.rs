@@ -189,23 +189,6 @@ pub struct BbPowerAutoSummary {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct BbConfigTextSummary {
-    pub mode: u8,
-    pub total_length: u16,
-    pub total_crc16: u16,
-    pub content: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct BbMinidbPowerSummary {
-    pub pwr_mode: u8,
-    pub pwr_init: u8,
-    pub pwr_auto: bool,
-    pub pwr_min: u8,
-    pub pwr_max: u8,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
 pub struct BbBandwidthModeSummary {
     pub slot: u8,
     pub auto_mode: bool,
@@ -704,76 +687,6 @@ pub struct bb_set_bandwidth_mode_t {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
-pub struct bb_phy_pwr_basic_t {
-    pub pwr_mode: u8,
-    pub pwr_init: u8,
-    pub pwr_auto: u8,
-    pub pwr_min: u8,
-    pub pwr_max: u8,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct bb_get_cfg_in_t {
-    pub seq: u16,
-    pub mode: u8,
-    pub rsv: u8,
-    pub offset: u16,
-    pub length: u16,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct bb_get_cfg_out_t {
-    pub seq: u16,
-    pub rsv: u16,
-    pub total_length: u16,
-    pub total_crc16: u16,
-    pub offset: u16,
-    pub length: u16,
-    pub data: [u8; BB_CFG_PAGE_SIZE - 12],
-}
-
-impl Default for bb_get_cfg_out_t {
-    fn default() -> Self {
-        Self {
-            seq: 0,
-            rsv: 0,
-            total_length: 0,
-            total_crc16: 0,
-            offset: 0,
-            length: 0,
-            data: [0; BB_CFG_PAGE_SIZE - 12],
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct bb_set_cfg_t {
-    pub seq: u32,
-    pub total_length: u16,
-    pub total_crc16: u16,
-    pub offset: u16,
-    pub length: u16,
-    pub data: [u8; BB_CFG_PAGE_SIZE - 12],
-}
-
-impl Default for bb_set_cfg_t {
-    fn default() -> Self {
-        Self {
-            seq: 0,
-            total_length: 0,
-            total_crc16: 0,
-            offset: 0,
-            length: 0,
-            data: [0; BB_CFG_PAGE_SIZE - 12],
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_orig_cfg_t {
     pub role: u8,
 }
@@ -794,57 +707,6 @@ impl Default for bb_set_prj_dispatch_in_t {
     fn default() -> Self {
         Self { data: [0; 256] }
     }
-}
-
-pub type bb_get_prj_dispatch_in_t = bb_set_prj_dispatch_in_t;
-pub type bb_get_prj_dispatch_out_t = bb_set_prj_dispatch_in_t;
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_role_t {
-    pub role: u8,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_ap_mac_t {
-    pub ap_mac: bb_mac_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_mac_t {
-    pub mac: bb_mac_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_slot_mac_t {
-    pub slot_id: u8,
-    pub slot_mac: bb_mac_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_band_t {
-    pub band_bmp: u8,
-}
-
-pub type prj_cmd_get_role_t = prj_cmd_set_role_t;
-pub type prj_cmd_get_ap_mac_t = prj_cmd_set_ap_mac_t;
-pub type prj_cmd_get_mac_t = prj_cmd_set_mac_t;
-pub type prj_cmd_get_band_t = prj_cmd_set_band_t;
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_get_slot_mac_in_t {
-    pub slot_id: u8,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_get_slot_mac_out_t {
-    pub mac: bb_mac_t,
 }
 
 type BbInitFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
@@ -1081,10 +943,8 @@ pub const BB_GET_POWER_AUTO: u32 = bb_request(BB_REQ_GET, 9);
 pub const BB_GET_CHAN_INFO: u32 = bb_request(BB_REQ_GET, 10);
 pub const BB_GET_PEER_QUALITY: u32 = bb_request(BB_REQ_GET, 11);
 pub const BB_GET_BAND_INFO: u32 = bb_request(BB_REQ_GET, 13);
-pub const BB_GET_CFG: u32 = bb_request(BB_REQ_GET, 101);
 pub const BB_GET_SYS_INFO: u32 = bb_request(BB_REQ_GET, 105);
 pub const BB_GET_MCS_MODE: u32 = bb_request(BB_REQ_GET, 117);
-pub const BB_GET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_GET, 200);
 
 // 设置命令字
 pub const BB_SET_EVENT_SUBSCRIBE: u32 = bb_request(BB_REQ_SET, 0);
@@ -1104,24 +964,10 @@ pub const BB_SET_BANDWIDTH_MODE: u32 = bb_request(BB_REQ_SET, 32);
 pub const BB_SET_LOCAL_MAC: u32 = bb_request(BB_REQ_SET, 33);
 pub const BB_SET_SYS_REBOOT: u32 = bb_request(BB_REQ_SET, 14);
 pub const BB_SET_PLOT: u32 = bb_request(BB_REQ_SET, 103);
-pub const BB_SET_CFG: u32 = bb_request(BB_REQ_SET, 101);
-pub const BB_RESET_CFG: u32 = bb_request(BB_REQ_SET, 102);
 pub const BB_SET_ORIG_CFG: u32 = bb_request(BB_REQ_SET, 113);
 pub const BB_SET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_SET, 200);
 
 pub const PRJ_CMD_SET_ROLE: u8 = 0;
-pub const PRJ_CMD_SET_AP_MAC: u8 = 1;
-pub const PRJ_CMD_SET_SLOT_MAC: u8 = 2;
-pub const PRJ_CMD_SET_BAND: u8 = 3;
-pub const PRJ_CMD_SET_RESET_DB: u8 = 4;
-pub const PRJ_CMD_SET_PWR: u8 = 5;
-pub const PRJ_CMD_SET_MAC: u8 = 11;
-pub const PRJ_CMD_GET_BAND: u8 = 128;
-pub const PRJ_CMD_GET_ROLE: u8 = 129;
-pub const PRJ_CMD_GET_AP_MAC: u8 = 130;
-pub const PRJ_CMD_GET_SLOT_MAC: u8 = 131;
-pub const PRJ_CMD_GET_PWR: u8 = 132;
-pub const PRJ_CMD_GET_MAC: u8 = 134;
 
 pub const BB_EVENT_PLOT_DATA: i32 = 3;
 
@@ -2042,127 +1888,6 @@ pub fn get_power_auto(handle: *mut bb_dev_handle_t) -> Result<BbPowerAutoSummary
     })
 }
 
-pub fn get_config_text(handle: *mut bb_dev_handle_t, mode: u8) -> Result<BbConfigTextSummary, String> {
-    let sdk = sdk()?;
-    let mut input = bb_get_cfg_in_t {
-        seq: 0,
-        mode,
-        rsv: 0,
-        offset: 0,
-        length: BB_CFG_CHUNK_SIZE as u16,
-    };
-    let mut buffer = Vec::new();
-    let mut metadata = None;
-
-    loop {
-        let mut output = bb_get_cfg_out_t::default();
-        let result = unsafe {
-            (sdk.bb_ioctl)(
-                handle,
-                BB_GET_CFG as c_uint,
-                &input as *const bb_get_cfg_in_t as *const c_void,
-                &mut output as *mut bb_get_cfg_out_t as *mut c_void,
-            )
-        };
-
-        if result != 0 {
-            return Err(format!("bb_ioctl(BB_GET_CFG) failed with code: {}", result));
-        }
-
-        if metadata.is_none() {
-            metadata = Some((output.total_length, output.total_crc16));
-        }
-
-        let chunk_length = usize::from(output.length).min(output.data.len());
-        if chunk_length == 0 {
-            break;
-        }
-
-        buffer.extend_from_slice(&output.data[..chunk_length]);
-        if buffer.len() >= usize::from(metadata.unwrap_or_default().0) {
-            break;
-        }
-
-        input.offset = input.offset.saturating_add(output.length);
-        input.seq = input.seq.wrapping_add(1);
-    }
-
-    let (total_length, total_crc16) = metadata.unwrap_or_default();
-
-    if buffer.len() > usize::from(total_length) {
-        buffer.truncate(usize::from(total_length));
-    }
-
-    while buffer.last() == Some(&0) {
-        buffer.pop();
-    }
-
-    Ok(BbConfigTextSummary {
-        mode,
-        total_length,
-        total_crc16,
-        content: String::from_utf8_lossy(&buffer).into_owned(),
-    })
-}
-
-pub fn set_config_text(handle: *mut bb_dev_handle_t, content: &str) -> Result<(), String> {
-    if content.is_empty() {
-        return Err("Configuration text cannot be empty".to_string());
-    }
-
-    let total_length = u16::try_from(content.len())
-        .map_err(|_| format!("Configuration is too large ({} bytes)", content.len()))?;
-    let total_crc16 = crc16_ccitt(content.as_bytes());
-    let sdk = sdk()?;
-    let mut offset = 0usize;
-    let mut seq = 0u32;
-    let bytes = content.as_bytes();
-
-    while offset < bytes.len() {
-        let chunk_length = (bytes.len() - offset).min(BB_CFG_CHUNK_SIZE);
-        let mut input = bb_set_cfg_t {
-            seq,
-            total_length,
-            total_crc16,
-            offset: u16::try_from(offset).map_err(|_| "Configuration offset overflowed u16".to_string())?,
-            length: u16::try_from(chunk_length)
-                .map_err(|_| "Configuration chunk length overflowed u16".to_string())?,
-            data: [0; BB_CFG_PAGE_SIZE - 12],
-        };
-
-        input.data[..chunk_length].copy_from_slice(&bytes[offset..offset + chunk_length]);
-
-        let result = unsafe {
-            (sdk.bb_ioctl)(
-                handle,
-                BB_SET_CFG as c_uint,
-                &input as *const bb_set_cfg_t as *const c_void,
-                std::ptr::null_mut(),
-            )
-        };
-
-        if result != 0 {
-            return Err(format!("bb_ioctl(BB_SET_CFG) failed with code: {}", result));
-        }
-
-        offset += chunk_length;
-        seq = seq.wrapping_add(1);
-    }
-
-    Ok(())
-}
-
-pub fn reset_config(handle: *mut bb_dev_handle_t) -> Result<(), String> {
-    let sdk = sdk()?;
-
-    unsafe {
-        match (sdk.bb_ioctl)(handle, BB_RESET_CFG as c_uint, std::ptr::null(), std::ptr::null_mut()) {
-            0 => Ok(()),
-            e => Err(format!("bb_ioctl(BB_RESET_CFG) failed with code: {}", e)),
-        }
-    }
-}
-
 pub fn subscribe_plot_stream(handle: *mut bb_dev_handle_t, user: u8, cache_num: u8) -> Result<(), String> {
     reset_plot_cache(user);
     subscribe_plot_event(handle)?;
@@ -2496,125 +2221,24 @@ pub fn set_bandwidth_mode(handle: *mut bb_dev_handle_t, slot: u8, auto_mode: boo
 }
 
 pub fn set_baseband_role(handle: *mut bb_dev_handle_t, role: u8) -> Result<(), String> {
-    set_minidb_role(handle, role)
-}
+    let sdk = sdk()?;
+    let mut input = bb_set_prj_dispatch_in_t::default();
 
-pub fn set_minidb_role(handle: *mut bb_dev_handle_t, role: u8) -> Result<(), String> {
-    send_prj_dispatch(handle, PRJ_CMD_SET_ROLE, "PRJ_CMD_SET_ROLE", Some(&prj_cmd_set_role_t { role }))
-}
+    // prj_rpc_hdr_t: cmdid(u8) + padding[3] + payload
+    input.data[0] = PRJ_CMD_SET_ROLE;
+    input.data[4] = role;
 
-pub fn get_minidb_role(handle: *mut bb_dev_handle_t) -> Result<Option<u8>, String> {
-    let (response, status) = query_prj_dispatch_no_payload::<prj_cmd_get_role_t>(
-        handle,
-        PRJ_CMD_GET_ROLE,
-        "PRJ_CMD_GET_ROLE",
-    )?;
-
-    Ok(if status == -8 { None } else { Some(response.role) })
-}
-
-pub fn set_minidb_band(handle: *mut bb_dev_handle_t, band_bmp: u8) -> Result<(), String> {
-    send_prj_dispatch(
-        handle,
-        PRJ_CMD_SET_BAND,
-        "PRJ_CMD_SET_BAND",
-        Some(&prj_cmd_set_band_t { band_bmp }),
-    )
-}
-
-pub fn get_minidb_band(handle: *mut bb_dev_handle_t) -> Result<Option<u8>, String> {
-    let (response, status) = query_prj_dispatch_no_payload::<prj_cmd_get_band_t>(
-        handle,
-        PRJ_CMD_GET_BAND,
-        "PRJ_CMD_GET_BAND",
-    )?;
-
-    Ok(if status == -8 { None } else { Some(response.band_bmp) })
-}
-
-pub fn set_minidb_power(handle: *mut bb_dev_handle_t, power: bb_phy_pwr_basic_t) -> Result<(), String> {
-    send_prj_dispatch(handle, PRJ_CMD_SET_PWR, "PRJ_CMD_SET_PWR", Some(&power))
-}
-
-pub fn get_minidb_power(handle: *mut bb_dev_handle_t) -> Result<Option<BbMinidbPowerSummary>, String> {
-    let (response, status) = query_prj_dispatch_no_payload::<bb_phy_pwr_basic_t>(
-        handle,
-        PRJ_CMD_GET_PWR,
-        "PRJ_CMD_GET_PWR",
-    )?;
-
-    Ok(if status == -8 {
-        None
-    } else {
-        Some(BbMinidbPowerSummary {
-            pwr_mode: response.pwr_mode,
-            pwr_init: response.pwr_init,
-            pwr_auto: response.pwr_auto != 0,
-            pwr_min: response.pwr_min,
-            pwr_max: response.pwr_max,
-        })
-    })
-}
-
-pub fn set_minidb_local_mac(handle: *mut bb_dev_handle_t, mac: &str) -> Result<(), String> {
-    let payload = prj_cmd_set_mac_t { mac: parse_bb_mac(mac)? };
-    send_prj_dispatch(handle, PRJ_CMD_SET_MAC, "PRJ_CMD_SET_MAC", Some(&payload))
-}
-
-pub fn get_minidb_local_mac(handle: *mut bb_dev_handle_t) -> Result<Option<String>, String> {
-    let (response, status) = query_prj_dispatch_no_payload::<prj_cmd_get_mac_t>(
-        handle,
-        PRJ_CMD_GET_MAC,
-        "PRJ_CMD_GET_MAC",
-    )?;
-
-    Ok(optional_mac_string(status, &response.mac))
-}
-
-pub fn set_minidb_ap_mac(handle: *mut bb_dev_handle_t, mac: &str) -> Result<(), String> {
-    let payload = prj_cmd_set_ap_mac_t {
-        ap_mac: parse_bb_mac(mac)?,
-    };
-    send_prj_dispatch(handle, PRJ_CMD_SET_AP_MAC, "PRJ_CMD_SET_AP_MAC", Some(&payload))
-}
-
-pub fn get_minidb_ap_mac(handle: *mut bb_dev_handle_t) -> Result<Option<String>, String> {
-    let (response, status) = query_prj_dispatch_no_payload::<prj_cmd_get_ap_mac_t>(
-        handle,
-        PRJ_CMD_GET_AP_MAC,
-        "PRJ_CMD_GET_AP_MAC",
-    )?;
-
-    Ok(optional_mac_string(status, &response.ap_mac))
-}
-
-pub fn set_minidb_slot_mac(handle: *mut bb_dev_handle_t, slot: u8, mac: &str) -> Result<(), String> {
-    let payload = prj_cmd_set_slot_mac_t {
-        slot_id: slot,
-        slot_mac: parse_bb_mac(mac)?,
-    };
-    send_prj_dispatch(
-        handle,
-        PRJ_CMD_SET_SLOT_MAC,
-        "PRJ_CMD_SET_SLOT_MAC",
-        Some(&payload),
-    )
-}
-
-pub fn get_minidb_slot_mac(handle: *mut bb_dev_handle_t, slot: u8) -> Result<Option<String>, String> {
-    let payload = prj_cmd_get_slot_mac_in_t { slot_id: slot };
-    let (response, status) = query_prj_dispatch::<prj_cmd_get_slot_mac_in_t, prj_cmd_get_slot_mac_out_t>(
-        handle,
-        PRJ_CMD_GET_SLOT_MAC,
-        "PRJ_CMD_GET_SLOT_MAC",
-        &payload,
-    )?;
-
-    Ok(optional_mac_string(status, &response.mac))
-}
-
-pub fn reset_minidb(handle: *mut bb_dev_handle_t) -> Result<(), String> {
-    send_prj_dispatch::<prj_cmd_set_role_t>(handle, PRJ_CMD_SET_RESET_DB, "PRJ_CMD_SET_RESET_DB", None)
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_PRJ_DISPATCH as c_uint,
+            &input as *const bb_set_prj_dispatch_in_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_PRJ_DISPATCH:PRJ_CMD_SET_ROLE) failed with code: {}", e)),
+        }
+    }
 }
 
 pub fn reboot_device(handle: *mut bb_dev_handle_t, delay_ms: u32) -> Result<(), String> {
@@ -2639,138 +2263,6 @@ fn format_bb_mac(mac: &bb_mac_t) -> String {
         .map(|value| format!("{:02X}", value))
         .collect::<Vec<_>>()
         .join(":")
-}
-
-const PRJ_RPC_HEADER_SIZE: usize = 4;
-const BB_CFG_CHUNK_SIZE: usize = BB_CFG_PAGE_SIZE - 13;
-
-fn crc16_ccitt(data: &[u8]) -> u16 {
-    let mut crc = 0xffff_u16;
-
-    for byte in data {
-        crc ^= u16::from(*byte) << 8;
-        for _ in 0..8 {
-            if (crc & 0x8000) != 0 {
-                crc = (crc << 1) ^ 0x1021;
-            } else {
-                crc <<= 1;
-            }
-        }
-    }
-
-    crc
-}
-
-fn build_prj_dispatch_packet<T: Copy>(command_id: u8, payload: Option<&T>) -> bb_set_prj_dispatch_in_t {
-    let mut packet = bb_set_prj_dispatch_in_t::default();
-    packet.data[0] = command_id;
-
-    if let Some(payload) = payload {
-        let payload_len = std::mem::size_of::<T>();
-        debug_assert!(payload_len <= packet.data.len().saturating_sub(PRJ_RPC_HEADER_SIZE));
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                payload as *const T as *const u8,
-                packet.data[PRJ_RPC_HEADER_SIZE..].as_mut_ptr(),
-                payload_len,
-            );
-        }
-    }
-
-    packet
-}
-
-fn send_prj_dispatch<T: Copy>(
-    handle: *mut bb_dev_handle_t,
-    command_id: u8,
-    command_name: &str,
-    payload: Option<&T>,
-) -> Result<(), String> {
-    let sdk = sdk()?;
-    let packet = build_prj_dispatch_packet(command_id, payload);
-
-    unsafe {
-        match (sdk.bb_ioctl)(
-            handle,
-            BB_SET_PRJ_DISPATCH as c_uint,
-            &packet as *const bb_set_prj_dispatch_in_t as *const c_void,
-            std::ptr::null_mut(),
-        ) {
-            0 => Ok(()),
-            e => Err(format!("bb_ioctl(BB_SET_PRJ_DISPATCH:{}) failed with code: {}", command_name, e)),
-        }
-    }
-}
-
-fn query_prj_dispatch<TIn: Copy, TOut: Copy>(
-    handle: *mut bb_dev_handle_t,
-    command_id: u8,
-    command_name: &str,
-    payload: &TIn,
-) -> Result<(TOut, c_int), String> {
-    let sdk = sdk()?;
-    let mut packet = build_prj_dispatch_packet(command_id, Some(payload));
-
-    let result = unsafe {
-        (sdk.bb_ioctl)(
-            handle,
-            BB_GET_PRJ_DISPATCH as c_uint,
-            &packet as *const bb_get_prj_dispatch_in_t as *const c_void,
-            &mut packet as *mut bb_get_prj_dispatch_out_t as *mut c_void,
-        )
-    };
-
-    if result < 0 && result != -8 {
-        return Err(format!(
-            "bb_ioctl(BB_GET_PRJ_DISPATCH:{}) failed with code: {}",
-            command_name,
-            result
-        ));
-    }
-
-    let output = unsafe {
-        std::ptr::read_unaligned(packet.data[PRJ_RPC_HEADER_SIZE..].as_ptr() as *const TOut)
-    };
-    Ok((output, result))
-}
-
-fn query_prj_dispatch_no_payload<TOut: Copy>(
-    handle: *mut bb_dev_handle_t,
-    command_id: u8,
-    command_name: &str,
-) -> Result<(TOut, c_int), String> {
-    let sdk = sdk()?;
-    let mut packet = build_prj_dispatch_packet::<u8>(command_id, None);
-
-    let result = unsafe {
-        (sdk.bb_ioctl)(
-            handle,
-            BB_GET_PRJ_DISPATCH as c_uint,
-            &packet as *const bb_get_prj_dispatch_in_t as *const c_void,
-            &mut packet as *mut bb_get_prj_dispatch_out_t as *mut c_void,
-        )
-    };
-
-    if result < 0 && result != -8 {
-        return Err(format!(
-            "bb_ioctl(BB_GET_PRJ_DISPATCH:{}) failed with code: {}",
-            command_name,
-            result
-        ));
-    }
-
-    let output = unsafe {
-        std::ptr::read_unaligned(packet.data[PRJ_RPC_HEADER_SIZE..].as_ptr() as *const TOut)
-    };
-    Ok((output, result))
-}
-
-fn optional_mac_string(status: c_int, mac: &bb_mac_t) -> Option<String> {
-    if status == -8 || is_zero_mac(&mac.addr) {
-        None
-    } else {
-        Some(format_bb_mac(mac))
-    }
 }
 
 fn parse_bb_mac(value: &str) -> Result<bb_mac_t, String> {
