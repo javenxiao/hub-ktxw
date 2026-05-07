@@ -507,12 +507,6 @@
                                                     </td>
                                                 </tr>
                                                 <tr>
-                                                    <td>Slot</td>
-                                                    <td>
-                                                        <input id="control-bandwidth-slot" class="sys-input rf-input-mini" type="number" min="0" max="7" value="0">
-                                                    </td>
-                                                </tr>
-                                                <tr>
                                                     <td>Direction</td>
                                                     <td>
                                                         <select id="control-bandwidth-direction" class="sys-input rf-input-short">
@@ -731,7 +725,7 @@
         let bandwidthSlotValue = null;
         let bandwidthDirectionValue = 'rx';
         let bandwidthValueSelection = null;
-        let bandwidthAutoMode = false;
+        let bandwidthAutoMode = true;
         const pairMacDraftBySlot = new Map();
         const pairCandidatesBySlot = new Map();
         const pairCandidateRequestsBySlot = new Map();
@@ -970,6 +964,20 @@
             if (wirelessChartPanel) {
                 wirelessChartPanel.hidden = !plotState.panelVisible;
             }
+        }
+
+        function clearPlotChartForPendingContext(targetMac = null) {
+            const nextTargetMac = targetMac ?? wirelessRuntimeCurrent?.local_mac_address ?? '--';
+            const placeholderChart = {
+                title: 'RSSI Graph',
+                target_mac_address: nextTargetMac,
+                series: [],
+            };
+
+            cancelScheduledPlotRender();
+            plotState.lastIncomingChart = placeholderChart;
+            clearPlotHoverInfo();
+            renderChart(placeholderChart);
         }
 
         function buildStatePill(label) {
@@ -2710,12 +2718,17 @@
                 }
                 document.getElementById('control-mcs-value').value = String(mcsValueSelection ?? current.current_mcs_value ?? 0);
                 bandwidthAutoMode = current.bandwidth_auto ?? bandwidthAutoMode;
-                if (bandwidthAutoMode) {
+                if (bandwidthAutoMode === true) {
                     document.getElementById('control-bandwidth-auto-on').checked = true;
-                } else {
+                    document.getElementById('control-bandwidth-auto-off').checked = false;
+                } else if (bandwidthAutoMode === false) {
+                    document.getElementById('control-bandwidth-auto-on').checked = false;
                     document.getElementById('control-bandwidth-auto-off').checked = true;
+                } else {
+                    document.getElementById('control-bandwidth-auto-on').checked = true;
+                    document.getElementById('control-bandwidth-auto-off').checked = false;
                 }
-                document.getElementById('control-bandwidth-slot').value = bandwidthSlotValue ?? current.current_slot ?? 0;
+                bandwidthSlotValue = Number(current.current_slot ?? bandwidthSlotValue ?? 0);
                 document.getElementById('control-bandwidth-direction').value = bandwidthDirectionValue;
                 if (bandwidthValueSelection !== null && bandwidthValueSelection !== undefined) {
                     document.getElementById('control-bandwidth-value').value = String(bandwidthValueSelection);
@@ -2728,7 +2741,6 @@
                 powerDbValue = Number(document.getElementById('control-power-db').value);
                 mcsSlotValue = Number(document.getElementById('control-mcs-slot').value);
                 mcsValueSelection = Number(document.getElementById('control-mcs-value').value);
-                bandwidthSlotValue = Number(document.getElementById('control-bandwidth-slot').value);
                 bandwidthDirectionValue = document.getElementById('control-bandwidth-direction').value;
                 bandwidthValueSelection = Number(document.getElementById('control-bandwidth-value').value);
                 controlDefaultsInitialized = true;
@@ -2947,8 +2959,8 @@
             return Number(document.getElementById('control-mcs-value').value);
         }
 
-        function getSelectedBandwidthSlot() {
-            return Number(document.getElementById('control-bandwidth-slot').value);
+        function getCurrentBandwidthSlot() {
+            return Number(wirelessRuntimeCurrent?.current_slot ?? bandwidthSlotValue ?? 0);
         }
 
         function getSelectedBandwidthDirection() {
@@ -3068,7 +3080,6 @@
             const isAuto = getSelectedBandwidthAuto();
             bandwidthAutoMode = isAuto;
             setRfControlsDisabled([
-                'control-bandwidth-slot',
                 'control-bandwidth-direction',
                 'control-bandwidth-value',
             ], isAuto);
@@ -3076,7 +3087,7 @@
 
         async function applyBandwidthAutoMode(autoMode) {
             bandwidthAutoMode = autoMode;
-            bandwidthSlotValue = getSelectedBandwidthSlot();
+            bandwidthSlotValue = getCurrentBandwidthSlot();
             await applyWirelessSetting('set_bandwidth_mode', { slot: bandwidthSlotValue, auto_mode: autoMode });
 
             if (!autoMode) {
@@ -3089,7 +3100,7 @@
                 return;
             }
 
-            bandwidthSlotValue = getSelectedBandwidthSlot();
+            bandwidthSlotValue = getCurrentBandwidthSlot();
             bandwidthDirectionValue = getSelectedBandwidthDirection();
             bandwidthValueSelection = getSelectedBandwidthValue();
             await applyWirelessSetting('set_bandwidth', {
@@ -3253,6 +3264,7 @@
                     return;
                 }
 
+                clearPlotChartForPendingContext(selectedMac);
                 queueDeviceSelection(selectedMac);
             });
         }
@@ -3273,6 +3285,7 @@
                     return;
                 }
 
+                clearPlotChartForPendingContext();
                 applyWirelessSetting('set_signal_user', { user: selectedUser }).catch(() => {});
             });
         }
@@ -3430,7 +3443,7 @@
             });
         });
 
-        ['control-bandwidth-slot', 'control-bandwidth-direction', 'control-bandwidth-value'].forEach((controlId) => {
+        ['control-bandwidth-direction', 'control-bandwidth-value'].forEach((controlId) => {
             const control = document.getElementById(controlId);
             if (!control) {
                 return;
@@ -3445,7 +3458,7 @@
                     updateSelectWidth(control);
                 }
 
-                bandwidthSlotValue = getSelectedBandwidthSlot();
+                bandwidthSlotValue = getCurrentBandwidthSlot();
                 bandwidthDirectionValue = getSelectedBandwidthDirection();
                 bandwidthValueSelection = getSelectedBandwidthValue();
 
