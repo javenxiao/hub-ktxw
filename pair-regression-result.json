@@ -1,0 +1,87 @@
+{
+  "base_url": "http://127.0.0.1:8080/",
+  "console_errors": [],
+  "page_errors": [],
+  "request_failures": [],
+  "response_failures": [],
+  "scenarios": [
+    {
+      "name": "ap_auto_pair",
+      "success": true,
+      "status_text": "Pair State 已下发",
+      "pair_row_count": 8,
+      "pair_row_label": "Slot 0",
+      "pair_row_value": "A5:54:F6:2C",
+      "pair_row_button": "Pair",
+      "apply_calls": [
+        {
+          "url": "/api/wireless/runtime/apply",
+          "method": "POST",
+          "body": "{\"action\":\"set_pair_mode\",\"slot\":0,\"pair_start\":true}",
+          "status": 200,
+          "text": "{\"success\":true,\"message\":\"Wireless setting action 'set_pair_mode' applied successfully\",\"current\":{\"local_mac_address\":\"A5:68:B0:33\",\"operation_mode\":\"AP (Async)\",\"dev_pair_target_mac\":\"A5:54:F6:2C\",\"available_devices\":[{\"role\":\"DEV\",\"mac_address\":\"A5:54:F6:2C\",\"label\":\"DEV:a554f62c\",\"selected\":false},{\"role\":\"AP\",\"mac_address\":\"A5:68:B0:33\",\"label\":\"AP:a568b033\",\"selected\":true}],\"selected_signal_user\":0,\"detected_signal_user\":0,\"compatibility_mode\":\"Single User\",\"work_band_code\":2,\"bandwidth_code\":3,\"bandwidth\":\"10 MHz\",\"frequency_khz\":2100000,\"frequency\":\"2.100 GHz\",\"system_uptime\":\"0d 02:52:54\",\"compile_time\":\"04/10/2026 15:34:37\",\"software_version\":\"1.3.02-01\",\"hardware_version\":\"Unknown_4.0\",\"firmware_version\":\"1.3.02-01\",\"band_auto\":true,\"work_band\":\"5G\",\"channel_auto\":true,\"channel_count\":15,\"work_channel_index\":9,\"work_channel_frequency\":\"5.303 GHz\",\"channels\":[{\"index\":0,\"frequency\":\"2.411 GHz\",\"power_dbm\":-79},{\"index\":1,\"frequency\":\"2.422 GHz\",\"power_dbm\":-96},{\"index\":2,\"frequency\":\"2.433 GHz\",\"power_dbm\":-101},{\"index\":3,\"frequency\":\"2.444 GHz\",\"power_dbm\":-99},{\"index\":4,\"frequency\":\"2.455 GHz\",\"power_dbm\":-101},{\"index\":5,\"frequency\":\"2.466 GHz\",\"power_dbm\":-76},{\"index\":6,\"frequency\":\"2.477 GHz\",\"power_dbm\":-101},{\"index\":7,\"frequency\":\"5.101 GHz\",\"power_dbm\":-102},{\"index\":8,\"frequency\":\"5.202 GHz\",\"power_dbm\":-85},{\"index\":9,\"frequency\":\"5.303 GHz\",\"power_dbm\":-104},{\"index\":10,\"frequency\":\"5.404 GHz\",\"power_dbm\":-104},{\"index\":11,\"frequency\":\"5.505 GHz\",\"power_dbm\":-103},{\"index\":12,\"frequency\":\"5.606 GHz\",\"power_dbm\":-102},{\"index\":13,\"frequency\":\"5.707 GHz\",\"power_dbm\":-101},{\"index\":14,\"frequency\":\"5.808 GHz\",\"power_dbm\":-101}],\"bandwidth_auto\":null,\"current_slot\":0,\"current_mcs_direction\":\"TX\",\"current_mcs_auto\":true,\"current_mcs_value\":2,\"current_mcs_label\":\"MCS0 BPSK 1/2\",\"current_mcs_throughput_kbps\":236,\"current_power_user\":0,\"current_power_mode\":\"Close Loop\",\"current_power_auto\":true,\"current_power_dbm\":25,\"warnings\":[]}}"
+        }
+      ],
+      "candidate_calls": [],
+      "notes": [
+        "Selected device: AP:a568b033"
+      ],
+      "error": null
+    },
+    {
+      "name": "ap_targeted_pair",
+      "success": true,
+      "status_text": "Pair State 已下发",
+      "pair_row_count": 8,
+      "pair_row_label": "Slot 0",
+      "pair_row_value": "A5:54:F6:2C",
+      "pair_row_button": "Pair",
+      "apply_calls": [
+        {
+          "url": "/api/wireless/runtime/apply",
+          "method": "POST",
+          "body": "{\"action\":\"set_pair_mode\",\"slot\":0,\"pair_start\":true,\"pair_target_mac\":\"A554F62C\"}",
+          "status": 200,
+          "text": "{\"success\":true,\"message\":\"Wireless setting action 'set_pair_mode' applied successfully\",\"current\":{\"local_mac_address\":\"A5:68:B0:33\",\"operation_mode\":\"AP (Async)\",\"dev_pair_target_mac\":null,\"available_devices\":[{\"role\":\"DEV\",\"mac_address\":\"A5:54:F6:2C\",\"label\":\"DEV:a554f62c\",\"selected\":false},{\"role\":\"AP\",\"mac_address\":\"A5:68:B0:33\",\"label\":\"AP:a568b033\",\"selected\":true}],\"selected_signal_user\":0,\"detected_signal_user\":0,\"compatibility_mode\":\"Single User\",\"work_band_code\":1,\"bandwidth_code\":3,\"bandwidth\":\"10 MHz\",\"frequency_khz\":2100000,\"frequency\":\"2.100 GHz\",\"system_uptime\":\"0d 02:52:58\",\"compile_time\":\"04/10/2026 15:34:37\",\"software_version\":\"1.3.02-01\",\"hardware_version\":\"Unknown_4.0\",\"firmware_version\":\"1.3.02-01\",\"band_auto\":true,\"work_band\":\"2G\",\"channel_auto\":true,\"channel_count\":15,\"work_channel_index\":5,\"work_channel_frequency\":\"2.466 GHz\",\"channels\":[{\"index\":0,\"frequency\":\"2.411 GHz\",\"power_dbm\":-91},{\"index\":1,\"frequency\":\"2.422 GHz\",\"power_dbm\":-101},{\"index\":2,\"frequency\":\"2.433 GHz\",\"power_dbm\":-101},{\"index\":3,\"frequency\":\"2.444 GHz\",\"power_dbm\":-101},{\"index\":4,\"frequency\":\"2.455 GHz\",\"power_dbm\":-97},{\"index\":5,\"frequency\":\"2.466 GHz\",\"power_dbm\":-102},{\"index\":6,\"frequency\":\"2.477 GHz\",\"power_dbm\":-102},{\"index\":7,\"frequency\":\"5.101 GHz\",\"power_dbm\":-102},{\"index\":8,\"frequency\":\"5.202 GHz\",\"power_dbm\":-86},{\"index\":9,\"frequency\":\"5.303 GHz\",\"power_dbm\":-104},{\"index\":10,\"frequency\":\"5.404 GHz\",\"power_dbm\":-104},{\"index\":11,\"frequency\":\"5.505 GHz\",\"power_dbm\":-103},{\"index\":12,\"frequency\":\"5.606 GHz\",\"power_dbm\":-102},{\"index\":13,\"frequency\":\"5.707 GHz\",\"power_dbm\":-101},{\"index\":14,\"frequency\":\"5.808 GHz\",\"power_dbm\":-101}],\"bandwidth_auto\":null,\"current_slot\":0,\"current_mcs_direction\":\"TX\",\"current_mcs_auto\":true,\"current_mcs_value\":2,\"current_mcs_label\":\"MCS0 BPSK 1/2\",\"current_mcs_throughput_kbps\":236,\"current_power_user\":0,\"current_power_mode\":\"Close Loop\",\"current_power_auto\":true,\"current_power_dbm\":25,\"warnings\":[]}}"
+        }
+      ],
+      "candidate_calls": [
+        {
+          "url": "/api/wireless/pair-candidates?slot=0",
+          "method": "GET",
+          "body": null,
+          "status": 200,
+          "text": "{\"success\":true,\"slot\":0,\"candidates\":[\"A5:54:F6:2C\"],\"message\":\"Loaded 1 pair candidates for slot 0\"}"
+        }
+      ],
+      "notes": [
+        "Selected device: AP:a568b033",
+        "Target DEV MAC: A5:54:F6:2C"
+      ],
+      "error": null
+    },
+    {
+      "name": "dev_single_address_pair",
+      "success": true,
+      "status_text": "Pair State 已下发",
+      "pair_row_count": 1,
+      "pair_row_label": "AP MAC",
+      "pair_row_value": "A5:68:B0:33",
+      "pair_row_button": "Pair",
+      "apply_calls": [
+        {
+          "url": "/api/wireless/runtime/apply",
+          "method": "POST",
+          "body": "{\"action\":\"set_pair_mode\",\"slot\":0,\"pair_start\":true,\"pair_target_mac\":\"A568B033\"}",
+          "status": 200,
+          "text": "{\"success\":true,\"message\":\"Wireless setting action 'set_pair_mode' applied successfully\",\"current\":{\"local_mac_address\":\"A5:54:F6:2C\",\"operation_mode\":\"DEV (Async)\",\"dev_pair_target_mac\":\"A5:68:B0:33\",\"available_devices\":[{\"role\":\"DEV\",\"mac_address\":\"A5:54:F6:2C\",\"label\":\"DEV:a554f62c\",\"selected\":true},{\"role\":\"AP\",\"mac_address\":\"A5:68:B0:33\",\"label\":\"AP:a568b033\",\"selected\":false}],\"selected_signal_user\":8,\"detected_signal_user\":0,\"compatibility_mode\":\"Single User\",\"work_band_code\":1,\"bandwidth_code\":1,\"bandwidth\":\"2.5 MHz\",\"frequency_khz\":2477000,\"frequency\":\"2.477 GHz\",\"system_uptime\":\"0d 02:53:02\",\"compile_time\":\"04/10/2026 15:34:37\",\"software_version\":\"1.3.02-01\",\"hardware_version\":\"Unknown_4.0\",\"firmware_version\":\"1.3.02-01\",\"band_auto\":true,\"work_band\":\"2G\",\"channel_auto\":true,\"channel_count\":15,\"work_channel_index\":255,\"work_channel_frequency\":\"Unavailable\",\"channels\":[{\"index\":0,\"frequency\":\"2.411 GHz\",\"power_dbm\":-82},{\"index\":1,\"frequency\":\"2.422 GHz\",\"power_dbm\":-95},{\"index\":2,\"frequency\":\"2.433 GHz\",\"power_dbm\":-100},{\"index\":3,\"frequency\":\"2.444 GHz\",\"power_dbm\":-101},{\"index\":4,\"frequency\":\"2.455 GHz\",\"power_dbm\":-101},{\"index\":5,\"frequency\":\"2.466 GHz\",\"power_dbm\":-91},{\"index\":6,\"frequency\":\"2.477 GHz\",\"power_dbm\":-102},{\"index\":7,\"frequency\":\"5.101 GHz\",\"power_dbm\":-102},{\"index\":8,\"frequency\":\"5.202 GHz\",\"power_dbm\":-94},{\"index\":9,\"frequency\":\"5.303 GHz\",\"power_dbm\":-105},{\"index\":10,\"frequency\":\"5.404 GHz\",\"power_dbm\":-104},{\"index\":11,\"frequency\":\"5.505 GHz\",\"power_dbm\":-104},{\"index\":12,\"frequency\":\"5.606 GHz\",\"power_dbm\":-103},{\"index\":13,\"frequency\":\"5.707 GHz\",\"power_dbm\":-101},{\"index\":14,\"frequency\":\"5.808 GHz\",\"power_dbm\":-101}],\"bandwidth_auto\":null,\"current_slot\":0,\"current_mcs_direction\":\"TX\",\"current_mcs_auto\":false,\"current_mcs_value\":12,\"current_mcs_label\":\"MCS10 64QAM 2/3\",\"current_mcs_throughput_kbps\":15372,\"current_power_user\":8,\"current_power_mode\":\"Close Loop\",\"current_power_auto\":true,\"current_power_dbm\":25,\"warnings\":[]}}"
+        }
+      ],
+      "candidate_calls": [],
+      "notes": [
+        "Selected device: DEV:a554f62c"
+      ],
+      "error": null
+    }
+  ]
+}
