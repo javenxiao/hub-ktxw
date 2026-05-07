@@ -352,6 +352,12 @@ impl Default for bb_get_pair_out_t {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
+pub struct bb_get_ap_mac_out_t {
+    pub mac: bb_mac_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct bb_get_candidates_in_t {
     pub slot: u8,
 }
@@ -609,6 +615,12 @@ pub struct bb_set_pair_mode_t {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_local_mac_t {
+    pub mac: bb_mac_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_ap_mac_t {
     pub mac: bb_mac_t,
 }
 
@@ -950,6 +962,7 @@ pub const BB_GET_MCS_MODE: u32 = bb_request(BB_REQ_GET, 117);
 pub const BB_SET_EVENT_SUBSCRIBE: u32 = bb_request(BB_REQ_SET, 0);
 pub const BB_SET_EVENT_UNSUBSCRIBE: u32 = bb_request(BB_REQ_SET, 1);
 pub const BB_SET_PAIR_MODE: u32 = bb_request(BB_REQ_SET, 2);
+pub const BB_SET_AP_MAC: u32 = bb_request(BB_REQ_SET, 3);
 pub const BB_SET_CHAN_MODE: u32 = bb_request(BB_REQ_SET, 5);
 pub const BB_SET_CHAN: u32 = bb_request(BB_REQ_SET, 6);
 pub const BB_SET_POWER_MODE: u32 = bb_request(BB_REQ_SET, 7);
@@ -1595,21 +1608,13 @@ pub fn get_status(
                     .iter()
                     .enumerate()
                     .filter_map(|(slot, link)| {
-                        let slot_mask = 1_u8.checked_shl(slot as u32).unwrap_or(0);
-                        let slot_declared = (output.cfg_sbmp & slot_mask) != 0 || (output.rt_sbmp & slot_mask) != 0;
-                        let candidate_macs = if slot_declared {
-                            get_pair_candidates(handle, slot as u8).unwrap_or_default()
-                        } else {
-                            Vec::new()
-                        };
-
                         summarize_link_status(
                             slot,
                             link,
                             output.cfg_sbmp,
                             output.rt_sbmp,
                             pair_slots.get(slot).cloned().flatten(),
-                            candidate_macs,
+                            Vec::new(),
                             peer_qualities.get(slot).cloned().flatten(),
                             effective_user_index
                                 .and_then(|user_index| {
@@ -1988,6 +1993,48 @@ pub fn get_pair_candidates(handle: *mut bb_dev_handle_t, slot: u8) -> Result<Vec
                     .collect())
             }
             e => Err(format!("bb_ioctl(BB_GET_CANDIDATES) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn get_ap_mac(handle: *mut bb_dev_handle_t) -> Result<Option<String>, String> {
+    let sdk = sdk()?;
+    let mut output = bb_get_ap_mac_out_t::default();
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_GET_AP_MAC as c_uint,
+            std::ptr::null(),
+            &mut output as *mut bb_get_ap_mac_out_t as *mut c_void,
+        ) {
+            0 => {
+                if is_zero_mac(&output.mac.addr) {
+                    Ok(None)
+                } else {
+                    Ok(Some(format_bb_mac(&output.mac)))
+                }
+            }
+            e => Err(format!("bb_ioctl(BB_GET_AP_MAC) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn set_ap_mac(handle: *mut bb_dev_handle_t, mac: &str) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_ap_mac_t {
+        mac: parse_bb_mac(mac)?,
+    };
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_AP_MAC as c_uint,
+            &input as *const bb_set_ap_mac_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_AP_MAC) failed with code: {}", e)),
         }
     }
 }

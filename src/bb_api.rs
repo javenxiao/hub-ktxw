@@ -109,6 +109,7 @@ pub struct BasebandHealthStatus {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WirelessRuntimeDetails {
     pub status: ffi::BbGetStatusSummary,
+    pub dev_pair_target_mac: Option<String>,
     pub available_devices: Vec<ffi::BbDiscoveredDeviceSummary>,
     pub system_info: Option<ffi::BbSystemInfoSummary>,
     pub band_info: Option<ffi::BbBandInfoSummary>,
@@ -821,9 +822,20 @@ impl BasebandApi {
             ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP, preferred_signal_user)
         })?;
         self.remember_current_device(&status);
+        let mut warnings = Vec::new();
+        let dev_pair_target_mac = if status.role == 1 {
+            match run_remote_sdk_call(is_remote, || ffi::get_ap_mac(self.handle_ptr())) {
+                Ok(value) => value,
+                Err(err) => {
+                    warnings.push(err);
+                    None
+                }
+            }
+        } else {
+            None
+        };
         let slot = status.links.first().map(|link| link.slot as u8).unwrap_or(0);
         let user = resolve_plot_user(&status);
-        let mut warnings = Vec::new();
         let available_devices = if self.host_handle != 0 {
             if let Err(err) = self.refresh_host_devices_cache() {
                 warnings.push(format!(
@@ -897,6 +909,7 @@ impl BasebandApi {
 
         Ok(WirelessRuntimeDetails {
             status,
+            dev_pair_target_mac,
             available_devices,
             system_info,
             band_info,
@@ -1025,6 +1038,10 @@ impl BasebandApi {
 
     pub fn get_pair_candidates(&mut self, slot: u8) -> Result<Vec<String>, String> {
         self.with_device_operation("get_pair_candidates", |handle| ffi::get_pair_candidates(handle, slot))
+    }
+
+    pub fn set_ap_mac(&mut self, mac: &str) -> Result<(), String> {
+        self.with_device_operation("set_ap_mac", |handle| ffi::set_ap_mac(handle, mac))
     }
 
     pub fn set_channel_mode(&mut self, auto_mode: bool) -> Result<(), String> {
@@ -1260,6 +1277,11 @@ impl BasebandManager {
     pub fn get_pair_candidates(&self, slot: u8) -> Result<Vec<String>, String> {
         let mut api = self.api.lock().unwrap();
         api.get_pair_candidates(slot)
+    }
+
+    pub fn set_ap_mac(&self, mac: &str) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_ap_mac(mac)
     }
 
     pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {

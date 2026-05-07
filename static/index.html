@@ -375,7 +375,7 @@
                                                 <th>Rx Mod</th>
                                                 <th>SNR (dB)</th>
                                                 <th>Signal</th>
-                                                <th>RSSI</th>
+                                                <th>RSSI Graph</th>
                                             </tr>
                                         </thead>
                                         <tbody id="connection-table-body">
@@ -389,7 +389,7 @@
 
                         </section>
 
-                        <section class="chart-panel">
+                        <section class="chart-panel" id="wireless-chart-panel" hidden>
                             <h2 class="sys-section-title chart-panel-title" id="chart-title">RSSI Graph (--)</h2>
                             <div class="chart-box">
                                 <div class="plot-toolbar">
@@ -652,7 +652,7 @@
                                 <div class="sys-section rf-summary-section rf-pair-section">
                                     <h3 class="sys-section-title">Pair</h3>
                                     <div class="rf-pair-list" id="rf-pair-list"></div>
-                                    <p class="rf-pair-note">Red dot means pairing is in progress. Green dot means the slot is paired. Enter or select a DEV MAC in the box to target a specific device; leave the box unchanged to keep automatic matching.</p>
+                                    <p class="rf-pair-note" id="rf-pair-note">Red dot means pairing is in progress. Green dot means the slot is paired. Enter or select a DEV MAC in the box to target a specific device; leave the box unchanged to keep automatic matching.</p>
                                 </div>
                             </div>
                             <p class="wireless-control-status" id="wireless-control-status" data-state="idle">Most RF settings apply automatically. Role switching requires manual Apply.</p>
@@ -711,6 +711,7 @@
         const sidebarToggleInput = document.getElementById('sidebar-collapsed');
         const primaryTabLabels = Array.from(document.querySelectorAll('.top-tabs .tab-label'));
         const connectionTableBody = document.getElementById('connection-table-body');
+        const wirelessChartPanel = document.getElementById('wireless-chart-panel');
         const wirelessSubTabs = Array.from(document.querySelectorAll('.sub-tab[data-wireless-tab]'));
         const wirelessSubPages = Array.from(document.querySelectorAll('.wireless-subpage'));
         let socket = null;
@@ -732,8 +733,11 @@
         let bandwidthValueSelection = null;
         let bandwidthAutoMode = false;
         const pairMacDraftBySlot = new Map();
+        const pairCandidatesBySlot = new Map();
+        const pairCandidateRequestsBySlot = new Map();
         const pairPendingBySlot = new Map();
         const pairStopOverrideBySlot = new Map();
+        let pairCandidatesDeviceMac = '';
         const pairPendingGraceMs = 2500;
         const rfSignalUserOptions = [
             { value: 0, label: 'User 0' },
@@ -752,6 +756,8 @@
             { value: 1, label: 'DEV' },
         ];
         const defaultWirelessControlStatusMessage = 'Most RF settings apply automatically. Role switching requires manual Apply.';
+        const defaultPairNoteMessage = 'Red dot means pairing is in progress. Green dot means the slot is paired. Enter or select a DEV MAC in the box to target a specific device; leave the box unchanged to keep automatic matching.';
+        const devPairNoteMessage = 'DEV mode follows PQ tool behavior: only one AP MAC address is editable. Update the AP MAC if needed, then click Pair.';
         const wirelessActionLabels = {
             select_device: 'Active Device',
             set_signal_user: 'User',
@@ -779,6 +785,8 @@
             paused: false,
             stopped: false,
             recording: false,
+            panelVisible: false,
+            panelSlot: null,
             visibility: new Map(),
             frames: [],
             lastIncomingChart: null,
@@ -946,10 +954,22 @@
         }
 
         function buildMiniChart(mainHistory, auxHistory) {
+            const isPressed = plotState.panelVisible;
             const [minValue, maxValue] = normalizeRange(...resolveRange(mainHistory, auxHistory));
             const mainPoints = toPolylinePoints(mainHistory, 44, 28, minValue, maxValue, 2, 2, 41, 25);
             const auxPoints = toPolylinePoints(auxHistory, 44, 28, minValue, maxValue, 2, 2, 41, 25);
-            return `<span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="双路 RSSI 缩略图"><polyline class="mini-line-main" points="${mainPoints}"></polyline><polyline class="mini-line-aux" points="${auxPoints}"></polyline></svg></span>`;
+            return `<button class="mini-chart-button${isPressed ? ' is-active' : ''}" type="button" data-rssi-toggle="true" aria-label="切换 RSSI Graph 显示" aria-pressed="${isPressed}"><span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="双路 RSSI 缩略图"><polyline class="mini-line-main" points="${mainPoints}"></polyline><polyline class="mini-line-aux" points="${auxPoints}"></polyline></svg></span></button>`;
+        }
+
+        function setPlotPanelVisibility(visible) {
+            plotState.panelVisible = Boolean(visible);
+            if (!plotState.panelVisible) {
+                plotState.panelSlot = null;
+            }
+
+            if (wirelessChartPanel) {
+                wirelessChartPanel.hidden = !plotState.panelVisible;
+            }
         }
 
         function buildStatePill(label) {
@@ -988,9 +1008,111 @@
             return normalized.match(/.{1,2}/g)?.join(':') || normalized;
         }
 
-        function buildPairCandidateOptions(slotConnection) {
+        function getPairCandidatesDeviceMac() {
+            return normalizeRfDeviceMac(
+                wirelessRuntimeCurrent?.local_mac_address || latestWirelessSnapshot?.general?.mac_address
+            );
+        }
+
+        function resolvePairPanelRole() {
+            const runtimeRole = resolveCurrentBasebandRole(wirelessRuntimeCurrent);
+            if (runtimeRole !== null) {
+                return runtimeRole;
+            }
+
+            const snapshotMode = latestWirelessSnapshot?.general?.operation_mode;
+            if (!snapshotMode) {
+                return null;
+            }
+
+            return resolveCurrentBasebandRole({ operation_mode: snapshotMode });
+        }
+
+        function isDevPairMode() {
+            return resolvePairPanelRole() === 1;
+        }
+
+        function getDevPairMacDisplayValue(slotConnection) {
+            return formatPairMacDisplay(
+                wirelessRuntimeCurrent?.dev_pair_target_mac
+                || slotConnection?.mac_address
+                || ''
+            );
+        }
+
+        function resetPairCandidatesCache(deviceMac = getPairCandidatesDeviceMac()) {
+            pairCandidatesBySlot.clear();
+            pairCandidateRequestsBySlot.clear();
+            pairCandidatesDeviceMac = deviceMac;
+        }
+
+        function ensurePairCandidatesCacheFresh() {
+            const deviceMac = getPairCandidatesDeviceMac();
+            if (deviceMac !== pairCandidatesDeviceMac) {
+                resetPairCandidatesCache(deviceMac);
+            }
+        }
+
+        async function loadPairCandidates(slotIndex, options = {}) {
+            const { force = false, silent = true } = options;
+            const slot = Number(slotIndex);
+            if (!Number.isFinite(slot)) {
+                return [];
+            }
+
+            if (isDevPairMode()) {
+                return [];
+            }
+
+            ensurePairCandidatesCacheFresh();
+
+            if (!force && pairCandidatesBySlot.has(slot)) {
+                return pairCandidatesBySlot.get(slot);
+            }
+
+            if (pairCandidateRequestsBySlot.has(slot)) {
+                return pairCandidateRequestsBySlot.get(slot);
+            }
+
+            const requestDeviceMac = pairCandidatesDeviceMac;
+            const requestPromise = fetch(`/api/wireless/pair-candidates?slot=${slot}`, { cache: 'no-store' })
+                .then(async (response) => {
+                    const result = await response.json();
+                    if (!response.ok || result.success === false) {
+                        throw new Error(result.message || `HTTP ${response.status}`);
+                    }
+
+                    const candidates = Array.isArray(result.candidates) ? result.candidates : [];
+                    if (requestDeviceMac === getPairCandidatesDeviceMac()) {
+                        pairCandidatesBySlot.set(slot, candidates);
+                        renderPairPanel(latestWirelessSnapshot?.connections);
+                    }
+                    return candidates;
+                })
+                .catch((error) => {
+                    if (!silent) {
+                        setWirelessControlStatus(`Pair candidates 读取失败: ${error.message}`, 'error');
+                    }
+                    return [];
+                })
+                .finally(() => {
+                    if (pairCandidateRequestsBySlot.get(slot) === requestPromise) {
+                        pairCandidateRequestsBySlot.delete(slot);
+                    }
+                });
+
+            pairCandidateRequestsBySlot.set(slot, requestPromise);
+            return requestPromise;
+        }
+
+        function buildPairCandidateOptions(slotIndex) {
+            if (isDevPairMode()) {
+                return [];
+            }
+
+            ensurePairCandidatesCacheFresh();
             const seen = new Set();
-            return (Array.isArray(slotConnection?.candidate_macs) ? slotConnection.candidate_macs : [])
+            return (Array.isArray(pairCandidatesBySlot.get(slotIndex)) ? pairCandidatesBySlot.get(slotIndex) : [])
                 .map((mac) => formatPairMacDisplay(mac))
                 .filter((mac) => {
                     const normalized = normalizePairMac(mac);
@@ -1010,6 +1132,12 @@
 
         function buildPairStatus(slotIndex, slotConnection) {
             if (!slotConnection) {
+                const pending = pairPendingBySlot.get(slotIndex);
+                if (pending && Date.now() < pending.expiresAt) {
+                    return 'pairing';
+                }
+
+                pairPendingBySlot.delete(slotIndex);
                 pairPendingBySlot.delete(slotIndex);
                 pairStopOverrideBySlot.delete(slotIndex);
                 return 'idle';
@@ -1065,12 +1193,15 @@
         }
 
         function buildPairMacFieldState(slotIndex, slotConnection, status) {
-            const macValue = normalizePairMac(slotConnection?.mac_address);
-            const displayMacValue = formatPairMacDisplay(slotConnection?.mac_address);
+            const devPairMode = isDevPairMode();
+            const displayMacValue = devPairMode
+                ? getDevPairMacDisplayValue(slotConnection)
+                : formatPairMacDisplay(slotConnection?.mac_address);
+            const macValue = normalizePairMac(displayMacValue);
             const hasDraft = pairMacDraftBySlot.has(slotIndex);
             const draftValue = hasDraft ? pairMacDraftBySlot.get(slotIndex) : null;
 
-            if (status === 'pairing') {
+            if (!devPairMode && status === 'pairing') {
                 return {
                     value: '匹配中...',
                     readOnly: false,
@@ -1082,32 +1213,36 @@
                 ? draftValue
                 : displayMacValue
                     ? displayMacValue
-                    : '无匹配设备';
+                    : devPairMode
+                        ? ''
+                        : '无匹配设备';
 
             return {
                 value: displayValue,
                 readOnly: false,
                 className: status === 'paired' && macValue !== '00000000'
                     ? ' is-paired'
-                    : displayValue === '无匹配设备'
+                    : (!devPairMode && displayValue === '无匹配设备') || (devPairMode && displayValue === '')
                         ? ' is-empty'
                         : '',
             };
         }
 
         function buildPairRow(slotIndex, slotConnection) {
+            const devPairMode = isDevPairMode();
             const status = buildPairStatus(slotIndex, slotConnection);
             const isPairing = status === 'pairing';
             const macFieldState = buildPairMacFieldState(slotIndex, slotConnection, status);
-            const candidateOptions = buildPairCandidateOptions(slotConnection);
+            const candidateOptions = buildPairCandidateOptions(slotIndex);
             const candidateListId = `rf-pair-candidates-${slotIndex}`;
             const pairStart = !isPairing;
             const buttonStateClass = isPairing ? ' is-pairing' : '';
+            const inputPlaceholder = devPairMode ? '输入 AP MAC' : '输入 DEV MAC';
             return `
                 <div class="rf-pair-row">
-                    <div class="rf-pair-user">Slot ${slotIndex}</div>
+                    <div class="rf-pair-user">${devPairMode ? 'AP MAC' : `Slot ${slotIndex}`}</div>
                     <span class="rf-pair-dot ${status}" aria-hidden="true"></span>
-                    <input class="sys-input rf-pair-mac-input${macFieldState.className}" type="text" data-pair-mac-slot="${slotIndex}" value="${escapeHtml(macFieldState.value)}" ${candidateOptions.length ? `list="${candidateListId}"` : ''} ${macFieldState.readOnly ? 'readonly aria-readonly="true"' : ''}>
+                    <input class="sys-input rf-pair-mac-input${macFieldState.className}" type="text" data-pair-mac-slot="${slotIndex}" value="${escapeHtml(macFieldState.value)}" placeholder="${escapeHtml(inputPlaceholder)}" ${candidateOptions.length ? `list="${candidateListId}"` : ''} ${macFieldState.readOnly ? 'readonly aria-readonly="true"' : ''}>
                     ${candidateOptions.length ? `<datalist id="${candidateListId}">${candidateOptions.map((mac) => `<option value="${escapeHtml(mac)}"></option>`).join('')}</datalist>` : ''}
                     <button class="sys-button-default rf-pair-button${buttonStateClass}" type="button" data-pair-slot="${slotIndex}" data-pair-start="${String(pairStart)}">${isPairing ? 'Stop' : 'Pair'}</button>
                 </div>
@@ -1120,13 +1255,20 @@
                 return;
             }
 
+            const note = document.getElementById('rf-pair-note');
+            if (note) {
+                note.textContent = isDevPairMode() ? devPairNoteMessage : defaultPairNoteMessage;
+            }
+
             const bySlot = new Map(
                 (Array.isArray(connections) ? connections : [])
                     .map((connection) => [parseConnectionSlot(connection.link_slot), connection])
                     .filter(([slot]) => slot !== null)
             );
 
-            const markup = Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex))).join('');
+            const markup = isDevPairMode()
+                ? buildPairRow(0, bySlot.get(0) || (Array.isArray(connections) ? connections[0] : null))
+                : Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex))).join('');
             if (container.dataset.renderedMarkup !== markup) {
                 container.innerHTML = markup;
                 container.dataset.renderedMarkup = markup;
@@ -1134,6 +1276,26 @@
 
             if (!container.dataset.bound) {
                 container.dataset.bound = 'true';
+                container.addEventListener('focusin', (event) => {
+                    const input = event.target instanceof Element
+                        ? event.target.closest('[data-pair-mac-slot]')
+                        : null;
+                    if (!input) {
+                        return;
+                    }
+
+                    const slot = Number(input.getAttribute('data-pair-mac-slot'));
+                    if (!Number.isFinite(slot)) {
+                        return;
+                    }
+
+                    if (isDevPairMode()) {
+                        return;
+                    }
+
+                    loadPairCandidates(slot).catch(() => {});
+                });
+
                 container.addEventListener('input', (event) => {
                     const input = event.target instanceof Element
                         ? event.target.closest('[data-pair-mac-slot]')
@@ -1171,12 +1333,17 @@
                     const targetInput = container.querySelector(`[data-pair-mac-slot="${slot}"]`);
                     const rawPairTarget = targetInput instanceof HTMLInputElement ? targetInput.value.trim() : '';
                     const normalizedPairTarget = normalizePairMac(rawPairTarget);
-                    const wantsTargetedPair = rawPairTarget !== ''
-                        && rawPairTarget !== '无匹配设备'
-                        && rawPairTarget !== '匹配中...';
+                    const devPairMode = isDevPairMode();
+                    const hasPairTargetDraft = pairMacDraftBySlot.has(slot);
+                    const wantsTargetedPair = devPairMode
+                        ? rawPairTarget !== '' && rawPairTarget !== '匹配中...'
+                        : hasPairTargetDraft
+                            && rawPairTarget !== ''
+                            && rawPairTarget !== '无匹配设备'
+                            && rawPairTarget !== '匹配中...';
 
                     if (pairStart && wantsTargetedPair && normalizedPairTarget === '00000000') {
-                        setWirelessControlStatus('Pair DEV MAC 格式无效，需为 4 字节 MAC', 'error');
+                        setWirelessControlStatus(devPairMode ? 'AP MAC 格式无效，需为 4 字节 MAC' : 'Pair DEV MAC 格式无效，需为 4 字节 MAC', 'error');
                         return;
                     }
 
@@ -1197,7 +1364,7 @@
 
                     renderPairPanel(latestWirelessSnapshot?.connections);
                     const payload = { slot, pair_start: pairStart };
-                    if (pairStart && normalizedPairTarget !== '00000000') {
+                    if (pairStart && wantsTargetedPair && normalizedPairTarget !== '00000000') {
                         payload.pair_target_mac = normalizedPairTarget;
                     }
 
@@ -1257,7 +1424,15 @@
             return String(series?.label || series?.key || `series_${index + 1}`).toUpperCase();
         }
 
-        function getPlotSeriesColor(index) {
+        function getPlotSeriesColor(series, index) {
+            const normalizedKey = getPlotSeriesKey(series, index).toUpperCase();
+            const normalizedLabel = getPlotSeriesLabel(series, index).toUpperCase();
+            if (normalizedKey === 'AP_GAIN_A' || normalizedLabel === 'AP_GAIN_A') {
+                return '#c026d3';
+            }
+            if (normalizedKey === 'DEV_GAIN_B' || normalizedLabel === 'DEV_GAIN_B') {
+                return '#0f766e';
+            }
             return plotPalette[index % plotPalette.length];
         }
 
@@ -1444,7 +1619,7 @@
         function buildPlotLegendItem(series, index, isVisible) {
             const key = getPlotSeriesKey(series, index);
             const label = getPlotSeriesLabel(series, index);
-            const color = getPlotSeriesColor(index);
+            const color = getPlotSeriesColor(series, index);
             const unit = series.unit || '';
             const currentValue = formatChartValue(series.current_value, unit);
             const rangeText = Number.isFinite(series.min_value) && Number.isFinite(series.max_value)
@@ -1586,7 +1761,7 @@
                 const points = rawPoints.length > 0
                     ? toPolylinePoints(rawPoints, plotBox.viewBoxWidth, plotBox.viewBoxHeight, rangeMin, rangeMax, plotBox.startX, plotBox.startY, plotBox.endX, plotBox.endY)
                     : `${plotBox.startX},${plotBox.endY} ${plotBox.endX},${plotBox.endY}`;
-                const color = getPlotSeriesColor(index);
+                const color = getPlotSeriesColor(series, index);
                 const lastValue = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1] : rangeMin;
                 const lastX = pointCount <= 1
                     ? plotBox.startX
@@ -2464,6 +2639,7 @@
 
             if (!payload || !payload.available || !payload.current) {
                 wirelessRuntimeCurrent = null;
+                resetPairCandidatesCache('');
                 renderRfProfile();
                 renderRfDeviceOptions(null);
                 renderRfSignalUserOptions(null);
@@ -2491,6 +2667,7 @@
 
             const current = payload.current;
             wirelessRuntimeCurrent = current;
+            ensurePairCandidatesCacheFresh();
             renderRfProfile();
             renderRfDeviceOptions(current);
             renderRfSignalUserOptions(current);
@@ -3030,6 +3207,36 @@
                 }
             });
         });
+
+        if (connectionTableBody) {
+            const toggleRssiChartPanel = () => {
+                setPlotPanelVisibility(!plotState.panelVisible);
+                renderConnections(latestWirelessSnapshot?.connections || []);
+            };
+
+            connectionTableBody.addEventListener('pointerdown', (event) => {
+                const button = event.target instanceof Element
+                    ? event.target.closest('[data-rssi-toggle="true"]')
+                    : null;
+                if (!button) {
+                    return;
+                }
+
+                event.preventDefault();
+                toggleRssiChartPanel();
+            });
+
+            connectionTableBody.addEventListener('click', (event) => {
+                const button = event.target instanceof Element
+                    ? event.target.closest('[data-rssi-toggle="true"]')
+                    : null;
+                if (!button || event.detail !== 0) {
+                    return;
+                }
+
+                toggleRssiChartPanel();
+            });
+        }
 
         const rfOperationModeSelect = document.getElementById('rf-operation-mode');
         if (rfOperationModeSelect) {

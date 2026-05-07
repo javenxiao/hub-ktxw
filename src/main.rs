@@ -5,6 +5,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     extract::{
+        Query,
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
@@ -113,6 +114,7 @@ struct WirelessRuntimeResponse {
 struct WirelessRuntimeView {
     local_mac_address: String,
     operation_mode: String,
+    dev_pair_target_mac: Option<String>,
     available_devices: Vec<WirelessDeviceOption>,
     selected_signal_user: Option<u8>,
     detected_signal_user: Option<u8>,
@@ -187,6 +189,19 @@ struct WirelessSettingResponse {
     success: bool,
     message: String,
     current: Option<WirelessRuntimeView>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PairCandidatesQuery {
+    slot: u8,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct PairCandidatesResponse {
+    success: bool,
+    slot: u8,
+    candidates: Vec<String>,
+    message: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -403,6 +418,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/api/wireless/status", get(get_wireless_status))
         .route("/api/wireless/runtime", get(get_wireless_runtime))
+        .route("/api/wireless/pair-candidates", get(get_pair_candidates))
         .route("/api/wireless/runtime/apply", post(apply_wireless_setting))
         .route(
             "/api/wireless/plot/settings",
@@ -445,6 +461,61 @@ async fn get_wireless_status(State(state): State<Arc<AppState>>) -> Json<Wireles
 
 async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<WirelessRuntimeResponse> {
     Json(state.wireless_runtime.read().await.clone())
+}
+
+async fn get_pair_candidates(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<PairCandidatesQuery>,
+) -> Json<PairCandidatesResponse> {
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(PairCandidatesResponse {
+            success: false,
+            slot: query.slot,
+            candidates: Vec::new(),
+            message: "Baseband SDK not available; cannot load pair candidates in simulator mode".to_string(),
+        });
+    };
+
+    if query.slot >= 8 {
+        return Json(PairCandidatesResponse {
+            success: false,
+            slot: query.slot,
+            candidates: Vec::new(),
+            message: format!("Unsupported slot '{}'; expected 0-7", query.slot),
+        });
+    }
+
+    let runtime_role = state
+        .wireless_runtime
+        .read()
+        .await
+        .current
+        .as_ref()
+        .and_then(resolve_runtime_role);
+
+    if runtime_role == Some(1) {
+        return Json(PairCandidatesResponse {
+            success: true,
+            slot: query.slot,
+            candidates: Vec::new(),
+            message: "DEV pair uses AP MAC and does not expose candidate DEV list".to_string(),
+        });
+    }
+
+    match baseband.get_pair_candidates(query.slot) {
+        Ok(candidates) => Json(PairCandidatesResponse {
+            success: true,
+            slot: query.slot,
+            message: format!("Loaded {} pair candidates for slot {}", candidates.len(), query.slot),
+            candidates,
+        }),
+        Err(err) => Json(PairCandidatesResponse {
+            success: false,
+            slot: query.slot,
+            candidates: Vec::new(),
+            message: format!("Failed to load pair candidates for slot {}: {}", query.slot, err),
+        }),
+    }
 }
 
 async fn get_plot_refresh_settings(
@@ -497,6 +568,17 @@ fn action_requires_runtime_context(action: &str, request: &WirelessSettingReques
         }
         "set_power" => request.user.is_none(),
         _ => false,
+    }
+}
+
+fn resolve_runtime_role(current: &WirelessRuntimeView) -> Option<u8> {
+    let operation_mode = current.operation_mode.to_ascii_uppercase();
+    if operation_mode.contains("AP") {
+        Some(0)
+    } else if operation_mode.contains("DEV") {
+        Some(1)
+    } else {
+        None
     }
 }
 
@@ -558,12 +640,13 @@ async fn apply_wireless_setting(
             .and_then(|pair_start| {
                 let slot = request.slot.unwrap_or(default_slot);
                 let slot_bmp = 1_u8.checked_shl(u32::from(slot)).unwrap_or(0);
+                let current_role = cached_current
+                    .as_ref()
+                    .and_then(resolve_runtime_role)
+                    .or_else(|| current.as_ref().map(|details| details.status.role))
+                    .or_else(|| baseband.get_wireless_runtime_details().ok().map(|details| details.status.role));
                 if slot_bmp == 0 {
                     return Err(format!("Unsupported slot '{}'; expected 0-7", slot));
-                }
-
-                if !pair_start {
-                    return baseband.set_pair_mode(pair_start, slot_bmp);
                 }
 
                 let requested_target = request
@@ -571,6 +654,20 @@ async fn apply_wireless_setting(
                     .as_deref()
                     .map(normalize_device_mac)
                     .filter(|mac| !mac.is_empty());
+
+                if current_role == Some(1) {
+                    if pair_start {
+                        if let Some(target_mac) = requested_target {
+                            baseband.set_ap_mac(&target_mac)?;
+                        }
+                    }
+
+                    return baseband.set_pair_mode(pair_start, slot_bmp);
+                }
+
+                if !pair_start {
+                    return baseband.set_pair_mode(pair_start, slot_bmp);
+                }
 
                 if let Some(target_mac) = requested_target {
                     let candidates = baseband.get_pair_candidates(slot)?;
@@ -1108,8 +1205,8 @@ fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> Wireless
                 "16-QAM FEC 3/4".to_string()
             },
             snr_db: 34 + oscillate(sequence, 2, 7),
-            signal_level_main: map_signal_level(peer_current_main_rssi),
-            signal_level_aux: map_signal_level(peer_current_aux_rssi),
+            signal_level_main: map_signal_level_from_snr(Some(34 + oscillate(sequence, 2, 7))),
+            signal_level_aux: map_signal_level_from_snr(Some(34 + oscillate(sequence, 2, 7))),
             rssi_main_history: peer_main_history,
             rssi_aux_history: peer_aux_history,
         }],
@@ -1214,6 +1311,8 @@ fn build_hardware_snapshot(
         .map(|link| {
             let current_main = link.signal_main.unwrap_or(RSSI_UNAVAILABLE_DBM);
             let current_aux = link.signal_aux.unwrap_or(RSSI_UNAVAILABLE_DBM);
+            let current_snr = link.snr_db;
+            let signal_level = map_signal_level_from_snr(current_snr);
 
             ConnectionStatus {
                 link_slot: format!("SLOT {}", link.slot),
@@ -1233,9 +1332,9 @@ fn build_hardware_snapshot(
                     .rx_mcs
                     .map(format_mcs)
                     .unwrap_or_else(|| "Unavailable".to_string()),
-                snr_db: link.snr_db.unwrap_or(SNR_UNAVAILABLE_DB),
-                signal_level_main: map_signal_level(current_main),
-                signal_level_aux: map_signal_level(current_aux),
+                snr_db: current_snr.unwrap_or(SNR_UNAVAILABLE_DB),
+                signal_level_main: signal_level,
+                signal_level_aux: signal_level,
                 rssi_main_history: history_from_previous(
                     previous_connection_history(previous, link.slot, true),
                     current_main,
@@ -1619,6 +1718,10 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
     WirelessRuntimeView {
         local_mac_address: details.status.mac_hex.clone(),
         operation_mode: format_operation_mode(&details.status),
+        dev_pair_target_mac: details
+            .dev_pair_target_mac
+            .clone()
+            .or_else(|| details.status.peer_mac_hex.clone()),
         available_devices,
         selected_signal_user: details.status.active_user,
         detected_signal_user: details.status.detected_active_user,
@@ -1841,17 +1944,13 @@ fn oscillate(step: u64, amplitude: i32, period: u64) -> i32 {
     amplitude - (distance * amplitude / pivot.max(1))
 }
 
-fn map_signal_level(rssi_dbm: i32) -> u8 {
-    match rssi_dbm {
-        i32::MIN..=-100 => 0,
-        96..=i32::MAX => 4,
-        64..=95 => 3,
-        32..=63 => 2,
-        1..=31 => 1,
-        -58..=-1 => 4,
-        -64..=-59 => 3,
-        -70..=-65 => 2,
-        _ => 1,
+fn map_signal_level_from_snr(snr_db: Option<i32>) -> u8 {
+    match snr_db {
+        None => 0,
+        Some(value) if value >= 23 => 4,
+        Some(value) if value >= 15 => 3,
+        Some(value) if value >= 9 => 2,
+        Some(_) => 1,
     }
 }
 

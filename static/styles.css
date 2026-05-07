@@ -638,11 +638,11 @@ body {
     }
 
     .wireless-status-table-scroll .wireless-overview-table {
-        min-width: 680px;
+        min-width: 960px;
     }
 
     .wireless-status-table-scroll-connection .connection-table {
-        min-width: 860px;
+        min-width: 1160px;
     }
 }
 
@@ -996,10 +996,24 @@ tbody td {
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable both-edges;
 }
 
 .wireless-status-table-scroll .wireless-status-table {
     margin: 0;
+}
+
+.wireless-overview-table,
+.connection-table {
+    width: 100%;
+}
+
+.wireless-status-table-scroll .wireless-overview-table {
+    min-width: 1080px;
+}
+
+.wireless-status-table-scroll-connection .connection-table {
+    min-width: 1240px;
 }
 
 .connection-table {
@@ -1073,6 +1087,8 @@ tbody td {
 
 .wireless-status-section .sys-section-title {
     margin-bottom: 6px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
 }
 
 .wireless-diagnostics-grid {
@@ -1199,50 +1215,6 @@ tbody td {
     overflow-wrap: normal;
 }
 
-.connection-table th:nth-child(1),
-.connection-table td:nth-child(1) {
-    width: 8%;
-}
-
-.connection-table th:nth-child(2),
-.connection-table td:nth-child(2) {
-    width: 10%;
-}
-
-.connection-table th:nth-child(3),
-.connection-table td:nth-child(3) {
-    width: 10%;
-}
-
-.connection-table th:nth-child(4),
-.connection-table td:nth-child(4),
-.connection-table th:nth-child(5),
-.connection-table td:nth-child(5) {
-    width: 14%;
-}
-
-.connection-table th:nth-child(6),
-.connection-table td:nth-child(6) {
-    width: 8%;
-}
-
-.connection-table th:nth-child(7),
-.connection-table td:nth-child(7) {
-    width: 8%;
-}
-
-.connection-table th:nth-child(8),
-.connection-table td:nth-child(8),
-.connection-table th:nth-child(9),
-.connection-table td:nth-child(9) {
-    width: 11%;
-}
-
-.connection-table th:nth-child(8),
-.connection-table td:nth-child(8) {
-    width: 10%;
-}
-
 .signal-bars {
     display: inline-flex;
     align-items: flex-end;
@@ -1321,6 +1293,25 @@ tbody td {
     height: 22px;
     border: 1px solid #6f86a1;
     background: linear-gradient(180deg, #f7f3d7, #d0d9ea);
+}
+
+.mini-chart-button {
+    display: inline-flex;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.mini-chart-button:focus-visible {
+    outline: 2px solid #2f67d8;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.mini-chart-button.is-active .mini-chart {
+    border-color: #2f67d8;
+    box-shadow: 0 0 0 1px rgba(47, 103, 216, 0.22);
 }
 
 .mini-grid {
@@ -2610,19 +2601,24 @@ tbody td {
     .console-context-role-controls {
         width: 100%;
         display: grid;
-        grid-template-columns: max-content auto;
-        align-items: center;
-        justify-content: space-between;
-        justify-items: start;
-        flex-wrap: nowrap;
+        grid-template-columns: 1fr;
+        align-items: stretch;
+        justify-content: stretch;
+        justify-items: stretch;
+        gap: 10px;
     }
 
     .console-context-role-controls .console-context-select.sys-input {
-        width: auto;
-        min-width: 110px;
-        max-width: calc(100% - 88px);
+        width: 100%;
+        min-width: 0;
+        max-width: none;
         text-align: left;
         text-align-last: left;
+    }
+
+    .console-context-role-controls .signal-source-role-apply {
+        width: 100%;
+        justify-self: stretch;
     }
 
     .console-context-role-controls .signal-source-role-apply {
@@ -2795,14 +2791,108 @@ tbody td {
 
     .wireless-status-table-scroll {
         padding-bottom: 2px;
+        overflow-x: visible;
     }
 
     .wireless-status-table-scroll .wireless-overview-table {
-        min-width: 640px;
+        min-width: 0;
+        table-layout: auto;
     }
 
     .wireless-status-table-scroll-connection .connection-table {
-        min-width: 860px;
+        min-width: 0;
+        table-layout: auto;
+    }
+
+    .wireless-status-table {
+        display: block;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .wireless-status-table thead {
+        display: none;
+    }
+
+    .wireless-status-table tbody {
+        display: grid;
+        gap: 12px;
+    }
+
+    .wireless-status-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        padding: 10px;
+        border: 1px solid #dbe6f2;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #fbfdff 0%, #f6f9fd 100%);
+        box-shadow: 0 10px 20px rgba(31, 42, 58, 0.04);
+    }
+
+    .wireless-status-table tbody td {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        min-width: 0;
+        padding: 8px 10px;
+        text-align: left;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        border: 1px solid #eef3f8;
+        border-bottom: none;
+        border-radius: 12px;
+        background: #ffffff;
+    }
+
+    .wireless-status-table tbody td::before {
+        color: #627b92;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+
+    .wireless-status-table tbody td[colspan] {
+        grid-column: 1 / -1;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .wireless-status-table tbody td[colspan]::before {
+        content: none;
+    }
+
+    .wireless-overview-table tbody td:nth-child(1)::before { content: 'MAC Address'; }
+    .wireless-overview-table tbody td:nth-child(2)::before { content: 'Operation Mode'; }
+    .wireless-overview-table tbody td:nth-child(3)::before { content: 'Compatibility Mode'; }
+    .wireless-overview-table tbody td:nth-child(4)::before { content: 'Work Band'; }
+    .wireless-overview-table tbody td:nth-child(5)::before { content: 'Channel Mode'; }
+    .wireless-overview-table tbody td:nth-child(6)::before { content: 'Work Channel'; }
+    .wireless-overview-table tbody td:nth-child(7)::before { content: 'Bandwidth'; }
+    .wireless-overview-table tbody td:nth-child(8)::before { content: 'Current MCS'; }
+    .wireless-overview-table tbody td:nth-child(9)::before { content: 'Power Control'; }
+
+    .connection-table tbody td:nth-child(1)::before { content: 'Link Slot'; }
+    .connection-table tbody td:nth-child(2)::before { content: 'Link State'; }
+    .connection-table tbody td:nth-child(3)::before { content: 'Pair State'; }
+    .connection-table tbody td:nth-child(4)::before { content: 'MAC Address'; }
+    .connection-table tbody td:nth-child(5)::before { content: 'Tx Mod'; }
+    .connection-table tbody td:nth-child(6)::before { content: 'Rx Mod'; }
+    .connection-table tbody td:nth-child(7)::before { content: 'SNR (dB)'; }
+    .connection-table tbody td:nth-child(8)::before { content: 'Signal'; }
+    .connection-table tbody td:nth-child(9)::before { content: 'RSSI Graph'; }
+
+    .connection-table td,
+    .wireless-overview-table td {
+        white-space: normal;
+    }
+
+    .connection-table td:last-child .mini-chart-button {
+        align-self: flex-start;
     }
 
     .chart-legend {
@@ -2842,22 +2932,23 @@ tbody td {
 
     .console-context-role-controls {
         display: grid;
-        grid-template-columns: max-content auto;
-        gap: 8px;
-        justify-content: space-between;
-        justify-items: start;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        justify-content: stretch;
+        justify-items: stretch;
     }
 
     .console-context-role-controls .console-context-select.sys-input {
-        width: auto;
-        min-width: 110px;
-        max-width: calc(100% - 88px);
+        width: 100%;
+        min-width: 0;
+        max-width: none;
         text-align: left;
         text-align-last: left;
     }
 
     .console-context-role-controls .signal-source-role-apply {
-        justify-self: end;
+        width: 100%;
+        justify-self: stretch;
     }
 
     .top-tabs {
