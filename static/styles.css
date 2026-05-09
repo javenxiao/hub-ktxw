@@ -290,6 +290,30 @@
 .sys-button-default:hover {
     background: #e8eaf0;
 }
+
+.sys-button-danger {
+    background: #c83f4c;
+    color: #fff;
+    border: 1px solid #a52f3a;
+    padding: 6px 20px;
+    font-size: 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+
+.sys-button-danger:hover {
+    background: #a52f3a;
+}
+
+.sys-button-primary:disabled,
+.sys-button-default:disabled,
+.sys-button-danger:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+}
+
 .sys-section {
     margin-bottom: 0;
     padding-bottom: 0;
@@ -1060,6 +1084,12 @@ tbody td {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
 }
 
+.wireless-runtime-notice.is-warning {
+    border-color: #d27a2f;
+    background: linear-gradient(180deg, #fff2e6 0%, #ffdcbc 100%);
+    color: #7a2f12;
+}
+
 .wireless-runtime-notice-badge {
     flex: none;
     display: inline-flex;
@@ -1074,6 +1104,11 @@ tbody td {
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.02em;
+}
+
+.wireless-runtime-notice-badge.is-warning {
+    background: rgba(180, 63, 13, 0.12);
+    color: #8e300d;
 }
 
 .wireless-runtime-notice-text {
@@ -2094,6 +2129,76 @@ tbody td {
     color: #b42318;
 }
 
+.maintenance-action-status {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border: 1px solid #d7dde3;
+    background: #f8fafc;
+    color: #455468;
+    font-weight: 600;
+    border-radius: 10px;
+}
+
+.maintenance-action-status[data-state="pending"] {
+    border-color: #bfd6f3;
+    background: #eef6ff;
+    color: #155dac;
+}
+
+.maintenance-action-status[data-state="success"] {
+    border-color: #b9e2c0;
+    background: #edf9f0;
+    color: #1f7a3f;
+}
+
+.maintenance-action-status[data-state="error"] {
+    border-color: #efc1bc;
+    background: #fff1f0;
+    color: #b42318;
+}
+
+.maintenance-form-group {
+    align-items: flex-start;
+}
+
+.maintenance-form-group .sys-label {
+    padding-top: 6px;
+}
+
+.maintenance-file-input {
+    width: 100%;
+    min-height: 36px;
+    padding: 5px 6px;
+}
+
+.maintenance-file-meta {
+    flex: 1;
+    min-height: 36px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    border: 1px solid #d0d8e0;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #455468;
+    font-size: 13px;
+    line-height: 1.45;
+    word-break: break-all;
+}
+
+.maintenance-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.maintenance-actions .sys-button-primary,
+.maintenance-actions .sys-button-default,
+.maintenance-actions .sys-button-danger {
+    min-width: 168px;
+}
+
 .rf-config-panel {
     padding-bottom: 14px;
 }
@@ -2272,6 +2377,18 @@ tbody td {
     margin-top: 4px;
 }
 
+.rf-pair-blocker {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border: 1px solid #d27a2f;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #fff2e6 0%, #ffdcbc 100%);
+    color: #7a2f12;
+    font-size: 12px;
+    line-height: 1.45;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
 .rf-pair-list {
     display: grid;
     gap: 3px;
@@ -2340,6 +2457,11 @@ tbody td {
     min-width: 0;
     width: 100%;
     padding: 3px 0;
+}
+
+.rf-pair-button:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
 }
 
 .rf-pair-button.is-pairing {
@@ -2453,6 +2575,13 @@ tbody td {
     font-weight: 700;
 }
 
+.rf-control-note {
+    margin-top: 10px;
+    color: #8f4d17;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .rf-unit {
     color: #5f6770;
     font-size: 12px;
@@ -2535,6 +2664,16 @@ tbody td {
 @media (max-width: 760px) {
     body {
         padding: 8px;
+    }
+
+    .maintenance-actions .sys-button-primary,
+    .maintenance-actions .sys-button-default,
+    .maintenance-actions .sys-button-danger {
+        width: 100%;
+    }
+
+    .maintenance-file-meta {
+        width: 100%;
     }
 
     .console-frame {

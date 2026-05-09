@@ -232,7 +232,46 @@
                         </div>
                     </div>
                     <div class="sys-tab-content" id="sys-tab-services" style="display:none"><div class="sys-section"><h2>Services</h2><p>Services 配置内容占位</p></div></div>
-                    <div class="sys-tab-content" id="sys-tab-maintenance" style="display:none"><div class="sys-section"><h2>Maintenance</h2><p>Maintenance 配置内容占位</p></div></div>
+                    <div class="sys-tab-content" id="sys-tab-maintenance" style="display:none">
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">Version Information</h3>
+                            <table class="sys-table">
+                                <tr><td>Running Time</td><td id="maintenance-uptime">--</td><td>Hardware Version</td><td id="maintenance-hardware-version">--</td></tr>
+                                <tr><td>Firmware Version</td><td id="maintenance-firmware-version">--</td><td>Software Version</td><td id="maintenance-software-version">--</td></tr>
+                                <tr><td>Software Build</td><td id="maintenance-software-build">--</td><td>Compile Time</td><td id="maintenance-compile-time">--</td></tr>
+                            </table>
+                        </div>
+                        <hr class="sys-divider">
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">Firmware Upgrade</h3>
+                            <div class="sys-form">
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group maintenance-form-group">
+                                        <label class="sys-label" for="maintenance-firmware-file">Firmware Image</label>
+                                        <input type="file" id="maintenance-firmware-file" class="sys-input maintenance-file-input" accept=".bin,.img,.fw,.rom,.pack,application/octet-stream">
+                                    </div>
+                                </div>
+                                <div class="sys-form-row">
+                                    <div class="sys-form-group">
+                                        <label class="sys-label">Selected File</label>
+                                        <div class="maintenance-file-meta" id="maintenance-file-meta">No file selected.</div>
+                                    </div>
+                                </div>
+                                <p class="maintenance-action-status" id="maintenance-action-status" data-state="idle">Ready to upgrade.</p>
+                                <div class="maintenance-actions">
+                                    <button id="maintenance-upgrade-btn" class="sys-button-primary" type="button" disabled>Upgrade</button>
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="sys-divider">
+                        <div class="sys-section">
+                            <h3 class="sys-section-title">Reset to Default Configurations</h3>
+                            <p class="maintenance-action-status" id="maintenance-reset-status" data-state="idle">Ready to restore factory defaults.</p>
+                            <div class="maintenance-actions">
+                                <button id="maintenance-reset-btn" class="sys-button-danger" type="button">Reset to Default</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="sys-tab-content" id="sys-tab-reboot" style="display:none"><div class="sys-section"><h2>Reboot</h2><p>Reboot 配置内容占位</p></div></div>
                 </div>
             </section>
@@ -336,9 +375,10 @@
                                                 <th>MAC Address</th>
                                                 <th>Operation Mode</th>
                                                 <th>Compatibility Mode</th>
-                                                <th>Work Band</th>
-                                                <th>Channel Mode</th>
-                                                <th>Work Channel</th>
+                                                <th>Configured Band</th>
+                                                <th>Live Band</th>
+                                                <th>Live Channel Mode</th>
+                                                <th>Live Channel</th>
                                                 <th>Bandwidth</th>
                                                 <th>Current MCS</th>
                                                 <th>Power Control</th>
@@ -349,7 +389,8 @@
                                                 <td id="general-mac">--</td>
                                                 <td id="general-mode">--</td>
                                                 <td id="general-compatibility">--</td>
-                                                <td id="general-work-band">--</td>
+                                                <td id="general-configured-band">--</td>
+                                                <td id="general-live-band">--</td>
                                                 <td id="general-channel-mode">--</td>
                                                 <td id="general-work-channel">--</td>
                                                 <td id="general-bandwidth">--</td>
@@ -416,29 +457,30 @@
 
                     <div class="wireless-subpage" id="wireless-panel-rf" data-wireless-panel="rf" role="tabpanel" hidden>
                         <section class="panel-box rf-config-panel">
+                            <div class="wireless-runtime-notices" id="wireless-rf-notices" aria-live="polite" hidden></div>
                             <div class="rf-config-box">
                                 <div class="sys-section rf-summary-section rf-config-group-band">
                                     <h3 class="sys-section-title">Frequency Band</h3>
                                     <table class="sys-table rf-summary-table">
                                         <tbody>
                                             <tr>
-                                                <td>Band Mode</td>
+                                                <td>Band</td>
                                                 <td>
                                                     <div class="rf-boolean-group rf-band-group" role="radiogroup" aria-label="Band selection">
                                                         <label class="rf-boolean-option" for="control-band-2g">
-                                                            <input id="control-band-2g" type="radio" name="control-band-select" value="1">
+                                                            <input id="control-band-2g" type="radio" name="control-band-select" value="2">
                                                             <span>2.4G</span>
                                                         </label>
                                                         <label class="rf-boolean-option" for="control-band-5g">
-                                                            <input id="control-band-5g" type="radio" name="control-band-select" value="2">
+                                                            <input id="control-band-5g" type="radio" name="control-band-select" value="4">
                                                             <span>5.8G</span>
                                                         </label>
                                                         <label class="rf-boolean-option" for="control-band-1g">
-                                                            <input id="control-band-1g" type="radio" name="control-band-select" value="0">
+                                                            <input id="control-band-1g" type="radio" name="control-band-select" value="1">
                                                             <span>600M</span>
                                                         </label>
                                                         <label class="rf-boolean-option" for="control-band-auto">
-                                                            <input id="control-band-auto" type="radio" name="control-band-select" value="auto">
+                                                            <input id="control-band-auto" type="radio" name="control-band-select" value="7">
                                                             <span>Auto</span>
                                                         </label>
                                                     </div>
@@ -530,6 +572,7 @@
                                                 </tr>
                                             </tbody>
                                         </table>
+                                        <div class="rf-control-note" id="control-mcs-note" hidden></div>
                                     </div>
                                 </div>
 
@@ -645,6 +688,7 @@
 
                                 <div class="sys-section rf-summary-section rf-pair-section">
                                     <h3 class="sys-section-title">Pair</h3>
+                                    <div class="rf-pair-blocker" id="rf-pair-blocker" role="alert" hidden></div>
                                     <div class="rf-pair-list" id="rf-pair-list"></div>
                                     <p class="rf-pair-note" id="rf-pair-note">Red dot means pairing is in progress. Green dot means the slot is paired. Enter or select a DEV MAC in the box to target a specific device; leave the box unchanged to keep automatic matching.</p>
                                 </div>
@@ -716,6 +760,8 @@
         let deviceSelectionInFlight = false;
         let roleSelectionDirty = false;
         let roleApplyInFlight = false;
+        let maintenanceInfoCache = null;
+        let maintenanceBusy = false;
         let channelDirectionValue = 'rx';
         let channelIndexValue = null;
         let powerModeValue = null;
@@ -750,12 +796,29 @@
             { value: 1, label: 'DEV' },
         ];
         const defaultWirelessControlStatusMessage = 'Most RF settings apply automatically. Role switching requires manual Apply.';
+        const daemonUnavailableWirelessControlStatusMessage = 'Remote bb_host daemon is unavailable. Start daemon.exe and refresh the RF page.';
+        const defaultMaintenanceUpgradeMessage = 'Ready to upgrade.';
+        const defaultMaintenanceResetMessage = 'Ready to restore factory defaults.';
+        const maintenanceStatusStore = {
+            'maintenance-action-status': {
+                message: defaultMaintenanceUpgradeMessage,
+                state: 'idle',
+                sticky: false,
+            },
+            'maintenance-reset-status': {
+                message: defaultMaintenanceResetMessage,
+                state: 'idle',
+                sticky: false,
+            },
+        };
         const defaultPairNoteMessage = 'Red dot means pairing is in progress. Green dot means the slot is paired. Enter or select a DEV MAC in the box to target a specific device; leave the box unchanged to keep automatic matching.';
         const devPairNoteMessage = 'DEV mode follows PQ tool behavior: only one AP MAC address is editable. Update the AP MAC if needed, then click Pair.';
+        const pairBlockedVersionMismatchMessage = 'AP/DEV version mismatch. Pair is unavailable until both devices run the same release.';
         const wirelessActionLabels = {
             select_device: 'Active Device',
             set_signal_user: 'User',
             set_pair_mode: 'Pair State',
+            set_band_selection: 'Frequency Band',
             set_band_mode: 'Band Mode',
             set_band: 'Frequency Band',
             set_channel_mode: 'Channel Auto Mode',
@@ -849,15 +912,30 @@
                 return '--';
             }
 
-            const parts = [];
-            if (current.work_channel_index !== null && current.work_channel_index !== undefined) {
-                parts.push(`CH ${current.work_channel_index}`);
-            }
-            if (current.work_channel_frequency && current.work_channel_frequency !== 'Unavailable') {
-                parts.push(current.work_channel_frequency);
+            const liveRf = current.live_rf || current;
+            const channelIndex = Number(liveRf.channel_index);
+            const channelCount = Number(liveRf.channel_count);
+            const hasChannelIndex = Number.isFinite(channelIndex);
+            const hasChannelCount = Number.isFinite(channelCount);
+            const invalidChannelIndex = hasChannelIndex && hasChannelCount && channelIndex >= channelCount;
+
+            if (invalidChannelIndex) {
+                return `Invalid CH ${channelIndex} / Unavailable`;
             }
 
-            return parts.length > 0 ? parts.join(' / ') : '--';
+            const parts = [];
+            if (liveRf.channel_index !== null && liveRf.channel_index !== undefined) {
+                parts.push(`CH ${liveRf.channel_index}`);
+            }
+            if (liveRf.channel_frequency && liveRf.channel_frequency !== 'Unavailable') {
+                parts.push(liveRf.channel_frequency);
+            }
+
+            if (parts.length > 0) {
+                return parts.join(' / ');
+            }
+
+            return liveRf.channel_frequency || '--';
         }
 
         function formatDiagnosticsMcs(current) {
@@ -901,8 +979,12 @@
         }
 
         function updateGeneralRuntimeStatus(current = wirelessRuntimeCurrent) {
-            setText('general-work-band', current?.work_band || '--');
-            setText('general-channel-mode', formatDiagnosticsMode(current?.channel_auto));
+            const configuredBand = current?.configured_band || null;
+            const liveRf = current?.live_rf || current || null;
+
+            setText('general-configured-band', configuredBand?.label || current?.band_bitmap || '--');
+            setText('general-live-band', liveRf?.band || current?.work_band || '--');
+            setText('general-channel-mode', formatDiagnosticsMode(liveRf?.channel_auto));
             setText('general-work-channel', formatDiagnosticsChannel(current));
             setText('general-current-mcs', formatDiagnosticsMcs(current));
             setText('general-power-control', formatDiagnosticsPower(current));
@@ -930,6 +1012,247 @@
                 return `${(bytes / 1024).toFixed(1)}KB`;
             }
             return `${bytes}B`;
+        }
+
+        function isMaintenancePanelVisible() {
+            const systemTab = document.getElementById('tab-system');
+            const maintenanceTab = document.querySelector('.sys-subnav-item[data-tab="maintenance"]');
+            const maintenancePanel = document.getElementById('sys-tab-maintenance');
+            return Boolean(
+                systemTab && systemTab.checked
+                && maintenanceTab && maintenanceTab.classList.contains('active')
+                && maintenancePanel && maintenancePanel.style.display !== 'none'
+            );
+        }
+
+        function renderMaintenanceStatusElement(id, message, state = 'idle') {
+            const statusElement = document.getElementById(id);
+            if (!statusElement) {
+                return;
+            }
+
+            statusElement.textContent = message;
+            statusElement.dataset.state = state;
+        }
+
+        function setMaintenanceStatus(id, message, state = 'idle', options = {}) {
+            const sticky = options.sticky ?? (state === 'success' || state === 'error');
+            maintenanceStatusStore[id] = {
+                message,
+                state,
+                sticky,
+            };
+            renderMaintenanceStatusElement(id, message, state);
+        }
+
+        function syncMaintenanceStatus(id, supported, force = false) {
+            const current = maintenanceStatusStore[id];
+            const message = id === 'maintenance-action-status'
+                ? getDefaultMaintenanceUpgradeStatus()
+                : getDefaultMaintenanceResetStatus();
+
+            if (!supported) {
+                setMaintenanceStatus(id, message, 'error', { sticky: false });
+                return;
+            }
+
+            if (!force && current?.sticky) {
+                renderMaintenanceStatusElement(id, current.message, current.state);
+                return;
+            }
+
+            setMaintenanceStatus(id, message, 'idle', { sticky: false });
+        }
+
+        function getDefaultMaintenanceUpgradeStatus() {
+            if (!maintenanceInfoCache?.upgrade_supported) {
+                return maintenanceInfoCache?.message || 'Firmware upgrade is currently unavailable.';
+            }
+
+            return defaultMaintenanceUpgradeMessage;
+        }
+
+        function getDefaultMaintenanceResetStatus() {
+            if (!maintenanceInfoCache?.reset_supported) {
+                return maintenanceInfoCache?.message || 'Reset to default is currently unavailable.';
+            }
+
+            return defaultMaintenanceResetMessage;
+        }
+
+        function syncMaintenanceStatuses() {
+            if (maintenanceBusy) {
+                return;
+            }
+
+            syncMaintenanceStatus('maintenance-action-status', Boolean(maintenanceInfoCache?.upgrade_supported));
+            syncMaintenanceStatus('maintenance-reset-status', Boolean(maintenanceInfoCache?.reset_supported));
+        }
+
+        function renderMaintenanceFileMeta(file) {
+            const meta = document.getElementById('maintenance-file-meta');
+            if (!meta) {
+                return;
+            }
+
+            if (!file) {
+                meta.textContent = 'No file selected.';
+                return;
+            }
+
+            meta.textContent = `${file.name} / ${formatBytes(file.size)} / ${file.type || 'binary image'}`;
+        }
+
+        function updateMaintenanceControlsState() {
+            const fileInput = document.getElementById('maintenance-firmware-file');
+            const upgradeButton = document.getElementById('maintenance-upgrade-btn');
+            const resetButton = document.getElementById('maintenance-reset-btn');
+            const upgradeSupported = Boolean(maintenanceInfoCache?.upgrade_supported);
+            const resetSupported = Boolean(maintenanceInfoCache?.reset_supported);
+            const hasFile = Boolean(fileInput?.files && fileInput.files.length > 0);
+
+            if (fileInput) {
+                fileInput.disabled = maintenanceBusy || !upgradeSupported;
+            }
+            if (upgradeButton) {
+                upgradeButton.disabled = maintenanceBusy || !upgradeSupported || !hasFile;
+            }
+            if (resetButton) {
+                resetButton.disabled = maintenanceBusy || !resetSupported;
+            }
+        }
+
+        function renderMaintenanceInfo(payload) {
+            maintenanceInfoCache = payload || null;
+            const version = payload?.version || {};
+
+            setText('maintenance-product-name', version.product_name || '--');
+            setText('maintenance-host-name', version.host_name || '--');
+            setText('maintenance-active-device', version.active_device || '--');
+            setText('maintenance-operation-mode', version.operation_mode || '--');
+            setText('maintenance-access-mode', version.access_mode || '--');
+            setText('maintenance-local-mac', version.local_mac_address || '--');
+            setText('maintenance-uptime', version.system_uptime || '--');
+            setText('maintenance-hardware-version', version.hardware_version || '--');
+            setText('maintenance-firmware-version', version.firmware_version || '--');
+            setText('maintenance-software-version', version.software_version || '--');
+            setText('maintenance-software-build', version.software_build || '--');
+            setText('maintenance-compile-time', version.compile_time || '--');
+
+            updateMaintenanceControlsState();
+            syncMaintenanceStatuses();
+        }
+
+        function showMaintenanceInfoError(error) {
+            const message = `Failed to load maintenance info: ${error.message}`;
+            ['maintenance-action-status', 'maintenance-reset-status'].forEach((id) => {
+                if (maintenanceStatusStore[id]?.sticky) {
+                    renderMaintenanceStatusElement(id, maintenanceStatusStore[id].message, maintenanceStatusStore[id].state);
+                    return;
+                }
+
+                setMaintenanceStatus(id, message, 'error', { sticky: false });
+            });
+        }
+
+        async function loadMaintenanceInfo() {
+            const response = await fetch('/api/system/maintenance', { cache: 'no-store' });
+            const payload = await response.json();
+
+            if (!response.ok || payload.success === false) {
+                throw new Error(payload.message || `HTTP ${response.status}`);
+            }
+
+            renderMaintenanceInfo(payload);
+            return payload;
+        }
+
+        function scheduleMaintenanceRefresh(delayMs = 4000) {
+            window.setTimeout(() => {
+                loadMaintenanceInfo().catch(() => {});
+                loadWirelessRuntimeDetails().catch(() => {});
+            }, delayMs);
+        }
+
+        async function submitMaintenanceUpgrade() {
+            const fileInput = document.getElementById('maintenance-firmware-file');
+            const file = fileInput?.files?.[0];
+
+            if (!file) {
+                setMaintenanceStatus('maintenance-action-status', 'Select one firmware file before starting the upgrade.', 'error', { sticky: true });
+                return;
+            }
+
+            const confirmed = window.confirm(`Upgrade firmware using ${file.name}? The device will reboot automatically after verification.`);
+            if (!confirmed) {
+                return;
+            }
+
+            maintenanceBusy = true;
+            updateMaintenanceControlsState();
+            setMaintenanceStatus('maintenance-action-status', 'Transferring firmware image...', 'pending', { sticky: false });
+
+            try {
+                const formData = new FormData();
+                formData.append('firmware', file, file.name);
+
+                const response = await fetch('/api/system/maintenance/upgrade', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const payload = await response.json();
+
+                if (!response.ok || payload.success === false) {
+                    throw new Error(payload.message || `HTTP ${response.status}`);
+                }
+
+                const fileMeta = document.getElementById('maintenance-file-meta');
+                if (fileMeta) {
+                    fileMeta.textContent = `${payload.file_name || file.name} / ${formatBytes(payload.file_size || file.size)} / CRC32 ${payload.crc32}`;
+                }
+                setMaintenanceStatus(
+                    'maintenance-action-status',
+                    'Upgrade complete. Device rebooting, waiting for reconnect.',
+                    'success',
+                    { sticky: true }
+                );
+                scheduleMaintenanceRefresh();
+            } catch (error) {
+                setMaintenanceStatus('maintenance-action-status', `Firmware upgrade failed: ${error.message}`, 'error', { sticky: true });
+            } finally {
+                maintenanceBusy = false;
+                updateMaintenanceControlsState();
+            }
+        }
+
+        async function submitMaintenanceReset() {
+            const confirmed = window.confirm('Reset to default configurations? Current baseband settings will be cleared and the device will reboot immediately.');
+            if (!confirmed) {
+                return;
+            }
+
+            maintenanceBusy = true;
+            updateMaintenanceControlsState();
+            setMaintenanceStatus('maintenance-reset-status', 'Restoring factory defaults...', 'pending', { sticky: false });
+
+            try {
+                const response = await fetch('/api/system/maintenance/reset-defaults', {
+                    method: 'POST',
+                });
+                const payload = await response.json();
+
+                if (!response.ok || payload.success === false) {
+                    throw new Error(payload.message || `HTTP ${response.status}`);
+                }
+
+                setMaintenanceStatus('maintenance-reset-status', 'Factory defaults restored. Device rebooting, waiting for reconnect.', 'success', { sticky: true });
+                scheduleMaintenanceRefresh();
+            } catch (error) {
+                setMaintenanceStatus('maintenance-reset-status', `Reset to default failed: ${error.message}`, 'error', { sticky: true });
+            } finally {
+                maintenanceBusy = false;
+                updateMaintenanceControlsState();
+            }
         }
 
         function escapeHtml(value) {
@@ -1040,12 +1363,14 @@
             return resolvePairPanelRole() === 1;
         }
 
-        function getDevPairMacDisplayValue(slotConnection) {
-            return formatPairMacDisplay(
-                wirelessRuntimeCurrent?.dev_pair_target_mac
-                || slotConnection?.mac_address
-                || ''
-            );
+        function getDevPairMacDisplayValue() {
+            return '';
+        }
+
+        function resetPairInputState() {
+            pairMacDraftBySlot.clear();
+            pairPendingBySlot.clear();
+            pairStopOverrideBySlot.clear();
         }
 
         function resetPairCandidatesCache(deviceMac = getPairCandidatesDeviceMac()) {
@@ -1058,6 +1383,28 @@
             const deviceMac = getPairCandidatesDeviceMac();
             if (deviceMac !== pairCandidatesDeviceMac) {
                 resetPairCandidatesCache(deviceMac);
+            }
+        }
+
+        function resolveBandSelectionBitmap(current) {
+            const explicitBitmap = Number(current?.configured_band?.bitmap ?? current?.band_bitmap);
+            if ([1, 2, 4, 7].includes(explicitBitmap)) {
+                return explicitBitmap;
+            }
+
+            if ((current?.configured_band?.auto ?? current?.band_auto) === true) {
+                return 7;
+            }
+
+            switch (Number(current?.live_rf?.band_code ?? current?.work_band_code)) {
+                case 0:
+                    return 1;
+                case 1:
+                    return 2;
+                case 2:
+                    return 4;
+                default:
+                    return 7;
             }
         }
 
@@ -1139,6 +1486,7 @@
         }
 
         function buildPairStatus(slotIndex, slotConnection) {
+            const devPairMode = isDevPairMode();
             if (!slotConnection) {
                 const pending = pairPendingBySlot.get(slotIndex);
                 if (pending && Date.now() < pending.expiresAt) {
@@ -1170,7 +1518,9 @@
             }
 
             if (pending) {
-                const successObserved = hasPeerMac && (pairState.includes('paired') || isLinked);
+                const successObserved = devPairMode
+                    ? isLinked
+                    : hasPeerMac && (pairState.includes('paired') || isLinked);
                 const hasNewPeerMac = hasPeerMac && macValue !== pending.previousMac;
 
                 if (hasNewPeerMac || (successObserved && Date.now() >= pending.expiresAt)) {
@@ -1183,6 +1533,14 @@
                 }
 
                 pairPendingBySlot.delete(slotIndex);
+            }
+
+            if (devPairMode) {
+                if (isLinked) {
+                    return 'paired';
+                }
+
+                return 'idle';
             }
 
             if (hasPeerMac && pairState.includes('paired')) {
@@ -1236,7 +1594,7 @@
             };
         }
 
-        function buildPairRow(slotIndex, slotConnection) {
+        function buildPairRow(slotIndex, slotConnection, pairBlockNotice = null) {
             const devPairMode = isDevPairMode();
             const status = buildPairStatus(slotIndex, slotConnection);
             const isPairing = status === 'pairing';
@@ -1244,15 +1602,16 @@
             const candidateOptions = buildPairCandidateOptions(slotIndex);
             const candidateListId = `rf-pair-candidates-${slotIndex}`;
             const pairStart = !isPairing;
+            const pairBlocked = pairStart && Boolean(pairBlockNotice?.text);
             const buttonStateClass = isPairing ? ' is-pairing' : '';
             const inputPlaceholder = devPairMode ? '输入 AP MAC' : '输入 DEV MAC';
             return `
                 <div class="rf-pair-row">
-                    <div class="rf-pair-user">${devPairMode ? 'AP MAC' : `Slot ${slotIndex}`}</div>
+                    <div class="rf-pair-user">${devPairMode ? 'AP MAC' : `User ${slotIndex}`}</div>
                     <span class="rf-pair-dot ${status}" aria-hidden="true"></span>
                     <input class="sys-input rf-pair-mac-input${macFieldState.className}" type="text" data-pair-mac-slot="${slotIndex}" value="${escapeHtml(macFieldState.value)}" placeholder="${escapeHtml(inputPlaceholder)}" ${candidateOptions.length ? `list="${candidateListId}"` : ''} ${macFieldState.readOnly ? 'readonly aria-readonly="true"' : ''}>
                     ${candidateOptions.length ? `<datalist id="${candidateListId}">${candidateOptions.map((mac) => `<option value="${escapeHtml(mac)}"></option>`).join('')}</datalist>` : ''}
-                    <button class="sys-button-default rf-pair-button${buttonStateClass}" type="button" data-pair-slot="${slotIndex}" data-pair-start="${String(pairStart)}">${isPairing ? 'Stop' : 'Pair'}</button>
+                    <button class="sys-button-default rf-pair-button${buttonStateClass}" type="button" data-pair-slot="${slotIndex}" data-pair-start="${String(pairStart)}" ${pairBlocked ? `disabled aria-disabled="true" title="${escapeHtml(pairBlockNotice.text)}"` : ''}>${isPairing ? 'Stop' : 'Pair'}</button>
                 </div>
             `;
         }
@@ -1261,6 +1620,13 @@
             const container = document.getElementById('rf-pair-list');
             if (!container) {
                 return;
+            }
+
+            const blocker = document.getElementById('rf-pair-blocker');
+            const pairBlockNotice = getWirelessPairBlockNotice();
+            if (blocker) {
+                blocker.hidden = !pairBlockNotice?.text;
+                blocker.textContent = pairBlockNotice?.text || '';
             }
 
             const note = document.getElementById('rf-pair-note');
@@ -1275,8 +1641,8 @@
             );
 
             const markup = isDevPairMode()
-                ? buildPairRow(0, bySlot.get(0) || (Array.isArray(connections) ? connections[0] : null))
-                : Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex))).join('');
+                ? buildPairRow(0, bySlot.get(0) || (Array.isArray(connections) ? connections[0] : null), pairBlockNotice)
+                : Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex), pairBlockNotice)).join('');
             if (container.dataset.renderedMarkup !== markup) {
                 container.innerHTML = markup;
                 container.dataset.renderedMarkup = markup;
@@ -1338,17 +1704,22 @@
                         return;
                     }
 
+                    const pairBlockNotice = getWirelessPairBlockNotice();
+                    if (pairStart && pairBlockNotice?.text) {
+                        setWirelessControlStatus(pairBlockNotice.text, 'error');
+                        renderPairPanel(latestWirelessSnapshot?.connections);
+                        return;
+                    }
+
                     const targetInput = container.querySelector(`[data-pair-mac-slot="${slot}"]`);
                     const rawPairTarget = targetInput instanceof HTMLInputElement ? targetInput.value.trim() : '';
                     const normalizedPairTarget = normalizePairMac(rawPairTarget);
                     const devPairMode = isDevPairMode();
                     const hasPairTargetDraft = pairMacDraftBySlot.has(slot);
-                    const wantsTargetedPair = devPairMode
-                        ? rawPairTarget !== '' && rawPairTarget !== '匹配中...'
-                        : hasPairTargetDraft
-                            && rawPairTarget !== ''
-                            && rawPairTarget !== '无匹配设备'
-                            && rawPairTarget !== '匹配中...';
+                    const wantsTargetedPair = hasPairTargetDraft
+                        && rawPairTarget !== ''
+                        && rawPairTarget !== '无匹配设备'
+                        && rawPairTarget !== '匹配中...';
 
                     if (pairStart && wantsTargetedPair && normalizedPairTarget === '00000000') {
                         setWirelessControlStatus(devPairMode ? 'AP MAC 格式无效，需为 4 字节 MAC' : 'Pair DEV MAC 格式无效，需为 4 字节 MAC', 'error');
@@ -2419,6 +2790,68 @@
             return document.querySelector('input[name="control-mcs-auto"]:checked')?.value === 'true';
         }
 
+        function setRfRadioGroupDisabled(groupName, disabled, title = '') {
+            document.querySelectorAll(`input[name="${groupName}"]`).forEach((radio) => {
+                radio.disabled = disabled;
+                radio.title = title;
+            });
+        }
+
+        function getMcsControlNotice(current = wirelessRuntimeCurrent) {
+            const operationMode = String(current?.operation_mode || '').toUpperCase();
+            if (operationMode.includes('DEV')) {
+                return 'Current DEV runtime ignores MCS mode/value changes. Use the AP side to control MCS.';
+            }
+
+            return '';
+        }
+
+        function syncMcsValueSelection(current = wirelessRuntimeCurrent) {
+            const select = document.getElementById('control-mcs-value');
+            if (!select) {
+                return;
+            }
+
+            select.querySelectorAll('option[data-runtime-option="true"]').forEach((option) => option.remove());
+
+            const runtimeValue = current?.current_mcs_value;
+            if (runtimeValue === null || runtimeValue === undefined) {
+                return;
+            }
+
+            const runtimeValueText = String(runtimeValue);
+            if (select.querySelector(`option[value="${runtimeValueText}"]`)) {
+                return;
+            }
+
+            const option = document.createElement('option');
+            option.value = runtimeValueText;
+            option.textContent = current?.current_mcs_label || `Unknown MCS (${runtimeValueText})`;
+            option.dataset.runtimeOption = 'true';
+            select.prepend(option);
+        }
+
+        function syncRfAutoModeControls(current = wirelessRuntimeCurrent) {
+            const syncBooleanGroup = (onId, offId, value, fallbackWhenUnknown = true) => {
+                const resolved = value ?? fallbackWhenUnknown;
+                const on = document.getElementById(onId);
+                const off = document.getElementById(offId);
+                if (on) {
+                    on.checked = resolved === true;
+                }
+                if (off) {
+                    off.checked = resolved !== true;
+                }
+            };
+
+            syncBooleanGroup('control-channel-auto-on', 'control-channel-auto-off', current?.channel_auto, true);
+            syncBooleanGroup('control-power-auto-on', 'control-power-auto-off', current?.current_power_auto, true);
+            syncBooleanGroup('control-mcs-auto-auto', 'control-mcs-auto-manual', current?.current_mcs_auto, true);
+
+            bandwidthAutoMode = current?.bandwidth_auto ?? bandwidthAutoMode;
+            syncBooleanGroup('control-bandwidth-auto-on', 'control-bandwidth-auto-off', bandwidthAutoMode, true);
+        }
+
         function updateRfSelectWidths() {
             document.querySelectorAll('#wireless-panel-rf select.sys-input').forEach((select) => {
                 updateSelectWidth(select);
@@ -2450,7 +2883,27 @@
                 .replace(/[^0-9a-f]/g, '');
         }
 
-        function renderRfDeviceOptions(current) {
+        function isDaemonUnavailableMessage(message) {
+            const text = String(message || '').toLowerCase();
+            return text.includes('remote bb_host daemon is unavailable')
+                || text.includes('start daemon.exe')
+                || text.includes('bb_host_connect failed')
+                || text.includes('failed to connect bb_host');
+        }
+
+        function getRuntimeUnavailableDeviceLabel(payload) {
+            if (isDaemonUnavailableMessage(payload?.message)) {
+                return 'bb_host daemon unavailable';
+            }
+
+            if (payload?.message) {
+                return 'Runtime unavailable';
+            }
+
+            return '--';
+        }
+
+        function renderRfDeviceOptions(current, payload = null) {
             const select = document.getElementById('rf-operation-mode');
             if (!select) {
                 return;
@@ -2458,8 +2911,11 @@
 
             const devices = Array.isArray(current?.available_devices) ? current.available_devices : [];
             if (devices.length === 0) {
-                select.innerHTML = '<option value="">--</option>';
+                const placeholderLabel = getRuntimeUnavailableDeviceLabel(payload);
+                select.innerHTML = `<option value="">${escapeHtml(placeholderLabel)}</option>`;
                 select.value = '';
+                select.disabled = true;
+                select.title = payload?.message || placeholderLabel;
                 updateSelectWidth(select);
                 return;
             }
@@ -2478,6 +2934,7 @@
             }
 
             select.disabled = deviceSelectionInFlight;
+            select.title = '';
             updateSelectWidth(select);
         }
 
@@ -2589,12 +3046,48 @@
             setWirelessControlStatus('Role 已下发，设备可能仍在重启，请稍后刷新状态。', 'pending');
         }
 
+        function classifyWirelessRuntimeNotice(notice) {
+            const text = String(notice || '').trim();
+            const normalized = text.toLowerCase();
+            const isVersionMismatch = normalized.includes('firmware mismatch') || normalized.includes('version mismatch') || normalized.includes('same release');
+
+            return {
+                text,
+                tone: isVersionMismatch ? 'warning' : 'notice',
+                badge: isVersionMismatch ? 'Warning' : 'Notice',
+                blocksPair: isVersionMismatch,
+                pairBlockText: isVersionMismatch ? pairBlockedVersionMismatchMessage : text,
+            };
+        }
+
+        function getWirelessPairBlockNotice(current = wirelessRuntimeCurrent) {
+            if (!current) {
+                return null;
+            }
+
+            if (!Array.isArray(current.warnings)) {
+                return null;
+            }
+
+            for (const warning of current.warnings) {
+                const notice = classifyWirelessRuntimeNotice(warning);
+                if (notice?.blocksPair) {
+                    return {
+                        ...notice,
+                        text: notice.pairBlockText,
+                    };
+                }
+            }
+
+            return null;
+        }
+
         function deriveWirelessRuntimeNotices(payload) {
             const notices = [];
 
             if (!payload?.available || !payload?.current) {
                 if (payload?.message) {
-                    notices.push(payload.message);
+                    notices.push(classifyWirelessRuntimeNotice(payload.message));
                 }
                 return notices;
             }
@@ -2605,41 +3098,58 @@
                     if (!warning) return;
                     const text = String(warning);
                     if (!runtimeNoticeOptions.showIoctlWarnings && text.includes('failed with code:')) return;
-                    notices.push(text);
+                    const notice = classifyWirelessRuntimeNotice(text);
+                    if (notice.blocksPair) return;
+                    notices.push(notice);
                 });
             }
 
             const deviceCount = Array.isArray(current.available_devices) ? current.available_devices.length : 0;
             if (runtimeNoticeOptions.showNoDeviceNotice && deviceCount === 0) {
-                notices.push('No remote device is currently detected. Check the device connection or bb_host session.');
+                notices.push(classifyWirelessRuntimeNotice('No remote device is currently detected. Check the device connection or bb_host session.'));
             }
             if (runtimeNoticeOptions.showSingleDeviceNotice && deviceCount === 1) {
-                notices.push('Only one remote device is currently detected. If multiple devices are expected, replug the device or refresh the bb_host session.');
+                notices.push(classifyWirelessRuntimeNotice('Only one remote device is currently detected. If multiple devices are expected, replug the device or refresh the bb_host session.'));
             }
 
-            return Array.from(new Set(notices.map((notice) => notice.trim()).filter(Boolean)));
+            const deduped = new Map();
+            notices.forEach((notice) => {
+                if (notice?.text) {
+                    deduped.set(notice.text, notice);
+                }
+            });
+            return Array.from(deduped.values());
         }
 
         function renderWirelessRuntimeNotices(payload) {
-            const noticeContainer = document.getElementById('wireless-runtime-notices');
-            if (!noticeContainer) {
+            const noticeContainers = [
+                document.getElementById('wireless-runtime-notices'),
+                document.getElementById('wireless-rf-notices'),
+            ].filter(Boolean);
+            if (noticeContainers.length === 0) {
                 return;
             }
 
             const notices = deriveWirelessRuntimeNotices(payload);
             if (notices.length === 0) {
-                noticeContainer.hidden = true;
-                noticeContainer.innerHTML = '';
+                noticeContainers.forEach((noticeContainer) => {
+                    noticeContainer.hidden = true;
+                    noticeContainer.innerHTML = '';
+                });
                 return;
             }
 
-            noticeContainer.hidden = false;
-            noticeContainer.innerHTML = notices.map((notice) => `
-                <div class="wireless-runtime-notice" role="status">
-                    <span class="wireless-runtime-notice-badge">Notice</span>
-                    <span class="wireless-runtime-notice-text">${escapeHtml(notice)}</span>
+            const noticeMarkup = notices.map((notice) => `
+                <div class="wireless-runtime-notice ${notice.tone === 'warning' ? 'is-warning' : ''}" role="${notice.tone === 'warning' ? 'alert' : 'status'}">
+                    <span class="wireless-runtime-notice-badge ${notice.tone === 'warning' ? 'is-warning' : ''}">${escapeHtml(notice.badge)}</span>
+                    <span class="wireless-runtime-notice-text">${escapeHtml(notice.text)}</span>
                 </div>
             `).join('');
+
+            noticeContainers.forEach((noticeContainer) => {
+                noticeContainer.hidden = false;
+                noticeContainer.innerHTML = noticeMarkup;
+            });
         }
 
         function renderWirelessRuntime(payload) {
@@ -2647,15 +3157,19 @@
 
             if (!payload || !payload.available || !payload.current) {
                 wirelessRuntimeCurrent = null;
+                resetPairInputState();
                 resetPairCandidatesCache('');
                 renderRfProfile();
-                renderRfDeviceOptions(null);
+                renderRfDeviceOptions(null, payload);
                 renderRfSignalUserOptions(null);
                 renderRfBasebandRoleOptions(null);
                 setText('runtime-mac', '--');
                 setText('runtime-system-uptime', '--');
                 setText('runtime-version', '--');
                 setText('runtime-firmware-version', '--');
+                if (isDaemonUnavailableMessage(payload?.message)) {
+                    setWirelessControlStatus(daemonUnavailableWirelessControlStatusMessage, 'error');
+                }
                 document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
                     radio.checked = false;
                 });
@@ -2673,8 +3187,23 @@
                 return;
             }
 
+            const previousDeviceMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
             const current = payload.current;
+            const currentDeviceMac = normalizeRfDeviceMac(current.local_mac_address);
+            if (currentDeviceMac !== previousDeviceMac) {
+                resetPairInputState();
+                resetPairCandidatesCache(currentDeviceMac);
+            }
             wirelessRuntimeCurrent = current;
+            renderPairPanel(latestWirelessSnapshot?.connections);
+            const wirelessControlStatus = document.getElementById('wireless-control-status');
+            if (
+                wirelessControlStatus
+                && wirelessControlStatus.dataset.state === 'error'
+                && isDaemonUnavailableMessage(wirelessControlStatus.textContent)
+            ) {
+                setWirelessControlStatus(defaultWirelessControlStatusMessage, 'idle');
+            }
             ensurePairCandidatesCacheFresh();
             renderRfProfile();
             renderRfDeviceOptions(current);
@@ -2686,16 +3215,14 @@
             setText('runtime-firmware-version', current.firmware_version || '--');
 
             populateChannelOptions(current.channels, channelIndexValue ?? current.work_channel_index);
+            syncMcsValueSelection(current);
+            syncRfAutoModeControls(current);
 
             if (!controlDefaultsInitialized) {
-                if (current.band_auto === true) {
-                    document.getElementById('control-band-auto').checked = true;
-                } else {
-                    const bandCode = String(current.work_band_code ?? '1');
-                    const selectedBand = document.querySelector(`input[name="control-band-select"][value="${bandCode}"]`);
-                    if (selectedBand) {
-                        selectedBand.checked = true;
-                    }
+                const bandBitmap = String(resolveBandSelectionBitmap(current));
+                const selectedBand = document.querySelector(`input[name="control-band-select"][value="${bandBitmap}"]`);
+                if (selectedBand) {
+                    selectedBand.checked = true;
                 }
                 if ((current.channel_auto ?? true) === true) {
                     document.getElementById('control-channel-auto-on').checked = true;
@@ -2837,7 +3364,10 @@
 
         async function applyWirelessSetting(action, payload, options = {}) {
             const actionLabel = options.actionLabel || getWirelessActionLabel(action);
-            setWirelessControlStatus(options.pendingMessage || `${actionLabel} 修改中...`, 'pending');
+            const defaultPendingMessage = action === 'set_pair_mode'
+                ? 'Pair request in progress...'
+                : `${actionLabel} 修改中...`;
+            setWirelessControlStatus(options.pendingMessage || defaultPendingMessage, 'pending');
 
             try {
                 const response = await fetch('/api/wireless/runtime/apply', {
@@ -2853,7 +3383,10 @@
                     throw new Error(result.message || `HTTP ${response.status}`);
                 }
 
-                setWirelessControlStatus(options.successMessage || `${actionLabel} 已下发`, 'success');
+                const defaultSuccessMessage = action === 'set_pair_mode'
+                    ? 'Pair request sent.'
+                    : `${actionLabel} 已下发`;
+                setWirelessControlStatus(options.successMessage || defaultSuccessMessage, 'success');
 
                 if (result.current) {
                     controlDefaultsInitialized = false;
@@ -2867,7 +3400,10 @@
                 await loadInitialSnapshot().catch(() => {});
                 return result;
             } catch (error) {
-                setWirelessControlStatus(`${actionLabel} 下发失败: ${error.message}`, 'error');
+                const defaultFailureMessage = action === 'set_pair_mode'
+                    ? `Pair request failed: ${error.message}`
+                    : `${actionLabel} 下发失败: ${error.message}`;
+                setWirelessControlStatus(defaultFailureMessage, 'error');
                 throw error;
             }
         }
@@ -3044,11 +3580,28 @@
             }
         }
 
-        function updateMcsControlsState() {
+        function updateMcsControlsState(current = wirelessRuntimeCurrent) {
+            const mcsControlNotice = getMcsControlNotice(current);
+            const mcsControlBlocked = Boolean(mcsControlNotice);
             setRfControlsDisabled([
                 'control-mcs-value',
                 'control-mcs-slot',
-            ], getSelectedMcsAuto());
+            ], getSelectedMcsAuto() || mcsControlBlocked);
+
+            setRfRadioGroupDisabled('control-mcs-auto', mcsControlBlocked, mcsControlNotice);
+
+            ['control-mcs-value', 'control-mcs-slot'].forEach((controlId) => {
+                const control = document.getElementById(controlId);
+                if (control) {
+                    control.title = mcsControlNotice;
+                }
+            });
+
+            const note = document.getElementById('control-mcs-note');
+            if (note) {
+                note.hidden = !mcsControlBlocked;
+                note.textContent = mcsControlNotice;
+            }
         }
 
         async function applyMcsSettings() {
@@ -3116,13 +3669,7 @@
                 return;
             }
 
-            if (selected.value === 'auto') {
-                await applyWirelessSetting('set_band_mode', { auto_mode: true });
-                return;
-            }
-
-            await applyWirelessSetting('set_band_mode', { auto_mode: false });
-            await applyWirelessSetting('set_band', { target_band: Number(selected.value) });
+            await applyWirelessSetting('set_band_selection', { band_bitmap: Number(selected.value) });
         }
 
         function bindAutoApply(controlIds, action, buildPayload, eventName = 'change') {
@@ -3330,6 +3877,39 @@
             });
         }
 
+        const maintenanceTabTrigger = document.querySelector('.sys-subnav-item[data-tab="maintenance"]');
+        if (maintenanceTabTrigger) {
+            maintenanceTabTrigger.addEventListener('click', () => {
+                loadMaintenanceInfo().catch((error) => {
+                    console.error('Failed to load maintenance info:', error);
+                    showMaintenanceInfoError(error);
+                });
+            });
+        }
+
+        const maintenanceFileInput = document.getElementById('maintenance-firmware-file');
+        if (maintenanceFileInput) {
+            maintenanceFileInput.addEventListener('change', () => {
+                renderMaintenanceFileMeta(maintenanceFileInput.files?.[0] || null);
+                syncMaintenanceStatus('maintenance-action-status', Boolean(maintenanceInfoCache?.upgrade_supported), true);
+                updateMaintenanceControlsState();
+            });
+        }
+
+        const maintenanceUpgradeButton = document.getElementById('maintenance-upgrade-btn');
+        if (maintenanceUpgradeButton) {
+            maintenanceUpgradeButton.addEventListener('click', () => {
+                submitMaintenanceUpgrade().catch(() => {});
+            });
+        }
+
+        const maintenanceResetButton = document.getElementById('maintenance-reset-btn');
+        if (maintenanceResetButton) {
+            maintenanceResetButton.addEventListener('click', () => {
+                submitMaintenanceReset().catch(() => {});
+            });
+        }
+
         document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
             radio.addEventListener('change', () => {
                 applyBandSelection().catch(() => {});
@@ -3505,8 +4085,21 @@
             console.error('Failed to load wireless runtime details:', error);
         });
 
+        renderMaintenanceFileMeta(null);
+        updateMaintenanceControlsState();
+        loadMaintenanceInfo().catch((error) => {
+            console.error('Failed to load maintenance info:', error);
+            showMaintenanceInfoError(error);
+        });
+
         window.setInterval(() => {
             loadWirelessRuntimeDetails().catch(() => {});
+        }, 5000);
+
+        window.setInterval(() => {
+            if (isMaintenancePanelVisible()) {
+                loadMaintenanceInfo().catch(() => {});
+            }
         }, 5000);
     </script>
 </body>

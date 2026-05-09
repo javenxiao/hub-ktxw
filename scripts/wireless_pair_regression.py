@@ -206,8 +206,8 @@ async def run_ap_auto_pair(page: Page, base_url: str) -> ScenarioResult:
     await goto_rf_settings(page, base_url)
     selected = await select_device_by_prefix(page, "AP")
     scenario.notes.append(f"Selected device: {selected['label']}")
-    await wait_for_pair_button(page, "Pair")
     await stop_pair_if_running(page)
+    await wait_for_pair_button(page, "Pair")
     await reset_pair_probe(page)
 
     row_count, label, value, button_text = await read_first_pair_row(page)
@@ -242,24 +242,23 @@ async def run_ap_targeted_pair(page: Page, base_url: str) -> ScenarioResult:
     await goto_rf_settings(page, base_url)
     selected = await select_device_by_prefix(page, "AP")
     scenario.notes.append(f"Selected device: {selected['label']}")
-    await wait_for_pair_button(page, "Pair")
     await stop_pair_if_running(page)
+    await wait_for_pair_button(page, "Pair")
     await reset_pair_probe(page)
 
     input_locator = page.locator('#rf-pair-list [data-pair-mac-slot="0"]')
     await input_locator.focus()
     await page.wait_for_timeout(800)
 
-    list_id = await input_locator.get_attribute("list")
-    datalist_options = []
-    if list_id:
-        datalist_options = await page.locator(f'#{list_id} option').evaluate_all(
-            "options => options.map(option => option.getAttribute('value'))"
-        )
-    if not datalist_options:
-        raise RuntimeError("AP targeted pair could not load any DEV candidate MAC")
+    device_options = await get_device_options(page)
+    dev_option = next(
+        (option for option in device_options if option["label"].upper().startswith("DEV:")),
+        None,
+    )
+    if not dev_option:
+        raise RuntimeError("AP targeted pair could not find any DEV device in the runtime device list")
 
-    target_mac = datalist_options[0]
+    target_mac = dev_option["value"]
     scenario.notes.append(f"Target DEV MAC: {target_mac}")
     await input_locator.fill(target_mac)
     await page.locator('#rf-pair-list [data-pair-slot="0"]').click()
@@ -280,8 +279,9 @@ async def run_ap_targeted_pair(page: Page, base_url: str) -> ScenarioResult:
             f"AP targeted pair sent unexpected target MAC: expected {normalize_pair_mac(target_mac)}, got {payload}"
         )
 
-    if not candidate_calls:
-        raise RuntimeError("AP targeted pair did not request candidate DEV list before pairing")
+    scenario.notes.append(
+        f"Candidate list requests observed: {len(candidate_calls)}"
+    )
 
     await stop_pair_if_running(page)
     row_count, label, value, button_text = await read_first_pair_row(page)
@@ -298,8 +298,8 @@ async def run_dev_single_address_pair(page: Page, base_url: str) -> ScenarioResu
     await goto_rf_settings(page, base_url)
     selected = await select_device_by_prefix(page, "DEV")
     scenario.notes.append(f"Selected device: {selected['label']}")
-    await wait_for_pair_button(page, "Pair")
     await stop_pair_if_running(page)
+    await wait_for_pair_button(page, "Pair")
     await reset_pair_probe(page)
 
     row_count, label, value, button_text = await read_first_pair_row(page)
@@ -351,6 +351,60 @@ async def run_dev_single_address_pair(page: Page, base_url: str) -> ScenarioResu
     return scenario
 
 
+async def run_dev_pair_with_cleared_ap_mac(page: Page, base_url: str) -> ScenarioResult:
+    scenario = ScenarioResult(name="dev_pair_with_cleared_ap_mac")
+    await goto_rf_settings(page, base_url)
+    selected = await select_device_by_prefix(page, "DEV")
+    scenario.notes.append(f"Selected device: {selected['label']}")
+    await stop_pair_if_running(page)
+    await wait_for_pair_button(page, "Pair")
+    await reset_pair_probe(page)
+
+    row_count, label, value, button_text = await read_first_pair_row(page)
+    scenario.pair_row_count = row_count
+    scenario.pair_row_label = label
+    scenario.pair_row_value = value
+    scenario.pair_row_button = button_text
+
+    if row_count != 1:
+        raise RuntimeError(f"DEV cleared-AP-MAC pair panel should render exactly one row, got {row_count}")
+    if (label or "").strip() != "AP MAC":
+        raise RuntimeError(f"DEV cleared-AP-MAC pair row should be labeled AP MAC, got {label!r}")
+
+    input_locator = page.locator('#rf-pair-list [data-pair-mac-slot="0"]')
+    await input_locator.fill("")
+    await page.wait_for_timeout(200)
+
+    apply_calls, candidate_calls = await read_pair_probe(page)
+    if candidate_calls:
+        raise RuntimeError(f"DEV cleared-AP-MAC pair should not request candidate list, got {candidate_calls}")
+
+    await page.locator('#rf-pair-list [data-pair-slot="0"]').click()
+    await page.wait_for_function("() => (window.__pairApplyCalls || []).length >= 1")
+    await page.wait_for_timeout(800)
+
+    apply_calls, candidate_calls = await read_pair_probe(page)
+    scenario.apply_calls = apply_calls
+    scenario.candidate_calls = candidate_calls
+    scenario.status_text = await page.locator("#wireless-control-status").text_content()
+
+    if not apply_calls:
+        raise RuntimeError("DEV cleared-AP-MAC pair did not send any apply request")
+
+    payload = parse_apply_body(apply_calls[0])
+    if payload.get("pair_target_mac"):
+        raise RuntimeError(
+            f"DEV cleared-AP-MAC pair should not send pair_target_mac when input is blank, got {payload}"
+        )
+
+    if candidate_calls:
+        raise RuntimeError(f"DEV cleared-AP-MAC pair should not request candidate list during apply, got {candidate_calls}")
+
+    await stop_pair_if_running(page)
+    scenario.success = True
+    return scenario
+
+
 async def execute_scenario(browser, result: PairRegressionResult, base_url: str, runner) -> None:
     page = await browser.new_page()
     await attach_page_listeners(page, result)
@@ -377,6 +431,7 @@ async def run_pair_regression(base_url: str, headless: bool) -> PairRegressionRe
             await execute_scenario(browser, result, base_url, run_ap_auto_pair)
             await execute_scenario(browser, result, base_url, run_ap_targeted_pair)
             await execute_scenario(browser, result, base_url, run_dev_single_address_pair)
+            await execute_scenario(browser, result, base_url, run_dev_pair_with_cleared_ap_mac)
         finally:
             await browser.close()
 

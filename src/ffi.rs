@@ -123,6 +123,7 @@ pub struct BbSystemInfoSummary {
 pub struct BbBandInfoSummary {
     pub band_auto: bool,
     pub work_band: u8,
+    pub selection_bitmap: Option<u8>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -625,6 +626,24 @@ pub struct bb_set_ap_mac_t {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_candidate_t {
+    pub slot: u8,
+    pub mac_num: u8,
+    pub mac_tab: [bb_mac_t; BB_CONFIG_MAX_SLOT_CANDIDATE],
+}
+
+impl Default for bb_set_candidate_t {
+    fn default() -> Self {
+        Self {
+            slot: 0,
+            mac_num: 0,
+            mac_tab: [bb_mac_t::default(); BB_CONFIG_MAX_SLOT_CANDIDATE],
+        }
+    }
+}
+
+#[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_chan_mode_t {
     pub auto_mode: u8,
@@ -708,6 +727,45 @@ pub struct bb_set_orig_cfg_t {
 pub struct bb_set_reboot_t {
     pub delay_ms: u32,
 }
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_hot_upgrade_write_in_t {
+    pub seq: u16,
+    pub len: u16,
+    pub addr: u32,
+    pub data: [u8; BB_HOT_UPGRADE_CHUNK_SIZE],
+}
+
+impl Default for bb_set_hot_upgrade_write_in_t {
+    fn default() -> Self {
+        Self {
+            seq: 0,
+            len: 0,
+            addr: 0,
+            data: [0; BB_HOT_UPGRADE_CHUNK_SIZE],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_hot_upgrade_write_out_t {
+    pub seq: u16,
+    pub ret: i16,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_hot_upgrade_crc32_in_t {
+    pub seq: u16,
+    pub reserve: u16,
+    pub len: u32,
+    pub addr: u32,
+    pub crc32: u32,
+}
+
+pub type bb_set_hot_upgrade_crc32_out_t = bb_set_hot_upgrade_write_out_t;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -878,6 +936,7 @@ pub const BB_MAC_LEN: usize = 4;
 pub const BB_REG_PAGE_NUM: usize = 16;
 pub const BB_REG_PAGE_SIZE: usize = 256;
 pub const BB_CFG_PAGE_SIZE: usize = 1024;
+pub const BB_HOT_UPGRADE_CHUNK_SIZE: usize = 0x300;
 pub const BB_PLOT_POINT_MAX: usize = 10;
 pub const BB_BLACK_LIST_SIZE: usize = 3;
 pub const BB_CONFIG_MAX_SLOT_CANDIDATE: usize = 5;
@@ -955,6 +1014,7 @@ pub const BB_GET_POWER_AUTO: u32 = bb_request(BB_REQ_GET, 9);
 pub const BB_GET_CHAN_INFO: u32 = bb_request(BB_REQ_GET, 10);
 pub const BB_GET_PEER_QUALITY: u32 = bb_request(BB_REQ_GET, 11);
 pub const BB_GET_BAND_INFO: u32 = bb_request(BB_REQ_GET, 13);
+pub const BB_GET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_GET, 200);
 pub const BB_GET_SYS_INFO: u32 = bb_request(BB_REQ_GET, 105);
 pub const BB_GET_MCS_MODE: u32 = bb_request(BB_REQ_GET, 117);
 
@@ -963,11 +1023,14 @@ pub const BB_SET_EVENT_SUBSCRIBE: u32 = bb_request(BB_REQ_SET, 0);
 pub const BB_SET_EVENT_UNSUBSCRIBE: u32 = bb_request(BB_REQ_SET, 1);
 pub const BB_SET_PAIR_MODE: u32 = bb_request(BB_REQ_SET, 2);
 pub const BB_SET_AP_MAC: u32 = bb_request(BB_REQ_SET, 3);
+pub const BB_SET_CANDIDATES: u32 = bb_request(BB_REQ_SET, 4);
 pub const BB_SET_CHAN_MODE: u32 = bb_request(BB_REQ_SET, 5);
 pub const BB_SET_CHAN: u32 = bb_request(BB_REQ_SET, 6);
 pub const BB_SET_POWER_MODE: u32 = bb_request(BB_REQ_SET, 7);
 pub const BB_SET_POWER: u32 = bb_request(BB_REQ_SET, 8);
 pub const BB_SET_POWER_AUTO: u32 = bb_request(BB_REQ_SET, 9);
+pub const BB_SET_HOT_UPGRADE_WRITE: u32 = bb_request(BB_REQ_SET, 10);
+pub const BB_SET_HOT_UPGRADE_CRC32: u32 = bb_request(BB_REQ_SET, 11);
 pub const BB_SET_BAND_MODE: u32 = bb_request(BB_REQ_SET, 18);
 pub const BB_SET_BAND: u32 = bb_request(BB_REQ_SET, 19);
 pub const BB_SET_MCS_MODE: u32 = bb_request(BB_REQ_SET, 12);
@@ -977,10 +1040,20 @@ pub const BB_SET_BANDWIDTH_MODE: u32 = bb_request(BB_REQ_SET, 32);
 pub const BB_SET_LOCAL_MAC: u32 = bb_request(BB_REQ_SET, 33);
 pub const BB_SET_SYS_REBOOT: u32 = bb_request(BB_REQ_SET, 14);
 pub const BB_SET_PLOT: u32 = bb_request(BB_REQ_SET, 103);
+pub const BB_RESET_CFG: u32 = bb_request(BB_REQ_SET, 102);
 pub const BB_SET_ORIG_CFG: u32 = bb_request(BB_REQ_SET, 113);
 pub const BB_SET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_SET, 200);
 
 pub const PRJ_CMD_SET_ROLE: u8 = 0;
+pub const PRJ_CMD_SET_AP_MAC: u8 = 1;
+pub const PRJ_CMD_SET_SLOT_MAC: u8 = 2;
+pub const PRJ_CMD_SET_BAND: u8 = 3;
+pub const PRJ_CMD_GET_BAND: u8 = 128;
+
+const PRJ_BAND_1G_BITMAP: u8 = 0x01;
+const PRJ_BAND_2G_BITMAP: u8 = 0x02;
+const PRJ_BAND_5G_BITMAP: u8 = 0x04;
+const PRJ_BAND_AUTO_BITMAP: u8 = PRJ_BAND_1G_BITMAP | PRJ_BAND_2G_BITMAP | PRJ_BAND_5G_BITMAP;
 
 pub const BB_EVENT_PLOT_DATA: i32 = 3;
 
@@ -1726,6 +1799,7 @@ pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, 
     let sdk = sdk()?;
     let input = bb_get_band_info_in_t::default();
     let mut output = bb_get_band_info_out_t::default();
+    let selection_bitmap = get_minidb_band_bitmap(handle).ok();
 
     suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
@@ -1737,6 +1811,7 @@ pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, 
             0 => Ok(BbBandInfoSummary {
                 band_auto: output.band_mode != 0,
                 work_band: output.work_band,
+                selection_bitmap,
             }),
             e => Err(format!("bb_ioctl(BB_GET_BAND_INFO) failed with code: {}", e)),
         }
@@ -2039,6 +2114,166 @@ pub fn set_ap_mac(handle: *mut bb_dev_handle_t, mac: &str) -> Result<(), String>
     }
 }
 
+fn set_prj_dispatch_payload(
+    handle: *mut bb_dev_handle_t,
+    cmd_id: u8,
+    payload: &[u8],
+) -> Result<(), String> {
+    if payload.len() + 4 > bb_set_prj_dispatch_in_t::default().data.len() {
+        return Err(format!(
+            "PRJ dispatch payload is too large: {} bytes exceeds limit {}",
+            payload.len(),
+            bb_set_prj_dispatch_in_t::default().data.len() - 4
+        ));
+    }
+
+    let sdk = sdk()?;
+    let mut input = bb_set_prj_dispatch_in_t::default();
+    input.data[0] = cmd_id;
+    input.data[4..4 + payload.len()].copy_from_slice(payload);
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_PRJ_DISPATCH as c_uint,
+            &input as *const bb_set_prj_dispatch_in_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!(
+                "bb_ioctl(BB_SET_PRJ_DISPATCH:cmd={}) failed with code: {}",
+                cmd_id, e
+            )),
+        }
+    }
+}
+
+fn get_prj_dispatch_payload(
+    handle: *mut bb_dev_handle_t,
+    cmd_id: u8,
+    payload: &[u8],
+) -> Result<bb_set_prj_dispatch_in_t, String> {
+    if payload.len() + 4 > bb_set_prj_dispatch_in_t::default().data.len() {
+        return Err(format!(
+            "PRJ dispatch payload is too large: {} bytes exceeds limit {}",
+            payload.len(),
+            bb_set_prj_dispatch_in_t::default().data.len() - 4
+        ));
+    }
+
+    let sdk = sdk()?;
+    let mut input = bb_set_prj_dispatch_in_t::default();
+    input.data[0] = cmd_id;
+    input.data[4..4 + payload.len()].copy_from_slice(payload);
+    let mut output = input;
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_GET_PRJ_DISPATCH as c_uint,
+            &input as *const bb_set_prj_dispatch_in_t as *const c_void,
+            &mut output as *mut bb_set_prj_dispatch_in_t as *mut c_void,
+        ) {
+            0 | -8 => Ok(output),
+            e => Err(format!(
+                "bb_ioctl(BB_GET_PRJ_DISPATCH:cmd={}) failed with code: {}",
+                cmd_id, e
+            )),
+        }
+    }
+}
+
+fn validate_prj_band_bitmap(band_bitmap: u8) -> Result<(), String> {
+    if matches!(band_bitmap, PRJ_BAND_1G_BITMAP | PRJ_BAND_2G_BITMAP | PRJ_BAND_5G_BITMAP | PRJ_BAND_AUTO_BITMAP) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unsupported band bitmap '{}'; expected 0x01(600M), 0x02(2.4G), 0x04(5.8G), or 0x07(Auto)",
+            band_bitmap
+        ))
+    }
+}
+
+fn map_target_band_to_prj_bitmap(target_band: u8) -> Result<u8, String> {
+    match target_band {
+        0 => Ok(PRJ_BAND_1G_BITMAP),
+        1 => Ok(PRJ_BAND_2G_BITMAP),
+        2 => Ok(PRJ_BAND_5G_BITMAP),
+        other => Err(format!(
+            "Unsupported band '{}' for PRJ_CMD_SET_BAND; expected bb_band_e 0, 1, or 2",
+            other
+        )),
+    }
+}
+
+pub fn get_minidb_band_bitmap(handle: *mut bb_dev_handle_t) -> Result<u8, String> {
+    let output = get_prj_dispatch_payload(handle, PRJ_CMD_GET_BAND, &[])?;
+    Ok(output.data[4])
+}
+
+pub fn set_band_selection_bitmap(handle: *mut bb_dev_handle_t, band_bitmap: u8) -> Result<(), String> {
+    validate_prj_band_bitmap(band_bitmap)?;
+    set_prj_dispatch_payload(handle, PRJ_CMD_SET_BAND, &[band_bitmap])
+}
+
+pub fn set_minidb_ap_mac(handle: *mut bb_dev_handle_t, mac: &str) -> Result<(), String> {
+    let parsed = parse_bb_mac(mac)?;
+    set_prj_dispatch_payload(handle, PRJ_CMD_SET_AP_MAC, &parsed.addr)
+}
+
+pub fn set_minidb_slot_mac(
+    handle: *mut bb_dev_handle_t,
+    slot: u8,
+    mac: &str,
+) -> Result<(), String> {
+    let parsed = parse_bb_mac(mac)?;
+    let mut payload = [0_u8; 1 + BB_MAC_LEN];
+    payload[0] = slot;
+    payload[1..].copy_from_slice(&parsed.addr);
+    set_prj_dispatch_payload(handle, PRJ_CMD_SET_SLOT_MAC, &payload)
+}
+
+pub fn set_pair_candidates(
+    handle: *mut bb_dev_handle_t,
+    slot: u8,
+    macs: &[String],
+) -> Result<(), String> {
+    if macs.is_empty() {
+        return Err("Pair candidates cannot be empty".to_string());
+    }
+
+    if macs.len() > BB_CONFIG_MAX_SLOT_CANDIDATE {
+        return Err(format!(
+            "Pair candidates support at most {} MACs, received {}",
+            BB_CONFIG_MAX_SLOT_CANDIDATE,
+            macs.len()
+        ));
+    }
+
+    let sdk = sdk()?;
+    let mut input = bb_set_candidate_t {
+        slot,
+        mac_num: macs.len() as u8,
+        ..Default::default()
+    };
+
+    for (index, mac) in macs.iter().enumerate() {
+        input.mac_tab[index] = parse_bb_mac(mac)?;
+    }
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_CANDIDATES as c_uint,
+            &input as *const bb_set_candidate_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_CANDIDATES) failed with code: {}", e)),
+        }
+    }
+}
+
 pub fn set_local_mac(handle: *mut bb_dev_handle_t, mac: [u8; BB_MAC_LEN]) -> Result<(), String> {
     let sdk = sdk()?;
     let input = bb_set_local_mac_t {
@@ -2226,6 +2461,14 @@ pub fn set_band(handle: *mut bb_dev_handle_t, target_band: u8) -> Result<(), Str
     }
 }
 
+pub fn set_minidb_band(handle: *mut bb_dev_handle_t, target_band: u8) -> Result<(), String> {
+    set_band_selection_bitmap(handle, map_target_band_to_prj_bitmap(target_band)?)
+}
+
+pub fn set_minidb_band_auto(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    set_band_selection_bitmap(handle, PRJ_BAND_AUTO_BITMAP)
+}
+
 pub fn set_bandwidth(handle: *mut bb_dev_handle_t, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
     let sdk = sdk()?;
     let input = bb_set_bandwidth_t {
@@ -2284,6 +2527,101 @@ pub fn set_baseband_role(handle: *mut bb_dev_handle_t, role: u8) -> Result<(), S
         ) {
             0 => Ok(()),
             e => Err(format!("bb_ioctl(BB_SET_PRJ_DISPATCH:PRJ_CMD_SET_ROLE) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn hot_upgrade_write(
+    handle: *mut bb_dev_handle_t,
+    seq: u16,
+    addr: u32,
+    data: &[u8],
+) -> Result<(), String> {
+    if data.is_empty() {
+        return Err("Firmware chunk is empty".to_string());
+    }
+
+    if data.len() > BB_HOT_UPGRADE_CHUNK_SIZE {
+        return Err(format!(
+            "Firmware chunk is too large: {} bytes exceeds SDK chunk limit {}",
+            data.len(),
+            BB_HOT_UPGRADE_CHUNK_SIZE
+        ));
+    }
+
+    let sdk = sdk()?;
+    let mut input = bb_set_hot_upgrade_write_in_t {
+        seq,
+        len: data.len() as u16,
+        addr,
+        ..Default::default()
+    };
+    input.data[..data.len()].copy_from_slice(data);
+    let mut output = bb_set_hot_upgrade_write_out_t::default();
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_HOT_UPGRADE_WRITE as c_uint,
+            &input as *const bb_set_hot_upgrade_write_in_t as *const c_void,
+            &mut output as *mut bb_set_hot_upgrade_write_out_t as *mut c_void,
+        ) {
+            0 if output.ret == 0 => Ok(()),
+            0 => Err(format!(
+                "bb_ioctl(BB_SET_HOT_UPGRADE_WRITE) returned device error: {}",
+                output.ret
+            )),
+            e => Err(format!("bb_ioctl(BB_SET_HOT_UPGRADE_WRITE) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn hot_upgrade_crc32(
+    handle: *mut bb_dev_handle_t,
+    seq: u16,
+    len: u32,
+    addr: u32,
+    crc32: u32,
+) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_hot_upgrade_crc32_in_t {
+        seq,
+        reserve: 0,
+        len,
+        addr,
+        crc32,
+    };
+    let mut output = bb_set_hot_upgrade_crc32_out_t::default();
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_HOT_UPGRADE_CRC32 as c_uint,
+            &input as *const bb_set_hot_upgrade_crc32_in_t as *const c_void,
+            &mut output as *mut bb_set_hot_upgrade_crc32_out_t as *mut c_void,
+        ) {
+            0 if output.ret == 0 => Ok(()),
+            0 => Err(format!(
+                "bb_ioctl(BB_SET_HOT_UPGRADE_CRC32) returned device error: {}",
+                output.ret
+            )),
+            e => Err(format!("bb_ioctl(BB_SET_HOT_UPGRADE_CRC32) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn reset_config(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    let sdk = sdk()?;
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_RESET_CFG as c_uint,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_RESET_CFG) failed with code: {}", e)),
         }
     }
 }

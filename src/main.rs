@@ -5,6 +5,7 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     extract::{
+        Multipart,
         Query,
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
@@ -27,12 +28,13 @@ use tower_http::{
 };
 use tracing::{error, info, warn};
 
-use bb_api::{BasebandHealthStatus, BasebandManager, WirelessRuntimeDetails};
+use bb_api::{BasebandHealthStatus, BasebandManager, FirmwareUpgradeResult, WirelessRuntimeDetails};
 use ffi::BbGetStatusSummary;
 
 const DEFAULT_RUST_LOG: &str = "info";
 const DEFAULT_BB_HOST_ADDR: &str = "127.0.0.1";
 const DEFAULT_BB_HOST_PORT: &str = "50000";
+const DEFAULT_SERVER_PORT: &str = "8080";
 
 fn set_default_env_var(key: &str, value: &str) {
     let should_set = std::env::var(key)
@@ -48,6 +50,7 @@ fn apply_default_runtime_env() {
     set_default_env_var("RUST_LOG", DEFAULT_RUST_LOG);
     set_default_env_var("BB_HOST_ADDR", DEFAULT_BB_HOST_ADDR);
     set_default_env_var("BB_HOST_PORT", DEFAULT_BB_HOST_PORT);
+    set_default_env_var("SERVER_PORT", DEFAULT_SERVER_PORT);
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -82,6 +85,50 @@ struct SystemInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct MaintenanceInfoResponse {
+    success: bool,
+    message: String,
+    version: MaintenanceVersionInfo,
+    upgrade_supported: bool,
+    reset_supported: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MaintenanceVersionInfo {
+    product_name: String,
+    host_name: String,
+    active_device: String,
+    operation_mode: String,
+    access_mode: String,
+    local_mac_address: String,
+    system_uptime: String,
+    hardware_version: String,
+    firmware_version: String,
+    software_version: String,
+    software_build: String,
+    compile_time: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MaintenanceActionResponse {
+    success: bool,
+    message: String,
+    reboot_expected: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct FirmwareUpgradeActionResponse {
+    success: bool,
+    message: String,
+    file_name: String,
+    file_size: usize,
+    bytes_written: usize,
+    chunk_count: usize,
+    crc32: String,
+    reboot_expected: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct BasebandTestResponse {
     available: bool,
     socket_initialized: bool,
@@ -111,6 +158,23 @@ struct WirelessRuntimeResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct WirelessConfiguredBandView {
+    bitmap: Option<u8>,
+    label: String,
+    auto: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WirelessLiveRfView {
+    band_code: Option<u8>,
+    band: String,
+    channel_auto: Option<bool>,
+    channel_count: Option<u8>,
+    channel_index: Option<u8>,
+    channel_frequency: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 struct WirelessRuntimeView {
     local_mac_address: String,
     operation_mode: String,
@@ -119,7 +183,10 @@ struct WirelessRuntimeView {
     selected_signal_user: Option<u8>,
     detected_signal_user: Option<u8>,
     compatibility_mode: String,
+    configured_band: WirelessConfiguredBandView,
+    live_rf: WirelessLiveRfView,
     work_band_code: Option<u8>,
+    band_bitmap: Option<u8>,
     bandwidth_code: Option<u8>,
     bandwidth: String,
     frequency_khz: Option<u32>,
@@ -169,6 +236,7 @@ struct WirelessDeviceOption {
 struct WirelessSettingRequest {
     action: String,
     auto_mode: Option<bool>,
+    band_bitmap: Option<u8>,
     device_mac: Option<String>,
     pair_start: Option<bool>,
     pair_target_mac: Option<String>,
@@ -391,10 +459,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let initial_runtime = match baseband.as_ref() {
         Some(baseband) => match baseband.get_wireless_runtime_details() {
             Ok(details) => runtime_response_from_details(&details),
-            Err(err) => runtime_unavailable_response(format!(
-                "Failed to fetch wireless runtime details: {}",
-                err
-            )),
+            Err(err) => runtime_unavailable_response(format_runtime_fetch_error_message(&err)),
         },
         None => runtime_unavailable_response(
             "Baseband SDK not available; runtime controls require real hardware mode".to_string(),
@@ -425,6 +490,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(get_plot_refresh_settings).post(apply_plot_refresh_settings),
         )
         .route("/api/system/info", get(get_system_info))
+        .route("/api/system/maintenance", get(get_maintenance_info))
+        .route("/api/system/maintenance/upgrade", post(apply_firmware_upgrade))
+        .route("/api/system/maintenance/reset-defaults", post(reset_default_config))
         .route("/api/baseband/health", get(get_baseband_health))
         .route("/api/baseband/test", get(test_baseband_communication))
         .route("/api/baseband/link/exercise", post(exercise_baseband_link))
@@ -445,7 +513,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let server_port = std::env::var("SERVER_PORT")
+        .ok()
+        .and_then(|value| value.trim().parse::<u16>().ok())
+        .unwrap_or(8080);
+    let addr = SocketAddr::from(([0, 0, 0, 0], server_port));
     info!("wireless status server listening on http://{}", addr);
     info!("========== Server Ready ==========\n");
 
@@ -634,20 +706,57 @@ async fn apply_wireless_setting(
             .as_deref()
             .ok_or_else(|| "device_mac is required".to_string())
             .and_then(|device_mac| baseband.switch_active_device(device_mac)),
+        "set_pair_target" => {
+            let slot = request.slot.unwrap_or(default_slot);
+            let current_role = cached_current
+                .as_ref()
+                .and_then(resolve_runtime_role)
+                .or_else(|| current.as_ref().map(|details| details.status.role))
+                .or_else(|| baseband.get_wireless_runtime_details().ok().map(|details| details.status.role));
+
+            request
+                .pair_target_mac
+                .as_deref()
+                .map(normalize_device_mac)
+                .filter(|mac| !mac.is_empty())
+                .ok_or_else(|| "pair_target_mac is required".to_string())
+                .and_then(|target_mac| {
+                    if current_role == Some(ffi::BB_ROLE_DEV) {
+                        baseband
+                            .set_ap_mac(&target_mac)
+                            .and_then(|_| baseband.set_minidb_ap_mac(&target_mac))
+                    } else {
+                        resolve_pair_slot_bitmap(slot, current_role)?;
+                        baseband
+                            .set_pair_candidates(slot, std::slice::from_ref(&target_mac))
+                            .and_then(|_| baseband.set_minidb_slot_mac(slot, &target_mac))
+                    }
+                })
+        }
         "set_pair_mode" => request
             .pair_start
             .ok_or_else(|| "pair_start is required".to_string())
             .and_then(|pair_start| {
+                if pair_start {
+                    let runtime = baseband.get_wireless_runtime_details().map_err(|err| {
+                        format!(
+                            "Failed to verify whether Pair can start before applying setting: {}",
+                            err
+                        )
+                    })?;
+
+                    if let Some(blocking_notice) = pair_blocking_notice_from_runtime(&runtime) {
+                        return Err(blocking_notice);
+                    }
+                }
+
                 let slot = request.slot.unwrap_or(default_slot);
-                let slot_bmp = 1_u8.checked_shl(u32::from(slot)).unwrap_or(0);
                 let current_role = cached_current
                     .as_ref()
                     .and_then(resolve_runtime_role)
                     .or_else(|| current.as_ref().map(|details| details.status.role))
                     .or_else(|| baseband.get_wireless_runtime_details().ok().map(|details| details.status.role));
-                if slot_bmp == 0 {
-                    return Err(format!("Unsupported slot '{}'; expected 0-7", slot));
-                }
+                let slot_bmp = resolve_pair_slot_bitmap(slot, current_role)?;
 
                 let requested_target = request
                     .pair_target_mac
@@ -659,6 +768,7 @@ async fn apply_wireless_setting(
                     if pair_start {
                         if let Some(target_mac) = requested_target {
                             baseband.set_ap_mac(&target_mac)?;
+                            baseband.set_minidb_ap_mac(&target_mac)?;
                         }
                     }
 
@@ -670,46 +780,9 @@ async fn apply_wireless_setting(
                 }
 
                 if let Some(target_mac) = requested_target {
-                    let candidates = baseband.get_pair_candidates(slot)?;
-                    let normalized_candidates = candidates
-                        .iter()
-                        .map(|mac| (normalize_device_mac(mac), mac.clone()))
-                        .filter(|(normalized, _)| !normalized.is_empty())
-                        .collect::<Vec<_>>();
-
-                    if normalized_candidates.is_empty() {
-                        return Err(format!("No candidate DEV detected for slot {}", slot));
-                    }
-
-                    if !normalized_candidates.iter().any(|(normalized, _)| *normalized == target_mac) {
-                        return Err(format!(
-                            "Target DEV '{}' is not in the current candidate list for slot {}",
-                            target_mac,
-                            slot
-                        ));
-                    }
-
-                    let black_list = normalized_candidates
-                        .into_iter()
-                        .filter_map(|(normalized, original)| {
-                            if normalized == target_mac {
-                                None
-                            } else {
-                                Some(original)
-                            }
-                        })
-                        .collect::<Vec<_>>();
-
-                    if black_list.len() > ffi::BB_BLACK_LIST_SIZE {
-                        return Err(format!(
-                            "Targeted pair for slot {} would require blacklisting {} DEV devices, exceeding SDK limit {}",
-                            slot,
-                            black_list.len(),
-                            ffi::BB_BLACK_LIST_SIZE
-                        ));
-                    }
-
-                    return baseband.set_pair_mode_with_blacklist(pair_start, slot_bmp, &black_list);
+                    baseband.set_pair_candidates(slot, std::slice::from_ref(&target_mac))?;
+                    baseband.set_minidb_slot_mac(slot, &target_mac)?;
+                    return baseband.set_pair_mode(pair_start, slot_bmp);
                 }
 
                 baseband.set_pair_mode(pair_start, slot_bmp)
@@ -751,6 +824,11 @@ async fn apply_wireless_setting(
             .auto_mode
             .ok_or_else(|| "auto_mode is required".to_string())
             .and_then(|auto_mode| baseband.set_band_mode(auto_mode)),
+        "set_band_selection" => request
+            .band_bitmap
+            .ok_or_else(|| "band_bitmap is required".to_string())
+            .and_then(parse_band_bitmap)
+            .and_then(|band_bitmap| baseband.set_band_selection(band_bitmap)),
         "set_band" => request
             .target_band
             .ok_or_else(|| "target_band is required".to_string())
@@ -779,6 +857,15 @@ async fn apply_wireless_setting(
             refresh_snapshot_from_baseband(&state, &baseband).await;
             refresh_runtime_from_baseband(&state, &baseband).await;
             let current = state.wireless_runtime.read().await.current.clone();
+
+            if let Err(err) = verify_wireless_setting_effect(&request, current.as_ref()) {
+                return Json(WirelessSettingResponse {
+                    success: false,
+                    message: err,
+                    current,
+                });
+            }
+
             let message = if request.action == "set_role" {
                 "Baseband role switch requested; device rebooting to apply the new role".to_string()
             } else {
@@ -801,6 +888,172 @@ async fn apply_wireless_setting(
 
 async fn get_system_info() -> Json<SystemInfo> {
     Json(build_system_info())
+}
+
+async fn get_maintenance_info(
+    State(state): State<Arc<AppState>>,
+) -> Json<MaintenanceInfoResponse> {
+    let system_info = build_system_info();
+    let current = state.wireless_runtime.read().await.current.clone();
+    let version = build_maintenance_version_info(state.as_ref(), &system_info, current.as_ref());
+    let actions_supported = state.baseband.is_some();
+    let message = if actions_supported {
+        "Maintenance information loaded".to_string()
+    } else {
+        "Baseband SDK not available; maintenance actions are disabled in simulator mode".to_string()
+    };
+
+    Json(MaintenanceInfoResponse {
+        success: true,
+        message,
+        version,
+        upgrade_supported: actions_supported,
+        reset_supported: actions_supported,
+    })
+}
+
+async fn apply_firmware_upgrade(
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Json<FirmwareUpgradeActionResponse> {
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(FirmwareUpgradeActionResponse {
+            success: false,
+            message: "Baseband SDK not available; firmware upgrade is disabled in simulator mode".to_string(),
+            file_name: String::new(),
+            file_size: 0,
+            bytes_written: 0,
+            chunk_count: 0,
+            crc32: String::new(),
+            reboot_expected: false,
+        });
+    };
+
+    let mut file_name = String::new();
+    let mut firmware = None;
+
+    loop {
+        let next_field = match multipart.next_field().await {
+            Ok(field) => field,
+            Err(err) => {
+                return Json(FirmwareUpgradeActionResponse {
+                    success: false,
+                    message: format!("Failed to read firmware upload: {}", err),
+                    file_name,
+                    file_size: 0,
+                    bytes_written: 0,
+                    chunk_count: 0,
+                    crc32: String::new(),
+                    reboot_expected: false,
+                });
+            }
+        };
+
+        let Some(field) = next_field else {
+            break;
+        };
+
+        let field_name = field.name().unwrap_or_default().to_string();
+        let detected_file_name = field.file_name().unwrap_or("firmware.bin").to_string();
+
+        if !file_name.is_empty() || (!field_name.is_empty() && field_name != "firmware") {
+            continue;
+        }
+
+        match field.bytes().await {
+            Ok(bytes) => {
+                file_name = detected_file_name;
+                firmware = Some(bytes.to_vec());
+                break;
+            }
+            Err(err) => {
+                return Json(FirmwareUpgradeActionResponse {
+                    success: false,
+                    message: format!("Failed to read uploaded firmware file: {}", err),
+                    file_name: detected_file_name,
+                    file_size: 0,
+                    bytes_written: 0,
+                    chunk_count: 0,
+                    crc32: String::new(),
+                    reboot_expected: false,
+                });
+            }
+        }
+    }
+
+    let firmware = match firmware {
+        Some(bytes) if !bytes.is_empty() => bytes,
+        Some(_) => {
+            return Json(FirmwareUpgradeActionResponse {
+                success: false,
+                message: "The selected firmware file is empty".to_string(),
+                file_name,
+                file_size: 0,
+                bytes_written: 0,
+                chunk_count: 0,
+                crc32: String::new(),
+                reboot_expected: false,
+            });
+        }
+        None => {
+            return Json(FirmwareUpgradeActionResponse {
+                success: false,
+                message: "No firmware file was uploaded".to_string(),
+                file_name,
+                file_size: 0,
+                bytes_written: 0,
+                chunk_count: 0,
+                crc32: String::new(),
+                reboot_expected: false,
+            });
+        }
+    };
+
+    let file_size = firmware.len();
+    match baseband.upgrade_firmware(&firmware) {
+        Ok(result) => Json(build_firmware_upgrade_response(
+            &file_name,
+            file_size,
+            result,
+            true,
+            format!("Upgrade complete for '{}'. CRC32 verified; device rebooting to apply the new firmware.", file_name),
+        )),
+        Err(err) => Json(FirmwareUpgradeActionResponse {
+            success: false,
+            message: format!("Firmware upgrade failed: {}", err),
+            file_name,
+            file_size,
+            bytes_written: 0,
+            chunk_count: 0,
+            crc32: String::new(),
+            reboot_expected: false,
+        }),
+    }
+}
+
+async fn reset_default_config(
+    State(state): State<Arc<AppState>>,
+) -> Json<MaintenanceActionResponse> {
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(MaintenanceActionResponse {
+            success: false,
+            message: "Baseband SDK not available; reset to default is disabled in simulator mode".to_string(),
+            reboot_expected: false,
+        });
+    };
+
+    match baseband.reset_to_default_config() {
+        Ok(()) => Json(MaintenanceActionResponse {
+            success: true,
+            message: "Factory default configuration restored. Device rebooting to apply the settings.".to_string(),
+            reboot_expected: true,
+        }),
+        Err(err) => Json(MaintenanceActionResponse {
+            success: false,
+            message: format!("Failed to reset device configuration: {}", err),
+            reboot_expected: false,
+        }),
+    }
 }
 
 fn build_system_info() -> SystemInfo {
@@ -832,6 +1085,78 @@ fn build_system_info() -> SystemInfo {
         wan_gateway: "10.10.10.1".to_string(),
         wan_primary_dns: "8.8.8.8".to_string(),
         wan_secondary_dns: "8.8.4.4".to_string(),
+    }
+}
+
+fn build_maintenance_version_info(
+    state: &AppState,
+    system_info: &SystemInfo,
+    current: Option<&WirelessRuntimeView>,
+) -> MaintenanceVersionInfo {
+    let active_device = current
+        .and_then(|runtime| {
+            runtime
+                .available_devices
+                .iter()
+                .find(|device| device.selected)
+                .map(|device| device.label.clone())
+        })
+        .unwrap_or_else(|| current
+            .map(|runtime| runtime.local_mac_address.clone())
+            .unwrap_or_else(|| system_info.mac_address.clone()));
+
+    let compile_time = current
+        .map(|runtime| runtime.compile_time.trim().to_string())
+        .filter(|value| !value.is_empty() && value != "Unavailable")
+        .unwrap_or_else(|| format!("{} {}", system_info.build_date, system_info.build_time));
+
+    MaintenanceVersionInfo {
+        product_name: system_info.product_name.clone(),
+        host_name: system_info.host_name.clone(),
+        active_device,
+        operation_mode: current
+            .map(|runtime| runtime.operation_mode.clone())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "--".to_string()),
+        access_mode: state.baseband_health.effective_mode.clone(),
+        local_mac_address: current
+            .map(|runtime| runtime.local_mac_address.clone())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| system_info.mac_address.clone()),
+        system_uptime: current
+            .map(|runtime| runtime.system_uptime.clone())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| system_info.system_uptime.clone()),
+        hardware_version: current
+            .map(|runtime| runtime.hardware_version.clone())
+            .filter(|value| !value.is_empty() && value != "Unavailable")
+            .unwrap_or_else(|| system_info.hardware_version.clone()),
+        firmware_version: current
+            .map(|runtime| runtime.firmware_version.clone())
+            .filter(|value| !value.is_empty() && value != "Unavailable")
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        software_version: system_info.software_version.clone(),
+        software_build: system_info.software_build.clone(),
+        compile_time,
+    }
+}
+
+fn build_firmware_upgrade_response(
+    file_name: &str,
+    file_size: usize,
+    result: FirmwareUpgradeResult,
+    reboot_expected: bool,
+    message: String,
+) -> FirmwareUpgradeActionResponse {
+    FirmwareUpgradeActionResponse {
+        success: true,
+        message,
+        file_name: file_name.to_string(),
+        file_size,
+        bytes_written: result.bytes_written,
+        chunk_count: result.chunk_count,
+        crc32: format!("{:08X}", result.crc32),
+        reboot_expected,
     }
 }
 
@@ -1715,18 +2040,25 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             .collect::<Vec<_>>()
     };
 
+    let configured_band = build_configured_band_view(details.band_info.as_ref());
+    let live_rf = build_live_rf_view(details.band_info.as_ref(), details.channel_info.as_ref());
+
     WirelessRuntimeView {
         local_mac_address: details.status.mac_hex.clone(),
         operation_mode: format_operation_mode(&details.status),
-        dev_pair_target_mac: details
-            .dev_pair_target_mac
-            .clone()
-            .or_else(|| details.status.peer_mac_hex.clone()),
+        dev_pair_target_mac: resolve_dev_pair_target_mac(
+            details.dev_pair_target_mac.as_deref(),
+            &details.status,
+            &available_devices,
+        ),
         available_devices,
         selected_signal_user: details.status.active_user,
         detected_signal_user: details.status.detected_active_user,
         compatibility_mode: format_baseband_mode(details.status.mode).to_string(),
-        work_band_code: details.band_info.as_ref().map(|info| info.work_band),
+        configured_band: configured_band.clone(),
+        live_rf: live_rf.clone(),
+        work_band_code: live_rf.band_code,
+        band_bitmap: configured_band.bitmap,
         bandwidth_code: details.status.bandwidth,
         bandwidth: details
             .status
@@ -1764,21 +2096,12 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             .as_ref()
             .map(|info| info.firmware_version.clone())
             .unwrap_or_else(|| "Unavailable".to_string()),
-        band_auto: details.band_info.as_ref().map(|info| info.band_auto),
-        work_band: details
-            .band_info
-            .as_ref()
-            .map(|info| format_band_name(info.work_band).to_string())
-            .unwrap_or_else(|| "Unavailable".to_string()),
-        channel_auto: details.channel_info.as_ref().map(|info| info.auto_mode),
-        channel_count: details.channel_info.as_ref().map(|info| info.chan_num),
-        work_channel_index: details.channel_info.as_ref().map(|info| info.work_chan),
-        work_channel_frequency: details
-            .channel_info
-            .as_ref()
-            .and_then(|info| info.work_frequency_khz)
-            .map(format_frequency_khz)
-            .unwrap_or_else(|| "Unavailable".to_string()),
+        band_auto: configured_band.auto,
+        work_band: live_rf.band.clone(),
+        channel_auto: live_rf.channel_auto,
+        channel_count: live_rf.channel_count,
+        work_channel_index: live_rf.channel_index,
+        work_channel_frequency: live_rf.channel_frequency.clone(),
         channels,
         bandwidth_auto: details.bandwidth_mode.as_ref().map(|info| info.auto_mode),
         current_slot: details.mcs_value.as_ref().map(|info| info.slot),
@@ -1815,6 +2138,51 @@ fn runtime_response_from_details(details: &WirelessRuntimeDetails) -> WirelessRu
     }
 }
 
+fn pair_blocking_notice_from_runtime(details: &WirelessRuntimeDetails) -> Option<String> {
+    details.warnings.iter().find_map(|warning| {
+        let text = warning.trim();
+        if text.is_empty() {
+            return None;
+        }
+
+        let normalized = text.to_ascii_lowercase();
+        if normalized.contains("firmware mismatch")
+            || normalized.contains("version mismatch")
+            || normalized.contains("same release")
+        {
+            Some(text.to_string())
+        } else {
+            None
+        }
+    })
+}
+
+fn format_runtime_fetch_error_message(error: &str) -> String {
+    let normalized_error = error.trim();
+    let lower_error = normalized_error.to_ascii_lowercase();
+
+    if lower_error.contains("bb_host_connect failed")
+        || lower_error.contains("failed to connect bb_host")
+        || lower_error.contains("remote bb_host session not established")
+    {
+        let host_addr = std::env::var("BB_HOST_ADDR")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| DEFAULT_BB_HOST_ADDR.to_string());
+        let host_port = std::env::var("BB_HOST_PORT")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| DEFAULT_BB_HOST_PORT.to_string());
+
+        return format!(
+            "Remote bb_host daemon is unavailable. Start daemon.exe and ensure {}:{} is listening, then refresh the RF page. SDK detail: {}",
+            host_addr, host_port, normalized_error
+        );
+    }
+
+    format!("Failed to fetch wireless runtime details: {}", normalized_error)
+}
+
 fn runtime_unavailable_response(message: String) -> WirelessRuntimeResponse {
     WirelessRuntimeResponse {
         available: false,
@@ -1847,14 +2215,128 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
 async fn refresh_runtime_from_baseband(state: &Arc<AppState>, baseband: &Arc<BasebandManager>) {
     let response = match baseband.get_wireless_runtime_details() {
         Ok(details) => runtime_response_from_details(&details),
-        Err(err) => runtime_unavailable_response(format!(
-            "Failed to fetch wireless runtime details: {}",
-            err
-        )),
+        Err(err) => runtime_unavailable_response(format_runtime_fetch_error_message(&err)),
     };
 
     let mut guard = state.wireless_runtime.write().await;
     *guard = response;
+}
+
+fn verify_wireless_setting_effect(
+    request: &WirelessSettingRequest,
+    current: Option<&WirelessRuntimeView>,
+) -> Result<(), String> {
+    let Some(current) = current else {
+        return Ok(());
+    };
+
+    match request.action.as_str() {
+        "set_channel_mode" => {
+            if let Some(requested) = request.auto_mode {
+                verify_bool_effect(
+                    "Channel auto mode",
+                    requested,
+                    current.channel_auto,
+                    &current.operation_mode,
+                    None,
+                )?;
+            }
+            Ok(())
+        }
+        "set_power_auto" => {
+            if let Some(requested) = request.auto_mode {
+                verify_bool_effect(
+                    "Power auto mode",
+                    requested,
+                    current.current_power_auto,
+                    &current.operation_mode,
+                    None,
+                )?;
+            }
+            Ok(())
+        }
+        "set_mcs_mode" => {
+            if let Some(requested) = request.auto_mode {
+                verify_bool_effect(
+                    "MCS auto mode",
+                    requested,
+                    current.current_mcs_auto,
+                    &current.operation_mode,
+                    Some("Use the AP side to control MCS in the current runtime."),
+                )?;
+            }
+            Ok(())
+        }
+        "set_mcs" => {
+            if let Some(requested) = request.mcs {
+                if current.current_mcs_value != Some(requested) {
+                    let mut message = format!(
+                        "Manual MCS did not take effect on {}. Requested {}, but runtime still reports {}.",
+                        current.operation_mode,
+                        requested,
+                        format_optional_u8(current.current_mcs_value)
+                    );
+
+                    if current.operation_mode.to_ascii_uppercase().contains("DEV") {
+                        message.push_str(" Use the AP side to control MCS in the current runtime.");
+                    }
+
+                    return Err(message);
+                }
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn verify_bool_effect(
+    label: &str,
+    requested: bool,
+    reported: Option<bool>,
+    operation_mode: &str,
+    hint: Option<&str>,
+) -> Result<(), String> {
+    if reported == Some(requested) {
+        return Ok(());
+    }
+
+    let mut message = format!(
+        "{} did not take effect on {}. Requested {}, but runtime still reports {}.",
+        label,
+        operation_mode,
+        format_bool_mode(requested),
+        format_optional_bool_mode(reported)
+    );
+
+    if let Some(hint) = hint {
+        message.push(' ');
+        message.push_str(hint);
+    }
+
+    Err(message)
+}
+
+fn format_bool_mode(value: bool) -> &'static str {
+    if value {
+        "auto"
+    } else {
+        "manual"
+    }
+}
+
+fn format_optional_bool_mode(value: Option<bool>) -> &'static str {
+    match value {
+        Some(true) => "auto",
+        Some(false) => "manual",
+        None => "unavailable",
+    }
+}
+
+fn format_optional_u8(value: Option<u8>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn parse_direction(value: &str) -> Result<u8, String> {
@@ -1877,6 +2359,86 @@ fn parse_band(value: u8) -> Result<u8, String> {
     match value {
         0..=2 => Ok(value),
         other => Err(format!("Unsupported target_band '{}'; expected 0(600M), 1(2.4G), or 2(5.8G)", other)),
+    }
+}
+
+fn parse_band_bitmap(value: u8) -> Result<u8, String> {
+    match value {
+        0x01 | 0x02 | 0x04 | 0x07 => Ok(value),
+        other => Err(format!(
+            "Unsupported band_bitmap '{}'; expected 0x01(600M), 0x02(2.4G), 0x04(5.8G), or 0x07(Auto)",
+            other
+        )),
+    }
+}
+
+fn format_band_bitmap_name(value: u8) -> &'static str {
+    match value {
+        0x01 => "600M",
+        0x02 => "2.4G",
+        0x04 => "5.8G",
+        0x07 => "Auto",
+        _ => "Unknown",
+    }
+}
+
+fn resolve_band_bitmap(band_info: Option<&ffi::BbBandInfoSummary>) -> Option<u8> {
+    let info = band_info?;
+
+    if let Some(selection_bitmap) = info.selection_bitmap {
+        return Some(selection_bitmap);
+    }
+
+    if info.band_auto {
+        return Some(0x07);
+    }
+
+    match info.work_band {
+        0 => Some(0x01),
+        1 => Some(0x02),
+        2 => Some(0x04),
+        _ => None,
+    }
+}
+
+fn build_configured_band_view(
+    band_info: Option<&ffi::BbBandInfoSummary>,
+) -> WirelessConfiguredBandView {
+    let bitmap = resolve_band_bitmap(band_info);
+    let auto = band_info.map(|info| info.band_auto);
+    let label = if let Some(bitmap) = bitmap {
+        format_band_bitmap_name(bitmap).to_string()
+    } else if auto == Some(true) {
+        "Auto".to_string()
+    } else if let Some(info) = band_info {
+        format_band_name(info.work_band).to_string()
+    } else {
+        "Unavailable".to_string()
+    };
+
+    WirelessConfiguredBandView {
+        bitmap,
+        label,
+        auto,
+    }
+}
+
+fn build_live_rf_view(
+    band_info: Option<&ffi::BbBandInfoSummary>,
+    channel_info: Option<&ffi::BbChannelInfoSummary>,
+) -> WirelessLiveRfView {
+    WirelessLiveRfView {
+        band_code: band_info.map(|info| info.work_band),
+        band: band_info
+            .map(|info| format_band_name(info.work_band).to_string())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        channel_auto: channel_info.map(|info| info.auto_mode),
+        channel_count: channel_info.map(|info| info.chan_num),
+        channel_index: channel_info.map(|info| info.work_chan),
+        channel_frequency: channel_info
+            .and_then(|info| info.work_frequency_khz)
+            .map(format_frequency_khz)
+            .unwrap_or_else(|| "Unavailable".to_string()),
     }
 }
 
@@ -1955,12 +2517,25 @@ fn map_signal_level_from_snr(snr_db: Option<i32>) -> u8 {
 }
 
 fn format_pair_state(link: &ffi::BbLinkStatusSummary) -> String {
-    if link.peer_mac_hex.is_some() {
+    if matches!(link.state, 1 | 2) {
         "Paired".to_string()
     } else if link.pair_state {
         "Pairing".to_string()
     } else {
         "Stable".to_string()
+    }
+}
+
+fn resolve_pair_slot_bitmap(slot: u8, current_role: Option<u8>) -> Result<u8, String> {
+    let slot_bmp = 1_u8.checked_shl(u32::from(slot)).unwrap_or(0);
+    if slot_bmp == 0 {
+        return Err(format!("Unsupported slot '{}'; expected 0-7", slot));
+    }
+
+    if current_role == Some(ffi::BB_ROLE_DEV) {
+        Ok(0)
+    } else {
+        Ok(slot_bmp)
     }
 }
 
@@ -1994,6 +2569,59 @@ fn normalize_device_mac(value: &str) -> String {
         .filter(|ch| ch.is_ascii_hexdigit())
         .collect::<String>()
         .to_lowercase()
+}
+
+fn resolve_connected_peer_mac(status: &BbGetStatusSummary) -> Option<String> {
+    status
+        .links
+        .iter()
+        .find(|link| link.state != 0)
+        .and_then(|link| link.peer_mac_hex.clone())
+        .or_else(|| {
+            status
+                .link_state
+                .filter(|state| *state != 0)
+                .and_then(|_| status.peer_mac_hex.clone())
+        })
+}
+
+fn resolve_dev_pair_target_mac(
+    configured_target: Option<&str>,
+    status: &BbGetStatusSummary,
+    available_devices: &[WirelessDeviceOption],
+) -> Option<String> {
+    if status.role != ffi::BB_ROLE_DEV {
+        return None;
+    }
+
+    let ap_device_macs = available_devices
+        .iter()
+        .filter(|device| device.role.eq_ignore_ascii_case("AP"))
+        .map(|device| normalize_device_mac(&device.mac_address))
+        .filter(|mac| !mac.is_empty())
+        .collect::<Vec<_>>();
+
+    let is_known_ap_mac = |value: &str| {
+        let normalized = normalize_device_mac(value);
+        !normalized.is_empty() && (ap_device_macs.is_empty() || ap_device_macs.iter().any(|mac| mac == &normalized))
+    };
+
+    if let Some(target) = configured_target.filter(|value| is_known_ap_mac(value)) {
+        return Some(target.to_string());
+    }
+
+    if let Some(peer_mac) = resolve_connected_peer_mac(status).filter(|value| is_known_ap_mac(value)) {
+        return Some(peer_mac);
+    }
+
+    if ap_device_macs.len() == 1 {
+        return available_devices
+            .iter()
+            .find(|device| device.role.eq_ignore_ascii_case("AP"))
+            .map(|device| device.mac_address.clone());
+    }
+
+    None
 }
 
 fn format_device_selector_label(role: &str, mac_address: &str) -> String {
@@ -2097,5 +2725,133 @@ fn format_mcs(mcs: u8) -> String {
         23 => "MCS21 64QAM 2/3 Dual".to_string(),
         24 => "MCS22 64QAM 3/4 Dual".to_string(),
         value => format!("Unknown MCS ({})", value),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_link_status(state: u8, pair_state: bool, peer_mac_hex: Option<&str>) -> ffi::BbLinkStatusSummary {
+        ffi::BbLinkStatusSummary {
+            slot: 0,
+            state,
+            rx_mcs: None,
+            pair_state,
+            candidate_macs: Vec::new(),
+            snr_db: None,
+            ldpc_err: None,
+            ldpc_num: None,
+            signal_main: None,
+            signal_aux: None,
+            peer_mac_bytes: None,
+            peer_mac_hex: peer_mac_hex.map(str::to_string),
+        }
+    }
+
+    fn sample_dev_status(configured_peer_mac: Option<&str>) -> BbGetStatusSummary {
+        BbGetStatusSummary {
+            role: ffi::BB_ROLE_DEV,
+            mode: 0,
+            sync_mode: 0,
+            sync_master: 0,
+            cfg_sbmp: 0,
+            rt_sbmp: 0,
+            active_user: None,
+            detected_active_user: None,
+            mac_bytes: [0; ffi::BB_MAC_LEN],
+            mac_hex: "A5:54:F6:2C".to_string(),
+            frequency_khz: None,
+            bandwidth: None,
+            tx_mcs: None,
+            rx_mcs: None,
+            link_state: Some(0),
+            pair_state: Some(true),
+            snr_db: None,
+            ldpc_err: None,
+            ldpc_num: None,
+            signal_main: None,
+            signal_aux: None,
+            peer_mac_bytes: None,
+            peer_mac_hex: configured_peer_mac.map(str::to_string),
+            links: vec![sample_link_status(0, true, configured_peer_mac)],
+        }
+    }
+
+    fn sample_available_devices() -> Vec<WirelessDeviceOption> {
+        vec![
+            WirelessDeviceOption {
+                role: "DEV".to_string(),
+                mac_address: "A5:54:F6:2C".to_string(),
+                label: "DEV:a554f62c".to_string(),
+                selected: true,
+            },
+            WirelessDeviceOption {
+                role: "AP".to_string(),
+                mac_address: "A5:68:B0:33".to_string(),
+                label: "AP:a568b033".to_string(),
+                selected: false,
+            },
+        ]
+    }
+
+    #[test]
+    fn resolve_dev_pair_target_mac_filters_stale_idle_peer() {
+        let status = sample_dev_status(Some("66:00:00:00"));
+
+        let resolved = resolve_dev_pair_target_mac(
+            Some("66:00:00:00"),
+            &status,
+            &sample_available_devices(),
+        );
+
+        assert_eq!(resolved.as_deref(), Some("A5:68:B0:33"));
+    }
+
+    #[test]
+    fn resolve_dev_pair_target_mac_keeps_known_ap_target() {
+        let status = sample_dev_status(Some("A5:68:B0:33"));
+
+        let resolved = resolve_dev_pair_target_mac(
+            Some("A5:68:B0:33"),
+            &status,
+            &sample_available_devices(),
+        );
+
+        assert_eq!(resolved.as_deref(), Some("A5:68:B0:33"));
+    }
+
+    #[test]
+    fn format_pair_state_reports_pairing_for_idle_slot_with_cached_peer_mac() {
+        let link = sample_link_status(0, true, Some("A5:68:B0:33"));
+
+        assert_eq!(format_pair_state(&link), "Pairing");
+    }
+
+    #[test]
+    fn format_pair_state_reports_paired_for_locked_slot() {
+        let link = sample_link_status(1, false, Some("A5:68:B0:33"));
+
+        assert_eq!(format_pair_state(&link), "Paired");
+    }
+
+    #[test]
+    fn resolve_pair_slot_bitmap_uses_zero_for_dev_role() {
+        assert_eq!(resolve_pair_slot_bitmap(0, Some(ffi::BB_ROLE_DEV)).unwrap(), 0);
+    }
+
+    #[test]
+    fn resolve_pair_slot_bitmap_uses_slot_mask_for_ap_role() {
+        assert_eq!(resolve_pair_slot_bitmap(0, Some(ffi::BB_ROLE_AP)).unwrap(), 0x01);
+        assert_eq!(resolve_pair_slot_bitmap(3, Some(ffi::BB_ROLE_AP)).unwrap(), 0x08);
+    }
+
+    #[test]
+    fn format_runtime_fetch_error_message_mentions_daemon_when_bb_host_is_unreachable() {
+        let message = format_runtime_fetch_error_message("bb_host_connect failed with code: -1");
+
+        assert!(message.contains("Remote bb_host daemon is unavailable"));
+        assert!(message.contains("127.0.0.1:50000"));
+        assert!(message.contains("Start daemon.exe"));
     }
 }

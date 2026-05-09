@@ -7,6 +7,8 @@ use crate::ffi;
 
 const REMOTE_SDK_CALL_GAP: Duration = Duration::from_millis(20);
 const REMOTE_DEVICE_SWITCH_GAP: Duration = Duration::from_millis(1200);
+const HOT_UPGRADE_WRITE_SEQ: u16 = 5673;
+const HOT_UPGRADE_CRC_SEQ: u16 = 3673;
 const BB_USER_0: u8 = 0;
 static REMOTE_SDK_LAST_CALL_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
@@ -69,6 +71,51 @@ fn non_empty_trimmed(value: String) -> Option<String> {
     }
 }
 
+fn normalized_release_value(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("unavailable") {
+        None
+    } else {
+        Some(trimmed.to_ascii_lowercase())
+    }
+}
+
+fn release_values_mismatch(current: &ffi::BbSystemInfoSummary, peer: &ffi::BbSystemInfoSummary) -> bool {
+    let firmware_mismatch = match (
+        normalized_release_value(&current.firmware_version),
+        normalized_release_value(&peer.firmware_version),
+    ) {
+        (Some(left), Some(right)) => left != right,
+        _ => false,
+    };
+
+    let software_mismatch = match (
+        normalized_release_value(&current.software_version),
+        normalized_release_value(&peer.software_version),
+    ) {
+        (Some(left), Some(right)) => left != right,
+        _ => false,
+    };
+
+    firmware_mismatch || software_mismatch
+}
+
+fn release_summary(info: &ffi::BbSystemInfoSummary) -> String {
+    let firmware = non_empty_trimmed(info.firmware_version.clone()).unwrap_or_else(|| "--".to_string());
+    let software = non_empty_trimmed(info.software_version.clone()).unwrap_or_else(|| "--".to_string());
+
+    format!("FW {} / SW {}", firmware, software)
+}
+
+fn role_name_for_warning(role: Option<u8>) -> &'static str {
+    match role {
+        Some(ffi::BB_ROLE_AP) => "AP",
+        Some(ffi::BB_ROLE_DEV) => "DEV",
+        _ => "Peer",
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BasebandOperationStatus {
     pub attempted: bool,
@@ -121,6 +168,13 @@ pub struct WirelessRuntimeDetails {
     pub current_power: Option<ffi::BbCurrentPowerSummary>,
     pub power_auto: Option<ffi::BbPowerAutoSummary>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FirmwareUpgradeResult {
+    pub bytes_written: usize,
+    pub chunk_count: usize,
+    pub crc32: u32,
 }
 
 impl BasebandHealthStatus {
@@ -233,6 +287,7 @@ pub struct BasebandApi {
     active_device_mac: Option<String>,
     preferred_signal_users: HashMap<String, u8>,
     bandwidth_mode_cache: HashMap<(String, u8), bool>,
+    system_info_cache: HashMap<String, ffi::BbSystemInfoSummary>,
     last_remote_device_switch_at: Option<Instant>,
     remote_device_handles: Vec<(String, usize)>,
 }
@@ -275,6 +330,7 @@ impl BasebandApi {
         self.started = false;
         self.host_devices_cache.borrow_mut().clear();
         self.remote_device_handles.clear();
+        self.system_info_cache.clear();
     }
 
     fn remember_current_device(&mut self, status: &ffi::BbGetStatusSummary) {
@@ -293,6 +349,25 @@ impl BasebandApi {
         if let Some(active_mac) = self.active_device_mac.clone() {
             self.bandwidth_mode_cache.insert((active_mac, slot), auto_mode);
         }
+    }
+
+    fn cache_system_info_for_mac(&mut self, mac: &str, system_info: &ffi::BbSystemInfoSummary) {
+        let normalized_mac = Self::normalize_mac(mac);
+        if normalized_mac.is_empty() {
+            return;
+        }
+
+        self.system_info_cache.insert(normalized_mac, system_info.clone());
+    }
+
+    fn cache_system_info_for_active_device(&mut self, system_info: &ffi::BbSystemInfoSummary) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.system_info_cache.insert(active_mac, system_info.clone());
+        }
+    }
+
+    fn cached_system_info_for_mac(&self, normalized_mac: &str) -> Option<ffi::BbSystemInfoSummary> {
+        self.system_info_cache.get(normalized_mac).cloned()
     }
 
     fn cached_bandwidth_mode_for_current_device(&self, slot: u8) -> Option<ffi::BbBandwidthModeSummary> {
@@ -411,6 +486,12 @@ impl BasebandApi {
         Ok(())
     }
 
+    fn should_retry_remote_operation(label: &str) -> bool {
+        // BB_SET_BANDWIDTH failures can leave the remote SDK in a state where
+        // immediate handle teardown/reconnect is not safe.
+        !matches!(label, "set_bandwidth")
+    }
+
     fn execute_remote_operation<T>(
         &mut self,
         label: &str,
@@ -421,6 +502,15 @@ impl BasebandApi {
         match operation(self) {
             Ok(value) => Ok(value),
             Err(first_err) => {
+                if !Self::should_retry_remote_operation(label) {
+                    tracing::warn!(
+                        "Remote operation '{}' failed: {}. Returning the error without reconnect because this SDK call is not retry-safe.",
+                        label,
+                        first_err
+                    );
+                    return Err(first_err);
+                }
+
                 tracing::warn!(
                     "Remote operation '{}' failed: {}. Resetting session and retrying once.",
                     label,
@@ -625,6 +715,268 @@ impl BasebandApi {
             .map(|(_, handle)| *handle)
     }
 
+    fn get_or_open_remote_handle_by_mac(&mut self, target_mac: &str) -> Result<usize, String> {
+        if self.host_handle == 0 {
+            return Err("Remote device handle requires an active bb_host session".to_string());
+        }
+
+        let normalized_target = Self::normalize_mac(target_mac);
+        if normalized_target.is_empty() {
+            return Err("device_mac is required".to_string());
+        }
+
+        if self.active_device_mac.as_deref() == Some(normalized_target.as_str()) && self.device_handle != 0 {
+            return Ok(self.device_handle);
+        }
+
+        if let Some(handle) = self.cached_remote_handle(&normalized_target) {
+            return Ok(handle);
+        }
+
+        let (handle, _) = run_remote_sdk_call(true, || {
+            ffi::open_host_device_by_mac(self.host_ptr(), &normalized_target)
+        })?;
+        let handle = handle as usize;
+        self.remember_remote_handle(normalized_target, handle);
+        Ok(handle)
+    }
+
+    fn remote_system_info_for_mac(&mut self, target_mac: &str) -> Result<ffi::BbSystemInfoSummary, String> {
+        let normalized_target = Self::normalize_mac(target_mac);
+        let handle = self.get_or_open_remote_handle_by_mac(target_mac)? as *mut ffi::bb_dev_handle_t;
+        let system_info = run_remote_sdk_call(true, || ffi::get_system_info(handle))?;
+        self.cache_system_info_for_mac(&normalized_target, &system_info);
+        Ok(system_info)
+    }
+
+    fn resolve_pair_version_peer(
+        &self,
+        status: &ffi::BbGetStatusSummary,
+        dev_pair_target_mac: Option<&str>,
+        available_devices: &[ffi::BbDiscoveredDeviceSummary],
+    ) -> Option<(String, Option<u8>)> {
+        let active_mac = Self::normalize_mac(&status.mac_hex);
+        let expected_peer_role = match status.role {
+            ffi::BB_ROLE_AP => Some(ffi::BB_ROLE_DEV),
+            ffi::BB_ROLE_DEV => Some(ffi::BB_ROLE_AP),
+            _ => None,
+        };
+        let find_device_by_mac = |mac: &str| {
+            available_devices.iter().find(|device| Self::normalize_mac(&device.mac_address) == mac)
+        };
+
+        if status.role == ffi::BB_ROLE_DEV {
+            let normalized_target = dev_pair_target_mac.map(Self::normalize_mac).filter(|value| !value.is_empty());
+            if let Some(target_mac) = normalized_target {
+                if let Some(device) = find_device_by_mac(&target_mac) {
+                    return Some((device.mac_address.clone(), device.role));
+                }
+
+                return Some((target_mac, expected_peer_role));
+            }
+        }
+
+        let opposite_role_devices = available_devices
+            .iter()
+            .filter(|device| {
+                let normalized_mac = Self::normalize_mac(&device.mac_address);
+                normalized_mac != active_mac && expected_peer_role == device.role
+            })
+            .collect::<Vec<_>>();
+
+        if status.role == ffi::BB_ROLE_DEV && opposite_role_devices.len() == 1 {
+            let device = opposite_role_devices[0];
+            return Some((device.mac_address.clone(), device.role));
+        }
+
+        let connected_peer_mac = status
+            .links
+            .first()
+            .and_then(|link| link.peer_mac_hex.clone())
+            .or_else(|| status.peer_mac_hex.clone())
+            .map(|value| Self::normalize_mac(&value))
+            .filter(|value| !value.is_empty());
+
+        if let Some(peer_mac) = connected_peer_mac {
+            if let Some(device) = find_device_by_mac(&peer_mac) {
+                return Some((device.mac_address.clone(), device.role));
+            }
+
+            if peer_mac.len() == 12 {
+                return Some((peer_mac, expected_peer_role));
+            }
+        }
+
+        if opposite_role_devices.len() == 1 {
+            let device = opposite_role_devices[0];
+            return Some((device.mac_address.clone(), device.role));
+        }
+
+        let other_devices = available_devices
+            .iter()
+            .filter(|device| Self::normalize_mac(&device.mac_address) != active_mac)
+            .collect::<Vec<_>>();
+
+        if other_devices.len() == 1 {
+            let device = other_devices[0];
+            return Some((device.mac_address.clone(), device.role));
+        }
+
+        None
+    }
+
+    fn pair_release_mismatch_warning(
+        &mut self,
+        status: &ffi::BbGetStatusSummary,
+        dev_pair_target_mac: Option<&str>,
+        available_devices: &[ffi::BbDiscoveredDeviceSummary],
+        current_info: &ffi::BbSystemInfoSummary,
+    ) -> Result<Option<String>, String> {
+        if !self.is_remote_mode() || self.host_handle == 0 || available_devices.len() < 2 {
+            return Ok(None);
+        }
+
+        let active_mac = Self::normalize_mac(&status.mac_hex);
+        let dev_target_peer = if status.role == ffi::BB_ROLE_DEV {
+            let peer_devices = available_devices
+                .iter()
+                .filter(|device| Self::normalize_mac(&device.mac_address) != active_mac)
+                .collect::<Vec<_>>();
+            let known_peer_macs = peer_devices
+                .iter()
+                .map(|device| Self::normalize_mac(&device.mac_address))
+                .filter(|mac| !mac.is_empty())
+                .collect::<Vec<_>>();
+            let is_known_peer_mac = |value: &str| {
+                let normalized = Self::normalize_mac(value);
+                !normalized.is_empty()
+                    && (known_peer_macs.is_empty() || known_peer_macs.iter().any(|mac| mac == &normalized))
+            };
+            let connected_peer_mac = status
+                .links
+                .iter()
+                .find(|link| link.state != 0)
+                .and_then(|link| link.peer_mac_hex.clone())
+                .or_else(|| {
+                    status
+                        .link_state
+                        .filter(|state| *state != 0)
+                        .and_then(|_| status.peer_mac_hex.clone())
+                });
+
+            dev_pair_target_mac
+                .filter(|value| is_known_peer_mac(value))
+                .map(Self::normalize_mac)
+                .filter(|value| !value.is_empty())
+                .map(|target_mac| {
+                    peer_devices
+                        .iter()
+                        .find(|device| Self::normalize_mac(&device.mac_address) == target_mac)
+                        .map(|device| (device.mac_address.clone(), device.role))
+                        .unwrap_or((target_mac, Some(ffi::BB_ROLE_AP)))
+                })
+                .or_else(|| {
+                    connected_peer_mac
+                        .filter(|value| is_known_peer_mac(value))
+                        .map(|peer_mac| {
+                            let normalized_peer = Self::normalize_mac(&peer_mac);
+                            peer_devices
+                                .iter()
+                                .find(|device| Self::normalize_mac(&device.mac_address) == normalized_peer)
+                                .map(|device| (device.mac_address.clone(), device.role))
+                                .unwrap_or((normalized_peer, Some(ffi::BB_ROLE_AP)))
+                        })
+                })
+                .or_else(|| {
+                    if peer_devices.len() == 1 {
+                        let device = peer_devices[0];
+                        Some((device.mac_address.clone(), device.role.or(Some(ffi::BB_ROLE_AP))))
+                    } else {
+                        None
+                    }
+                })
+        } else {
+            None
+        };
+
+        let (peer_mac, peer_role) = match dev_target_peer
+            .or_else(|| self.resolve_pair_version_peer(status, dev_pair_target_mac, available_devices))
+        {
+            Some(peer) => peer,
+            None => return Ok(None),
+        };
+        if Self::normalize_mac(&peer_mac) == Self::normalize_mac(&status.mac_hex) {
+            return Ok(None);
+        }
+
+        let normalized_peer_mac = Self::normalize_mac(&peer_mac);
+        let peer_info = if let Some(cached) = self.cached_system_info_for_mac(&normalized_peer_mac) {
+            cached
+        } else {
+            self.remote_system_info_for_mac(&peer_mac).map_err(|error| {
+                format!(
+                    "Unable to verify whether AP and DEV releases match because peer version info could not be read from {} {}: {}. Switch to the peer once or refresh the bb_host session, then retry Pair.",
+                    role_name_for_warning(peer_role),
+                    peer_mac,
+                    error,
+                )
+            })?
+        };
+        if !release_values_mismatch(current_info, &peer_info) {
+            return Ok(None);
+        }
+
+        let current_role = Some(status.role);
+
+        let (ap_label, ap_mac, ap_info, dev_label, dev_mac, dev_info) = if current_role == Some(ffi::BB_ROLE_AP) {
+            (
+                "AP",
+                status.mac_hex.as_str(),
+                current_info,
+                "DEV",
+                peer_mac.as_str(),
+                &peer_info,
+            )
+        } else if current_role == Some(ffi::BB_ROLE_DEV) {
+            (
+                "AP",
+                peer_mac.as_str(),
+                &peer_info,
+                "DEV",
+                status.mac_hex.as_str(),
+                current_info,
+            )
+        } else if peer_role == Some(ffi::BB_ROLE_AP) {
+            (
+                "AP",
+                peer_mac.as_str(),
+                &peer_info,
+                role_name_for_warning(current_role),
+                status.mac_hex.as_str(),
+                current_info,
+            )
+        } else {
+            (
+                role_name_for_warning(current_role),
+                status.mac_hex.as_str(),
+                current_info,
+                role_name_for_warning(peer_role),
+                peer_mac.as_str(),
+                &peer_info,
+            )
+        };
+
+        Ok(Some(format!(
+            "Firmware mismatch detected between {} {} ({}) and {} {} ({}). Pairing requires AP and DEV to run the same release. Upgrade or downgrade one side, then retry Pair.",
+            ap_label,
+            ap_mac,
+            release_summary(ap_info),
+            dev_label,
+            dev_mac,
+            release_summary(dev_info),
+        )))
+    }
+
     fn close_remote_handles(&mut self) {
         let mut handles = self
             .remote_device_handles
@@ -664,6 +1016,7 @@ impl BasebandApi {
             active_device_mac: None,
             preferred_signal_users: HashMap::new(),
             bandwidth_mode_cache: HashMap::new(),
+            system_info_cache: HashMap::new(),
             last_remote_device_switch_at: None,
             remote_device_handles: Vec::new(),
         };
@@ -907,6 +1260,21 @@ impl BasebandApi {
             }
         };
 
+        if let Some(current_info) = system_info.as_ref() {
+            self.cache_system_info_for_active_device(current_info);
+
+            match self.pair_release_mismatch_warning(
+                &status,
+                dev_pair_target_mac.as_deref(),
+                &available_devices,
+                current_info,
+            ) {
+                Ok(Some(version_warning)) => warnings.push(version_warning),
+                Ok(None) => {}
+                Err(err) => warnings.push(err),
+            }
+        }
+
         Ok(WirelessRuntimeDetails {
             status,
             dev_pair_target_mac,
@@ -1040,8 +1408,26 @@ impl BasebandApi {
         self.with_device_operation("get_pair_candidates", |handle| ffi::get_pair_candidates(handle, slot))
     }
 
+    pub fn set_pair_candidates(&mut self, slot: u8, macs: &[String]) -> Result<(), String> {
+        self.with_device_operation("set_pair_candidates", |handle| {
+            ffi::set_pair_candidates(handle, slot, macs)
+        })
+    }
+
     pub fn set_ap_mac(&mut self, mac: &str) -> Result<(), String> {
         self.with_device_operation("set_ap_mac", |handle| ffi::set_ap_mac(handle, mac))
+    }
+
+    pub fn set_minidb_ap_mac(&mut self, mac: &str) -> Result<(), String> {
+        self.with_device_operation("set_minidb_ap_mac", |handle| {
+            ffi::set_minidb_ap_mac(handle, mac)
+        })
+    }
+
+    pub fn set_minidb_slot_mac(&mut self, slot: u8, mac: &str) -> Result<(), String> {
+        self.with_device_operation("set_minidb_slot_mac", |handle| {
+            ffi::set_minidb_slot_mac(handle, slot, mac)
+        })
     }
 
     pub fn set_channel_mode(&mut self, auto_mode: bool) -> Result<(), String> {
@@ -1073,11 +1459,28 @@ impl BasebandApi {
     }
 
     pub fn set_band_mode(&mut self, auto_mode: bool) -> Result<(), String> {
-        self.with_device_operation("set_band_mode", |handle| ffi::set_band_mode(handle, auto_mode))
+        self.with_device_operation("set_band_mode", |handle| {
+            ffi::set_band_mode(handle, auto_mode).and_then(|_| {
+                if auto_mode {
+                    ffi::set_minidb_band_auto(handle)
+                } else {
+                    Ok(())
+                }
+            })
+        })
     }
 
     pub fn set_band(&mut self, target_band: u8) -> Result<(), String> {
-        self.with_device_operation("set_band", |handle| ffi::set_band(handle, target_band))
+        self.with_device_operation("set_band", |handle| {
+            ffi::set_band(handle, target_band)
+                .and_then(|_| ffi::set_minidb_band(handle, target_band))
+        })
+    }
+
+    pub fn set_band_selection(&mut self, band_bitmap: u8) -> Result<(), String> {
+        self.with_device_operation("set_band_selection", |handle| {
+            ffi::set_band_selection_bitmap(handle, band_bitmap)
+        })
     }
 
     pub fn set_bandwidth(&mut self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
@@ -1099,6 +1502,59 @@ impl BasebandApi {
     pub fn set_baseband_role(&mut self, role: u8) -> Result<(), String> {
         self.with_device_operation("set_baseband_role", |handle| {
             ffi::set_baseband_role(handle, role)?;
+            ffi::reboot_device(handle, 2000)
+        })
+    }
+
+    pub fn upgrade_firmware(&mut self, firmware: &[u8]) -> Result<FirmwareUpgradeResult, String> {
+        if firmware.is_empty() {
+            return Err("Firmware image is empty".to_string());
+        }
+
+        if firmware.len() > u32::MAX as usize {
+            return Err(format!(
+                "Firmware image is too large: {} bytes exceeds SDK limit {}",
+                firmware.len(),
+                u32::MAX
+            ));
+        }
+
+        let is_remote = self.is_remote_mode();
+        if is_remote {
+            self.ensure_remote_session()?;
+        } else if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        let mut addr = 0_u32;
+        let chunk_count = firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).len();
+
+        for chunk in firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE) {
+            let handle = self.handle_ptr();
+            run_remote_sdk_call(is_remote, || {
+                ffi::hot_upgrade_write(handle, HOT_UPGRADE_WRITE_SEQ, addr, chunk)
+            })?;
+            addr = addr
+                .checked_add(chunk.len() as u32)
+                .ok_or_else(|| "Firmware image address overflow".to_string())?;
+        }
+
+        let crc32 = crc32fast::hash(firmware);
+        let handle = self.handle_ptr();
+        run_remote_sdk_call(is_remote, || {
+            ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, firmware.len() as u32, 0, crc32)
+        })?;
+
+        Ok(FirmwareUpgradeResult {
+            bytes_written: firmware.len(),
+            chunk_count,
+            crc32,
+        })
+    }
+
+    pub fn reset_to_default_config(&mut self) -> Result<(), String> {
+        self.with_device_operation("reset_to_default_config", |handle| {
+            ffi::reset_config(handle)?;
             ffi::reboot_device(handle, 2000)
         })
     }
@@ -1264,24 +1720,29 @@ impl BasebandManager {
         api.set_pair_mode(start, slot_bmp)
     }
 
-    pub fn set_pair_mode_with_blacklist(
-        &self,
-        start: bool,
-        slot_bmp: u8,
-        black_list: &[String],
-    ) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_pair_mode_with_blacklist(start, slot_bmp, black_list)
-    }
-
     pub fn get_pair_candidates(&self, slot: u8) -> Result<Vec<String>, String> {
         let mut api = self.api.lock().unwrap();
         api.get_pair_candidates(slot)
     }
 
+    pub fn set_pair_candidates(&self, slot: u8, macs: &[String]) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_pair_candidates(slot, macs)
+    }
+
     pub fn set_ap_mac(&self, mac: &str) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.set_ap_mac(mac)
+    }
+
+    pub fn set_minidb_ap_mac(&self, mac: &str) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_minidb_ap_mac(mac)
+    }
+
+    pub fn set_minidb_slot_mac(&self, slot: u8, mac: &str) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_minidb_slot_mac(slot, mac)
     }
 
     pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
@@ -1334,6 +1795,11 @@ impl BasebandManager {
         api.set_band(target_band)
     }
 
+    pub fn set_band_selection(&self, band_bitmap: u8) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_band_selection(band_bitmap)
+    }
+
     pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.set_bandwidth(slot, dir, bandwidth)
@@ -1347,6 +1813,16 @@ impl BasebandManager {
     pub fn set_baseband_role(&self, role: u8) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.set_baseband_role(role)
+    }
+
+    pub fn upgrade_firmware(&self, firmware: &[u8]) -> Result<FirmwareUpgradeResult, String> {
+        let mut api = self.api.lock().unwrap();
+        api.upgrade_firmware(firmware)
+    }
+
+    pub fn reset_to_default_config(&self) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.reset_to_default_config()
     }
 
     /// 发送数据到 SOC
@@ -1392,10 +1868,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_baseband_api_initialization() {
-        // 测试初始化 - 需要实际的 ar8030 硬件或模拟
-        let api = BasebandApi::get();
-        println!("API Initialized: {}", api.is_initialized());
+    #[ignore = "requires hardware or remote bb_host"]
+    fn test_baseband_manager_initialization() {
+        let _ = BasebandManager::new();
     }
 
 }
