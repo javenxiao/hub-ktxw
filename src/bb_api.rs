@@ -170,11 +170,33 @@ pub struct WirelessRuntimeDetails {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BootDiagnostics {
+    pub running_system: String,
+    pub boot_reason: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct FirmwareUpgradeResult {
     pub bytes_written: usize,
     pub chunk_count: usize,
     pub crc32: u32,
+}
+
+/// 固件升级实时进度
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct FirmwareUpgradeProgress {
+    pub state: String,             // "idle" | "uploading" | "flashing" | "done" | "error"
+    pub file_name: String,
+    pub file_size: usize,
+    pub bytes_written: usize,
+    pub total_steps: usize,
+    pub current_step: usize,
+    pub step_label: String,
+    pub percent: f64,              // 0.0 ~ 100.0
+    pub message: String,
+    pub crc32: Option<String>,
+    pub reboot_expected: bool,
 }
 
 impl BasebandHealthStatus {
@@ -290,6 +312,8 @@ pub struct BasebandApi {
     system_info_cache: HashMap<String, ffi::BbSystemInfoSummary>,
     last_remote_device_switch_at: Option<Instant>,
     remote_device_handles: Vec<(String, usize)>,
+    /// 固件升级进度追踪器（Arc<Mutex<>> 允许跨锁共享）
+    upgrade_progress: Option<Arc<Mutex<FirmwareUpgradeProgress>>>,
 }
 
 impl BasebandApi {
@@ -1019,6 +1043,7 @@ impl BasebandApi {
             system_info_cache: HashMap::new(),
             last_remote_device_switch_at: None,
             remote_device_handles: Vec::new(),
+            upgrade_progress: None,
         };
 
         if let Some(remote_host) = remote_host {
@@ -1306,6 +1331,24 @@ impl BasebandApi {
         }
     }
 
+    pub fn get_boot_diagnostics(&mut self) -> Result<BootDiagnostics, String> {
+        let is_remote = self.is_remote_mode();
+
+        let running_system = match run_remote_sdk_call(is_remote, || ffi::get_running_system(self.handle_ptr())) {
+            Ok(value) => value,
+            Err(err) => format!("Error: {}", err),
+        };
+        let boot_reason = match run_remote_sdk_call(is_remote, || ffi::get_boot_reason(self.handle_ptr())) {
+            Ok(value) => value,
+            Err(err) => format!("Error: {}", err),
+        };
+
+        Ok(BootDiagnostics {
+            running_system,
+            boot_reason,
+        })
+    }
+
     fn switch_remote_device_once(&mut self, target_mac: &str, normalized_target: &str) -> Result<(), String> {
         if self.initialized && self.active_device_mac.as_deref() == Some(normalized_target) {
             return Ok(());
@@ -1506,6 +1549,505 @@ impl BasebandApi {
         })
     }
 
+    /// 将一段分区/段数据写入指定 flash 地址，分块传输后校验 CRC32（对标 PC Tool ar8030_upgrade_partition）
+    fn upgrade_partition(&mut self, flash_addr: u64, len: u32, data: &[u8]) -> Result<(), String> {
+        if data.is_empty() {
+            return Err("Partition data is empty".to_string());
+        }
+
+        let is_remote = self.is_remote_mode();
+        let partition_crc = crc32fast::hash(data);
+        let chunk_count = data.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).len();
+
+        tracing::info!(
+            "Upgrade partition: flash_addr=0x{:X} len={} chunks={} crc32={:08X}",
+            flash_addr,
+            len,
+            chunk_count,
+            partition_crc
+        );
+
+        // 进度上报辅助
+        let progress_arc = self.upgrade_progress.clone();
+
+        let mut offset = 0u64;
+        for (i, chunk) in data.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).enumerate() {
+            let chunk_addr = flash_addr
+                .checked_add(offset)
+                .ok_or_else(|| "Partition address overflow".to_string())?;
+            // BB_SET_HOT_UPGRADE_WRITE 的 addr 字段为 u32，截断高位（flash 地址在 32 位范围内）
+            let ioctl_addr = chunk_addr as u32;
+
+            if let Some(ref prog) = progress_arc {
+                if let Ok(mut guard) = prog.lock() {
+                    guard.bytes_written = offset as usize + chunk.len();
+                }
+            }
+
+            let handle = self.handle_ptr();
+            run_remote_sdk_call(is_remote, || {
+                ffi::hot_upgrade_write(handle, HOT_UPGRADE_WRITE_SEQ, ioctl_addr, chunk)
+            })
+            .map_err(|e| format!("Partition chunk {}/{} write at 0x{:X} failed: {}", i + 1, chunk_count, chunk_addr, e))?;
+
+            offset = offset
+                .checked_add(chunk.len() as u64)
+                .ok_or_else(|| "Partition offset overflow".to_string())?;
+
+            // 更新进度百分比
+            if let Some(ref prog) = progress_arc {
+                if let Ok(mut guard) = prog.lock() {
+                    let chunk_done = i + 1;
+                    let part_pct = if chunk_count > 0 { chunk_done as f64 / chunk_count as f64 } else { 1.0 };
+                    guard.percent = part_pct * 100.0;
+                    guard.current_step = chunk_done;
+                    guard.total_steps = chunk_count;
+                    guard.step_label = format!("Partition 0x{:X} chunk {}/{}", flash_addr, chunk_done, chunk_count);
+                    guard.bytes_written = offset as usize;
+                    guard.state = "flashing".to_string();
+                }
+            }
+        }
+
+        // CRC32 校验使用分区的 flash 起始地址和分区数据长度（对标 PC Tool ar8030_upgrade_chk_crc）
+        let ioctl_addr = flash_addr as u32;
+        let handle = self.handle_ptr();
+        run_remote_sdk_call(is_remote, || {
+            ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, len, ioctl_addr, partition_crc)
+        })
+        .map_err(|e| format!("Partition CRC32 verify at 0x{:X} failed: {}", flash_addr, e))?;
+
+        tracing::info!(
+            "Partition upgrade OK: flash_addr=0x{:X} chunks={} crc32={:08X}",
+            flash_addr,
+            chunk_count,
+            partition_crc
+        );
+
+        Ok(())
+    }
+
+    fn upgrade_raw_firmware(&mut self, firmware: &[u8]) -> Result<FirmwareUpgradeResult, String> {
+        let is_remote = self.is_remote_mode();
+
+        let mut addr = 0_u32;
+        let chunk_count = firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).len();
+        let progress_arc = self.upgrade_progress.clone();
+
+        for (i, chunk) in firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).enumerate() {
+            let handle = self.handle_ptr();
+            run_remote_sdk_call(is_remote, || {
+                ffi::hot_upgrade_write(handle, HOT_UPGRADE_WRITE_SEQ, addr, chunk)
+            })
+            .map_err(|e| format!("Chunk {}/{} write failed: {}", i + 1, chunk_count, e))?;
+            addr = addr
+                .checked_add(chunk.len() as u32)
+                .ok_or_else(|| "Firmware image address overflow".to_string())?;
+
+            // 更新进度
+            if let Some(ref prog) = progress_arc {
+                if let Ok(mut guard) = prog.lock() {
+                    guard.current_step = i + 1;
+                    guard.total_steps = chunk_count;
+                    guard.step_label = format!("Raw write chunk {}/{}", i + 1, chunk_count);
+                    guard.bytes_written = addr as usize;
+                    guard.percent = ((i + 1) as f64 / chunk_count as f64) * 100.0;
+                    guard.state = "flashing".to_string();
+                }
+            }
+        }
+
+        let crc32 = crc32fast::hash(firmware);
+        let handle = self.handle_ptr();
+        run_remote_sdk_call(is_remote, || {
+            ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, firmware.len() as u32, 0, crc32)
+        })?;
+
+        Ok(FirmwareUpgradeResult {
+            bytes_written: firmware.len(),
+            chunk_count,
+            crc32,
+        })
+    }
+
+    fn upgrade_partition_by_name_pc<F>(
+        &mut self,
+        partitions_raw: &[u8],
+        segments_raw: &[u8],
+        image: &[u8],
+        partitions_count: usize,
+        segments_count: usize,
+        part_name: &str,
+        total_bytes_written: &mut usize,
+        partition_cnt: &mut usize,
+        current_step: &mut usize,
+        update_progress: &F,
+    ) -> Result<bool, String>
+    where
+        F: Fn(usize, &str, usize),
+    {
+        let mut segment_idx: isize = -1;
+        let mut selected_part_off: Option<usize> = None;
+
+        for part_idx in 0..partitions_count {
+            let part_off = part_idx * ffi::PART_INFO_SIZE;
+            if part_off + ffi::PART_INFO_SIZE > partitions_raw.len() {
+                break;
+            }
+
+            let part_bytes = &partitions_raw[part_off..part_off + ffi::PART_INFO_SIZE];
+            let is_upgrade = u32::from_le_bytes([
+                part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET],
+                part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET + 1],
+                part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET + 2],
+                part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET + 3],
+            ]) != 0;
+            if is_upgrade {
+                segment_idx += 1;
+            }
+
+            let current_name = String::from_utf8_lossy(&part_bytes[..ffi::PART_INFO_NAME_SIZE])
+                .trim_end_matches('\0')
+                .to_string();
+            if current_name == part_name {
+                selected_part_off = Some(part_off);
+                break;
+            }
+        }
+
+        let Some(part_off) = selected_part_off else {
+            tracing::info!("OTA partition '{}' not found in image, skipping", part_name);
+            return Ok(false);
+        };
+
+        let part_bytes = &partitions_raw[part_off..part_off + ffi::PART_INFO_SIZE];
+        let is_upgrade = u32::from_le_bytes([
+            part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET],
+            part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET + 1],
+            part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET + 2],
+            part_bytes[ffi::PART_INFO_IS_UPGRADE_OFFSET + 3],
+        ]) != 0;
+        if !is_upgrade {
+            tracing::info!("OTA partition '{}' marked as non-upgrade, skipping", part_name);
+            return Ok(false);
+        }
+
+        if segment_idx < 0 || segment_idx as usize >= segments_count {
+            return Err(format!("OTA partition '{}' has invalid segment index {}", part_name, segment_idx));
+        }
+
+        let seg_off = segment_idx as usize * ffi::SEGMENT_INFO_SIZE;
+        if seg_off + ffi::SEGMENT_INFO_SIZE > segments_raw.len() {
+            return Err(format!("OTA partition '{}' segment {} out of bounds", part_name, segment_idx));
+        }
+        let seg_bytes = &segments_raw[seg_off..seg_off + ffi::SEGMENT_INFO_SIZE];
+
+        let part_flash_off = u64::from_le_bytes([
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET],
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET + 1],
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET + 2],
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET + 3],
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET + 4],
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET + 5],
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET + 6],
+            part_bytes[ffi::PART_INFO_FLASH_OFFSET_OFFSET + 7],
+        ]);
+        let part_length = u64::from_le_bytes([
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET],
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET + 1],
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET + 2],
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET + 3],
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET + 4],
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET + 5],
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET + 6],
+            part_bytes[ffi::PART_INFO_LENGTH_OFFSET + 7],
+        ]);
+        let seg_flash_off = u64::from_le_bytes([
+            seg_bytes[8], seg_bytes[9], seg_bytes[10], seg_bytes[11],
+            seg_bytes[12], seg_bytes[13], seg_bytes[14], seg_bytes[15],
+        ]);
+        if seg_flash_off != part_flash_off {
+            return Err(format!(
+                "OTA partition '{}' flash offset mismatch: partition=0x{:X}, segment=0x{:X}, segment_idx={}",
+                part_name,
+                part_flash_off,
+                seg_flash_off,
+                segment_idx
+            ));
+        }
+
+        let img_off = u64::from_le_bytes([
+            seg_bytes[0], seg_bytes[1], seg_bytes[2], seg_bytes[3],
+            seg_bytes[4], seg_bytes[5], seg_bytes[6], seg_bytes[7],
+        ]);
+        let size_dec = u64::from_le_bytes([
+            seg_bytes[24], seg_bytes[25], seg_bytes[26], seg_bytes[27],
+            seg_bytes[28], seg_bytes[29], seg_bytes[30], seg_bytes[31],
+        ]);
+
+        if seg_flash_off + size_dec > part_flash_off + part_length {
+            return Err(format!(
+                "OTA partition '{}' segment exceeds partition length: segment=0x{:X}+0x{:X}, partition=0x{:X}+0x{:X}",
+                part_name,
+                seg_flash_off,
+                size_dec,
+                part_flash_off,
+                part_length
+            ));
+        }
+
+        if size_dec == 0 {
+            tracing::info!("OTA partition '{}' has zero-sized segment, skipping", part_name);
+            return Ok(false);
+        }
+        if size_dec > u32::MAX as u64 {
+            return Err(format!("OTA segment for '{}' too large: {}", part_name, size_dec));
+        }
+
+        let data_start = img_off as usize;
+        let data_end = data_start + size_dec as usize;
+        if data_end > image.len() {
+            return Err(format!("OTA segment '{}' data out of bounds: offset=0x{:X} size=0x{:X}", part_name, img_off, size_dec));
+        }
+
+        let seg_data = &image[data_start..data_end];
+        let flash_addr = seg_flash_off
+            .checked_add(ffi::GPT_FLASH_OFFSET)
+            .ok_or_else(|| format!("Flash address overflow for partition '{}'", part_name))?;
+
+        tracing::info!(
+            "OTA partition '{}': flash_addr=0x{:X} size={} file_offset=0x{:X} segment_idx={}",
+            part_name, flash_addr, size_dec, img_off, segment_idx
+        );
+
+        update_progress(*current_step, &format!("Flashing partition '{}'", part_name), *total_bytes_written);
+        self.upgrade_partition(flash_addr, size_dec as u32, seg_data)?;
+        *total_bytes_written += size_dec as usize;
+        *partition_cnt += 1;
+        *current_step += 1;
+        update_progress(*current_step, &format!("Partition '{}' written", part_name), *total_bytes_written);
+        Ok(true)
+    }
+
+    /// 解析 .img 格式 OTA 升级镜像并逐分区写入 flash（精确对标 PC Tool AR8030_Upgrade_Thread_OTA::ar8030_upgrade）
+    fn upgrade_ota_image(&mut self, image: &[u8]) -> Result<FirmwareUpgradeResult, String> {
+        let is_remote = self.is_remote_mode();
+        if is_remote {
+            self.ensure_remote_session()?;
+        } else if !self.initialized {
+            return Err("Baseband API not initialized".to_string());
+        }
+
+        // 校验最小长度：header(256) + hash(32) + sig(256) = 544
+        if image.len() < ffi::UPGRADE_HDR_SIZE + ffi::OTA_HASH_SIZE + ffi::OTA_SIG_SIZE {
+            return Err(format!(
+                "Firmware image too small for OTA format: {} bytes (need at least {})",
+                image.len(),
+                ffi::UPGRADE_HDR_SIZE + ffi::OTA_HASH_SIZE + ffi::OTA_SIG_SIZE
+            ));
+        }
+
+        // 读取 upgrade_hdr 头部关键字段（256 字节）
+        let hdr = &image[..ffi::UPGRADE_HDR_SIZE];
+
+        // 根据 PC Tool 实际镜像头布局解析：
+        // 0x00 u32 magic
+        // 0x04 u8  hdr_version
+        // 0x05 u8  compressed
+        // 0x06 u8  flashtype
+        // 0x07 u8  reserved/part_status
+        // 0x08 u16 header_ext_size
+        // 0x0A u16 hash_size
+        // 0x0C u16 sig_size
+        // 0x0E u16 sig_realsize
+        // 0x10 u64 img_size
+        // 0x18 u32 rom_size
+        // 0x1C u32 loader_size
+        // 0x20 u16 partitions
+        // 0x22 u16 segments
+        let mut hdr_dump = String::new();
+        for i in 0..(ffi::UPGRADE_HDR_SIZE / 4).min(64) {
+            let val = u32::from_le_bytes([hdr[i * 4], hdr[i * 4 + 1], hdr[i * 4 + 2], hdr[i * 4 + 3]]);
+            use std::fmt::Write;
+            if i > 0 && i % 8 == 0 {
+                let _ = write!(hdr_dump, "\n  ");
+            }
+            let _ = write!(hdr_dump, " {:02X}:{:08X}", i * 4, val);
+        }
+        tracing::info!("OTA header scan:\n  {}", hdr_dump);
+
+        let magic = u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
+        let hdr_version = hdr[4];
+        let compressed = hdr[5];
+        let flashtype = hdr[6];
+        let part_status = hdr[7];
+        let header_ext_size = u16::from_le_bytes([hdr[8], hdr[9]]) as usize;
+        let hash_size = u16::from_le_bytes([hdr[10], hdr[11]]) as usize;
+        let sig_size = u16::from_le_bytes([hdr[12], hdr[13]]) as usize;
+        let sig_realsize = u16::from_le_bytes([hdr[14], hdr[15]]) as usize;
+        let img_size = u64::from_le_bytes([hdr[16], hdr[17], hdr[18], hdr[19], hdr[20], hdr[21], hdr[22], hdr[23]]);
+        let rom_size = u32::from_le_bytes([hdr[24], hdr[25], hdr[26], hdr[27]]) as u64;
+        let loader_size = u32::from_le_bytes([hdr[28], hdr[29], hdr[30], hdr[31]]) as u64;
+        let partitions_count = u16::from_le_bytes([hdr[32], hdr[33]]) as usize;
+        let segments_count = u16::from_le_bytes([hdr[34], hdr[35]]) as usize;
+
+        tracing::info!(
+            "OTA header: magic=0x{:08X} hdr_ver={} compressed={} flashtype={} part_status={} img_size={} hash_sz={} sig_sz={} sig_real={} hdr_ext_sz={} rom={} loader={} partitions={} segments={}",
+            magic,
+            hdr_version,
+            compressed,
+            flashtype,
+            part_status,
+            img_size,
+            hash_size,
+            sig_size,
+            sig_realsize,
+            header_ext_size,
+            rom_size,
+            loader_size,
+            partitions_count,
+            segments_count
+        );
+
+        if magic != ffi::OTA_IMG_MAGIC {
+            return Err(format!("Not a valid OTA image: magic 0x{:08X}", magic));
+        }
+
+        if hash_size != ffi::OTA_HASH_SIZE || sig_size != ffi::OTA_SIG_SIZE {
+            return Err(format!(
+                "Invalid OTA image: hash_size={}, sig_size={}, sig_realsize={}. Header scan:\n{}",
+                hash_size,
+                sig_size,
+                sig_realsize,
+                hdr_dump
+            ));
+        }
+
+        // PC Tool 偏移计算（与 ar8030_upgrade_ota.cpp 一致）：
+        //   布局: [header 256] [hash 32] [sig 256] [header_ext N] [romcode] [bootloader区域]
+        //   PC Tool 计算:
+        //     romcode   = sizeof(hdr) + 32(hash) + 256(sig) + header_ext
+        //     bootloader= romcode + rom_size
+        //     gpt       = bootloader + loader_size
+        //     partitions= gpt + GPT_FLASH_SIZE
+        //     segments  = partitions + partitions * sizeof(part_info)
+        let hash_offset      = ffi::UPGRADE_HDR_SIZE;                               // 256
+        let sig_offset       = hash_offset + ffi::OTA_HASH_SIZE;                     // 288
+        let header_ext_offset = sig_offset + ffi::OTA_SIG_SIZE;                      // 544
+        let romcode_offset   = header_ext_offset + header_ext_size;                  // 544 + N
+        let bootloader_offset = romcode_offset + rom_size as usize;
+        let gpt_offset       = bootloader_offset + loader_size as usize;
+        let partitions_offset = gpt_offset + ffi::GPT_FLASH_SIZE as usize;
+        let segments_offset   = partitions_offset + partitions_count * ffi::PART_INFO_SIZE;
+        // 段数据: img_offset 是**文件内绝对偏移**（对标 PC Tool data += segments[idx].img_offset）
+        let image_data_offset = segments_offset + segments_count * ffi::SEGMENT_INFO_SIZE;
+
+        if image_data_offset > image.len() {
+            return Err(format!("OTA image header overflow: data at {} but file is {}", image_data_offset, image.len()));
+        }
+
+        let mut total_bytes_written: usize = 0;
+        let mut partition_cnt: usize = 0;
+        let overall_crc = crc32fast::hash(image);
+
+        // 对齐 PC Tool 实际升级顺序: ROM -> GPT1 -> app1 -> GPT0 -> app0 -> reboot
+        let total_steps = 5;
+        let mut current_step: usize = 0;
+
+        // 初始化进度（如果已设置进度追踪器）
+        let progress_arc = self.upgrade_progress.clone();
+        let update_progress = |step: usize, label: &str, bytes: usize| {
+            if let Some(ref prog) = progress_arc {
+                if let Ok(mut guard) = prog.lock() {
+                    guard.current_step = step;
+                    guard.total_steps = total_steps;
+                    guard.step_label = label.to_string();
+                    guard.bytes_written = bytes;
+                    if total_steps > 0 {
+                        guard.percent = (step as f64 / total_steps as f64) * 100.0;
+                    }
+                    guard.state = "flashing".to_string();
+                }
+            }
+        };
+
+        // ----- 1) 写入 romcode -----
+        if rom_size > 0 {
+            let end = romcode_offset + rom_size as usize;
+            if end > image.len() { return Err("OTA image truncated at romcode".to_string()); }
+            let rom_data = &image[romcode_offset..end];
+            self.upgrade_partition(0x0, rom_size as u32, rom_data)?;
+            total_bytes_written += rom_size as usize;
+            partition_cnt += 1;
+            tracing::info!("OTA romcode: 0x0 {} bytes", rom_size);
+        }
+
+        // ----- 2) 写入 GPT table 1（地址 = 0 + rom_size + GPT_FLASH_SIZE）-----
+        // GPT 数据在 .img 文件中的位置已在上面 gpt_offset 计算
+        let gpt_data_end = gpt_offset + ffi::GPT_FLASH_SIZE as usize;
+        if gpt_data_end > image.len() { return Err("OTA image truncated at GPT".to_string()); }
+        let gpt_data = &image[gpt_offset..gpt_data_end];
+
+        let gpt_table1_addr = (0u64)
+            .checked_add(rom_size)
+            .and_then(|a| a.checked_add(ffi::GPT_FLASH_SIZE))
+            .ok_or_else(|| "GPT table 1 address overflow".to_string())?;
+        self.upgrade_partition(gpt_table1_addr, ffi::GPT_FLASH_SIZE as u32, gpt_data)?;
+        total_bytes_written += ffi::GPT_FLASH_SIZE as usize;
+        partition_cnt += 1;
+        tracing::info!("OTA gpt table1: 0x{:X} {} bytes", gpt_table1_addr, ffi::GPT_FLASH_SIZE);
+
+        // ----- 3) 写入 app1 分区（严格对齐 PC Tool ar8030_upgrade_partition_byname）-----
+        let partitions_raw = &image[partitions_offset..segments_offset];
+        let segments_raw   = &image[segments_offset..image_data_offset];
+        let _ = self.upgrade_partition_by_name_pc(
+            partitions_raw,
+            segments_raw,
+            image,
+            partitions_count,
+            segments_count,
+            "app1",
+            &mut total_bytes_written,
+            &mut partition_cnt,
+            &mut current_step,
+            &update_progress,
+        )?;
+
+        // ----- 4) 写入 GPT table 0（地址 = 0 + rom_size）-----
+        let gpt_table0_addr = rom_size;
+        update_progress(current_step, "Writing GPT table 0", total_bytes_written);
+        self.upgrade_partition(gpt_table0_addr, ffi::GPT_FLASH_SIZE as u32, gpt_data)?;
+        total_bytes_written += ffi::GPT_FLASH_SIZE as usize;
+        partition_cnt += 1;
+        current_step += 1;
+        update_progress(current_step, "GPT table 0 written", total_bytes_written);
+        tracing::info!("OTA gpt table0: 0x{:X} {} bytes", gpt_table0_addr, ffi::GPT_FLASH_SIZE);
+
+        let _ = self.upgrade_partition_by_name_pc(
+            partitions_raw,
+            segments_raw,
+            image,
+            partitions_count,
+            segments_count,
+            "app0",
+            &mut total_bytes_written,
+            &mut partition_cnt,
+            &mut current_step,
+            &update_progress,
+        )?;
+
+        tracing::info!(
+            "OTA upgrade done: {} partitions, {} bytes, overall_crc={:08X}",
+            partition_cnt, total_bytes_written, overall_crc
+        );
+
+        Ok(FirmwareUpgradeResult {
+            bytes_written: total_bytes_written,
+            chunk_count: partition_cnt,
+            crc32: overall_crc,
+        })
+    }
+
     pub fn upgrade_firmware(&mut self, firmware: &[u8]) -> Result<FirmwareUpgradeResult, String> {
         if firmware.is_empty() {
             return Err("Firmware image is empty".to_string());
@@ -1520,36 +2062,47 @@ impl BasebandApi {
         }
 
         let is_remote = self.is_remote_mode();
-        if is_remote {
-            self.ensure_remote_session()?;
-        } else if !self.initialized {
-            return Err("Baseband API not initialized".to_string());
-        }
+        tracing::info!(
+            "Firmware upgrade starting: {} bytes, remote_mode={}",
+            firmware.len(),
+            is_remote
+        );
 
-        let mut addr = 0_u32;
-        let chunk_count = firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).len();
+        // 检测是否为 OTA 格式 (.img) — 检查 magic
+        let is_ota_image = firmware.len() >= 4
+            && u32::from_le_bytes([firmware[0], firmware[1], firmware[2], firmware[3]]) == ffi::OTA_IMG_MAGIC;
 
-        for chunk in firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE) {
+        if is_ota_image {
+            tracing::info!("Detected OTA firmware image (.img), using partition-based upgrade");
+            let result = self.upgrade_ota_image(firmware)?;
+
+            // 触发设备重启以应用新固件
             let handle = self.handle_ptr();
             run_remote_sdk_call(is_remote, || {
-                ffi::hot_upgrade_write(handle, HOT_UPGRADE_WRITE_SEQ, addr, chunk)
+                ffi::reboot_device(handle, 2000)
             })?;
-            addr = addr
-                .checked_add(chunk.len() as u32)
-                .ok_or_else(|| "Firmware image address overflow".to_string())?;
+
+            tracing::info!("Firmware upgrade complete, device rebooting");
+            Ok(result)
+        } else {
+            tracing::info!("Detected raw firmware, using flat binary upgrade");
+            if is_remote {
+                self.ensure_remote_session()?;
+            } else if !self.initialized {
+                return Err("Baseband API not initialized".to_string());
+            }
+
+            let result = self.upgrade_raw_firmware(firmware)?;
+
+            // 触发设备重启以应用新固件
+            let handle = self.handle_ptr();
+            run_remote_sdk_call(is_remote, || {
+                ffi::reboot_device(handle, 2000)
+            })?;
+
+            tracing::info!("Firmware upgrade complete, device rebooting");
+            Ok(result)
         }
-
-        let crc32 = crc32fast::hash(firmware);
-        let handle = self.handle_ptr();
-        run_remote_sdk_call(is_remote, || {
-            ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, firmware.len() as u32, 0, crc32)
-        })?;
-
-        Ok(FirmwareUpgradeResult {
-            bytes_written: firmware.len(),
-            chunk_count,
-            crc32,
-        })
     }
 
     pub fn reset_to_default_config(&mut self) -> Result<(), String> {
@@ -1619,6 +2172,7 @@ impl Drop for BasebandApi {
 /// 管理基带通信的核心模块
 pub struct BasebandManager {
     api: Arc<Mutex<BasebandApi>>,
+    upgrade_progress: Mutex<Option<FirmwareUpgradeProgress>>,
 }
 
 impl BasebandManager {
@@ -1631,6 +2185,7 @@ impl BasebandManager {
                 return (
                     Some(BasebandManager {
                         api: Arc::new(Mutex::new(api)),
+                        upgrade_progress: Mutex::new(None),
                     }),
                     health,
                 );
@@ -1644,6 +2199,7 @@ impl BasebandManager {
             return (
                 Some(BasebandManager {
                     api: Arc::new(Mutex::new(api)),
+                    upgrade_progress: Mutex::new(None),
                 }),
                 health,
             );
@@ -1659,6 +2215,7 @@ impl BasebandManager {
                 (
                     Some(BasebandManager {
                         api: Arc::new(Mutex::new(api)),
+                        upgrade_progress: Mutex::new(None),
                     }),
                     health,
                 )
@@ -1703,6 +2260,11 @@ impl BasebandManager {
     pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
         let mut api = self.api.lock().unwrap();
         api.get_wireless_runtime_details()
+    }
+
+    pub fn get_boot_diagnostics(&self) -> Result<BootDiagnostics, String> {
+        let mut api = self.api.lock().unwrap();
+        api.get_boot_diagnostics()
     }
 
     pub fn get_health_status(&self) -> BasebandHealthStatus {
@@ -1820,6 +2382,71 @@ impl BasebandManager {
         api.upgrade_firmware(firmware)
     }
 
+    /// 在后台线程中执行固件升级，立即返回（通过 progress 轮询进度）
+    pub fn start_upgrade_background(self: &Arc<Self>, firmware: Vec<u8>, file_name: String) {
+        let progress = FirmwareUpgradeProgress {
+            state: "flashing".to_string(),
+            file_name: file_name.clone(),
+            file_size: firmware.len(),
+            bytes_written: 0,
+            total_steps: 0,
+            current_step: 0,
+            step_label: "Preparing...".to_string(),
+            percent: 0.0,
+            message: "Starting firmware upgrade...".to_string(),
+            crc32: None,
+            reboot_expected: true,
+        };
+        *self.upgrade_progress.lock().unwrap() = Some(progress.clone());
+
+        let mgr = Arc::clone(self);
+        std::thread::spawn(move || {
+            // 将进度追踪器注入 BasebandApi
+            {
+                let mut api = mgr.api.lock().unwrap();
+                api.upgrade_progress = Some(Arc::new(Mutex::new(progress)));
+            }
+
+            let result = {
+                let mut api = mgr.api.lock().unwrap();
+                api.upgrade_firmware(&firmware)
+            };
+
+            // 更新最终进度
+            let mut final_progress = mgr.upgrade_progress.lock().unwrap();
+            if let Some(ref mut s) = *final_progress {
+                match &result {
+                    Ok(r) => {
+                        s.state = "done".to_string();
+                        s.percent = 100.0;
+                        s.crc32 = Some(format!("{:08X}", r.crc32));
+                        s.step_label = "Upgrade complete".to_string();
+                        s.message = "Firmware written and verified. Device is rebooting...".to_string();
+                    }
+                    Err(e) => {
+                        s.state = "error".to_string();
+                        s.message = format!("Upgrade failed: {}", e);
+                    }
+                }
+            }
+
+            // 清理 BasebandApi 中的进度引用
+            if let Ok(mut api) = mgr.api.lock() {
+                api.upgrade_progress = None;
+            }
+
+            tracing::info!("Background firmware upgrade finished: {:?}", result);
+        });
+    }
+
+    pub fn get_upgrade_progress(&self) -> Option<FirmwareUpgradeProgress> {
+        self.upgrade_progress.lock().unwrap().clone()
+    }
+
+    pub fn set_upgrade_progress(&self, progress: Option<FirmwareUpgradeProgress>) {
+        *self.upgrade_progress.lock().unwrap() = progress;
+    }
+
     pub fn reset_to_default_config(&self) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.reset_to_default_config()
@@ -1859,6 +2486,7 @@ impl Clone for BasebandManager {
     fn clone(&self) -> Self {
         BasebandManager {
             api: Arc::clone(&self.api),
+            upgrade_progress: Mutex::new(None),
         }
     }
 }

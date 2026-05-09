@@ -117,6 +117,8 @@ pub struct BbSystemInfoSummary {
     pub software_version: String,
     pub hardware_version: String,
     pub firmware_version: String,
+    pub running_system: Option<String>,
+    pub boot_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -521,6 +523,30 @@ impl Default for bb_get_sys_info_out_t {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_get_boot_reason_out_t {
+    pub boot_reason: u32,
+    pub pc: u32,
+    pub ra: u32,
+    pub ex_data: u32,
+    pub repeat_time: u32,
+    pub desc: [c_char; 64],
+}
+
+impl Default for bb_get_boot_reason_out_t {
+    fn default() -> Self {
+        Self {
+            boot_reason: 0,
+            pc: 0,
+            ra: 0,
+            ex_data: 0,
+            repeat_time: 0,
+            desc: [0; 64],
+        }
+    }
+}
+
+#[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct bb_get_band_info_in_t {
     pub rsv: [c_char; 32],
@@ -734,7 +760,7 @@ pub struct bb_set_hot_upgrade_write_in_t {
     pub seq: u16,
     pub len: u16,
     pub addr: u32,
-    pub data: [u8; BB_HOT_UPGRADE_CHUNK_SIZE],
+    pub data: [u8; BB_HOT_UPGRADE_DATA_SIZE],
 }
 
 impl Default for bb_set_hot_upgrade_write_in_t {
@@ -743,7 +769,7 @@ impl Default for bb_set_hot_upgrade_write_in_t {
             seq: 0,
             len: 0,
             addr: 0,
-            data: [0; BB_HOT_UPGRADE_CHUNK_SIZE],
+            data: [0; BB_HOT_UPGRADE_DATA_SIZE],
         }
     }
 }
@@ -777,6 +803,61 @@ impl Default for bb_set_prj_dispatch_in_t {
     fn default() -> Self {
         Self { data: [0; 256] }
     }
+}
+
+// ============ OTA 热升级镜像格式，对齐 PC Tool ar8030_upgrade_ota.cpp ============
+
+/// OTA 镜像魔数 "ARTO" (0x4152544f)
+pub const OTA_IMG_MAGIC: u32 = 0x4152_544f;
+/// upgrade_hdr 总大小（PC Tool 注释: "parse header(256 + 32 + 256)"）
+pub const UPGRADE_HDR_SIZE: usize = 256;
+/// SHA256 哈希长度
+pub const OTA_HASH_SIZE: usize = 32;
+/// RSA 签名长度
+pub const OTA_SIG_SIZE: usize = 256;
+/// GPT 分区表在 flash 中的基准偏移
+pub const GPT_FLASH_OFFSET: u64 = 0x8000;
+/// 单个 GPT 表大小
+pub const GPT_FLASH_SIZE: u64 = 0x1000;
+/// part_info.name 字段大小
+pub const PART_INFO_NAME_SIZE: usize = 32;
+/// part_info.flash_offset 字段偏移
+pub const PART_INFO_FLASH_OFFSET_OFFSET: usize = 32;
+/// part_info.length 字段偏移
+pub const PART_INFO_LENGTH_OFFSET: usize = 40;
+/// part_info.is_upgrade 字段偏移
+pub const PART_INFO_IS_UPGRADE_OFFSET: usize = 48;
+/// part_info 结构体大小（common.h: name[32] + u64 + u64 + u32）
+pub const PART_INFO_SIZE: usize = 52;
+/// segment_info 结构体大小
+pub const SEGMENT_INFO_SIZE: usize = 32;
+
+/// OTA 热升级描述的一个分区信息 (52 字节, 对齐 PC Tool common.h)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct OtaPartInfo {
+    /// 分区名称，32 字节，不一定以 '\0' 结尾
+    pub name: [u8; PART_INFO_NAME_SIZE],
+    /// 该分区在 flash 中的起始偏移
+    pub flash_offset: u64,
+    /// 分区长度
+    pub length: u64,
+    /// 是否需要升级 (1 = 是)
+    pub is_upgrade: u32,
+}
+
+/// OTA 热升级描述的一个数据段 (32 字节)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct OtaSegmentInfo {
+    /// 该段在 .img 文件中的偏移
+    pub img_offset: u64,
+    /// 该段在 flash 中的起始偏移（写入时需 + GPT_FLASH_OFFSET）
+    pub flash_offset: u64,
+    /// 压缩后大小（当前 PC Tool 为 0，表示不压缩）
+    pub size_compress: u64,
+    /// 解压后大小 = 实际需写入的长度
+    pub size_decompress: u64,
 }
 
 type BbInitFn = unsafe extern "C" fn(handle: *mut bb_dev_handle_t) -> c_int;
@@ -936,6 +1017,9 @@ pub const BB_MAC_LEN: usize = 4;
 pub const BB_REG_PAGE_NUM: usize = 16;
 pub const BB_REG_PAGE_SIZE: usize = 256;
 pub const BB_CFG_PAGE_SIZE: usize = 1024;
+/// BB_CFG_PAGE_SIZE - 8 = 1016 bytes，与 C 头文件 bb_set_hot_upgrade_write_in_t.data 对齐
+pub const BB_HOT_UPGRADE_DATA_SIZE: usize = BB_CFG_PAGE_SIZE - 8;
+/// 固件热升级单次传输 chunk 上限（≤ BB_HOT_UPGRADE_DATA_SIZE）
 pub const BB_HOT_UPGRADE_CHUNK_SIZE: usize = 0x300;
 pub const BB_PLOT_POINT_MAX: usize = 10;
 pub const BB_BLACK_LIST_SIZE: usize = 3;
@@ -1014,6 +1098,7 @@ pub const BB_GET_POWER_AUTO: u32 = bb_request(BB_REQ_GET, 9);
 pub const BB_GET_CHAN_INFO: u32 = bb_request(BB_REQ_GET, 10);
 pub const BB_GET_PEER_QUALITY: u32 = bb_request(BB_REQ_GET, 11);
 pub const BB_GET_BAND_INFO: u32 = bb_request(BB_REQ_GET, 13);
+pub const BB_GET_BOOT_REASON: u32 = bb_request(BB_REQ_GET, 115);
 pub const BB_GET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_GET, 200);
 pub const BB_GET_SYS_INFO: u32 = bb_request(BB_REQ_GET, 105);
 pub const BB_GET_MCS_MODE: u32 = bb_request(BB_REQ_GET, 117);
@@ -1049,6 +1134,7 @@ pub const PRJ_CMD_SET_AP_MAC: u8 = 1;
 pub const PRJ_CMD_SET_SLOT_MAC: u8 = 2;
 pub const PRJ_CMD_SET_BAND: u8 = 3;
 pub const PRJ_CMD_GET_BAND: u8 = 128;
+pub const PRJ_CMD_GET_RUNSYS: u8 = 133;
 
 const PRJ_BAND_1G_BITMAP: u8 = 0x01;
 const PRJ_BAND_2G_BITMAP: u8 = 0x02;
@@ -1789,10 +1875,73 @@ pub fn get_system_info(handle: *mut bb_dev_handle_t) -> Result<BbSystemInfoSumma
                 software_version: c_char_array_to_string(&output.soft_ver),
                 hardware_version: c_char_array_to_string(&output.hardware_ver),
                 firmware_version: c_char_array_to_string(&output.firmware_ver),
+                running_system: None,
+                boot_reason: None,
             }),
             e => Err(format!("bb_ioctl(BB_GET_SYS_INFO) failed with code: {}", e)),
         }
     })
+}
+
+pub fn get_boot_reason(handle: *mut bb_dev_handle_t) -> Result<String, String> {
+    let sdk = sdk()?;
+    let mut output = bb_get_boot_reason_out_t::default();
+
+    suppress_sdk_console_output(|| unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_GET_BOOT_REASON as c_uint,
+            std::ptr::null(),
+            &mut output as *mut bb_get_boot_reason_out_t as *mut c_void,
+        ) {
+            0 => {
+                let desc = c_char_array_to_string(&output.desc);
+                if !desc.trim().is_empty() {
+                    Ok(desc)
+                } else {
+                    let label = match output.boot_reason {
+                        0 => "Power Off",
+                        1 => "Reboot",
+                        2 => "Malloc Fail",
+                        3 => "Stack Overflow",
+                        4 => "Load Instruction",
+                        5 => "Illegal Instruction",
+                        6 => "Debug Break",
+                        7 => "Load Instruction Unaligned",
+                        8 => "Load Instruction Access Error",
+                        9 => "Store Instruction Unaligned",
+                        10 => "Store Instruction Access Error",
+                        11 => "User Mode Environment",
+                        12 => "Machine Mode Environment",
+                        13 => "Unknown",
+                        14 => "Enter Recovery Mode",
+                        other => return Ok(format!("Boot reason {}", other)),
+                    };
+                    Ok(label.to_string())
+                }
+            }
+            e => Err(format!("bb_ioctl(BB_GET_BOOT_REASON) failed with code: {}", e)),
+        }
+    })
+}
+
+pub fn get_running_system(handle: *mut bb_dev_handle_t) -> Result<String, String> {
+    let output = get_prj_dispatch_payload(handle, PRJ_CMD_GET_RUNSYS, &[])?;
+    let runsys_id = i32::from_le_bytes([
+        output.data[4],
+        output.data[5],
+        output.data[6],
+        output.data[7],
+    ]);
+
+    let label = match runsys_id {
+        -1 => "Unknown",
+        0 => "Master",
+        1 => "Backup",
+        other => return Ok(format!("Unknown({})", other)),
+    };
+
+    Ok(label.to_string())
 }
 
 pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, String> {

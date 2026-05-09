@@ -236,9 +236,13 @@
                         <div class="sys-section">
                             <h3 class="sys-section-title">Version Information</h3>
                             <table class="sys-table">
+                                <tr><td>Product Name</td><td id="maintenance-product-name">--</td><td>Host Name</td><td id="maintenance-host-name">--</td></tr>
+                                <tr><td>Active Device</td><td id="maintenance-active-device">--</td><td>Operation Mode</td><td id="maintenance-operation-mode">--</td></tr>
+                                <tr><td>Access Mode</td><td id="maintenance-access-mode">--</td><td>Local MAC Address</td><td id="maintenance-local-mac">--</td></tr>
                                 <tr><td>Running Time</td><td id="maintenance-uptime">--</td><td>Hardware Version</td><td id="maintenance-hardware-version">--</td></tr>
                                 <tr><td>Firmware Version</td><td id="maintenance-firmware-version">--</td><td>Software Version</td><td id="maintenance-software-version">--</td></tr>
                                 <tr><td>Software Build</td><td id="maintenance-software-build">--</td><td>Compile Time</td><td id="maintenance-compile-time">--</td></tr>
+                                <tr><td>Running System</td><td id="maintenance-running-system">--</td><td>Boot Reason</td><td id="maintenance-boot-reason">--</td></tr>
                             </table>
                         </div>
                         <hr class="sys-divider">
@@ -1138,6 +1142,8 @@
             setText('maintenance-software-version', version.software_version || '--');
             setText('maintenance-software-build', version.software_build || '--');
             setText('maintenance-compile-time', version.compile_time || '--');
+            setText('maintenance-running-system', version.running_system || '--');
+            setText('maintenance-boot-reason', version.boot_reason || '--');
 
             updateMaintenanceControlsState();
             syncMaintenanceStatuses();
@@ -1167,11 +1173,36 @@
             return payload;
         }
 
+        async function loadMaintenanceBootDiagnostics() {
+            const response = await fetch('/api/system/maintenance/boot-diagnostics', { cache: 'no-store' });
+            const payload = await response.json();
+
+            if (!response.ok || payload.success === false) {
+                setText('maintenance-running-system', payload?.running_system || '--');
+                setText('maintenance-boot-reason', payload?.boot_reason || '--');
+                throw new Error(payload.message || `HTTP ${response.status}`);
+            }
+
+            setText('maintenance-running-system', payload.running_system || '--');
+            setText('maintenance-boot-reason', payload.boot_reason || '--');
+            return payload;
+        }
+
         function scheduleMaintenanceRefresh(delayMs = 4000) {
             window.setTimeout(() => {
                 loadMaintenanceInfo().catch(() => {});
+                loadMaintenanceBootDiagnostics().catch(() => {});
                 loadWirelessRuntimeDetails().catch(() => {});
             }, delayMs);
+        }
+
+        let maintenanceProgressTimer = null;
+
+        function stopMaintenanceProgressTimer() {
+            if (maintenanceProgressTimer !== null) {
+                window.clearInterval(maintenanceProgressTimer);
+                maintenanceProgressTimer = null;
+            }
         }
 
         async function submitMaintenanceUpgrade() {
@@ -1188,9 +1219,10 @@
                 return;
             }
 
+            stopMaintenanceProgressTimer();
             maintenanceBusy = true;
             updateMaintenanceControlsState();
-            setMaintenanceStatus('maintenance-action-status', 'Transferring firmware image...', 'pending', { sticky: false });
+            setMaintenanceStatus('maintenance-action-status', 'Uploading firmware image...', 'pending', { sticky: false });
 
             try {
                 const formData = new FormData();
@@ -1203,23 +1235,85 @@
                 const payload = await response.json();
 
                 if (!response.ok || payload.success === false) {
-                    throw new Error(payload.message || `HTTP ${response.status}`);
+                    const errorMsg = payload.message || `HTTP ${response.status}`;
+                    console.error('Firmware upgrade rejected by server:', errorMsg, payload);
+                    throw new Error(errorMsg);
                 }
 
-                const fileMeta = document.getElementById('maintenance-file-meta');
-                if (fileMeta) {
-                    fileMeta.textContent = `${payload.file_name || file.name} / ${formatBytes(payload.file_size || file.size)} / CRC32 ${payload.crc32}`;
+                console.log('Firmware upload accepted, starting progress poll:', payload);
+
+                // 开始轮询进度
+                const pollProgress = async () => {
+                    try {
+                        const res = await fetch('/api/system/maintenance/upgrade-progress', { cache: 'no-store' });
+                        const prog = await res.json();
+                        if (!prog || prog.state === 'idle') {
+                            return null;
+                        }
+                        return prog;
+                    } catch (e) {
+                        console.warn('Progress poll failed:', e);
+                        return null;
+                    }
+                };
+
+                // 第一次轮询，等待后端准备好
+                let firstProg = null;
+                for (let i = 0; i < 10; i++) {
+                    await new Promise(r => setTimeout(r, 300));
+                    firstProg = await pollProgress();
+                    if (firstProg && firstProg.state !== 'idle') break;
                 }
-                setMaintenanceStatus(
-                    'maintenance-action-status',
-                    'Upgrade complete. Device rebooting, waiting for reconnect.',
-                    'success',
-                    { sticky: true }
-                );
-                scheduleMaintenanceRefresh();
+
+                if (!firstProg || firstProg.state === 'idle') {
+                    // 降级: 没有进度, 可能是快速完成
+                    setMaintenanceStatus('maintenance-action-status', 'Firmware flashing started. Waiting for completion...', 'pending', { sticky: false });
+                    if (firstProg && firstProg.reboot_expected) {
+                        scheduleMaintenanceRefresh(6000);
+                    }
+                    return;
+                }
+
+                // 持续轮询直到完成或出错
+                maintenanceProgressTimer = window.setInterval(async () => {
+                    const prog = await pollProgress();
+                    if (!prog) return;
+
+                    if (prog.state === 'done') {
+                        stopMaintenanceProgressTimer();
+                        const crcStr = prog.crc32 ? ` / CRC32 ${prog.crc32}` : '';
+                        const fileMeta = document.getElementById('maintenance-file-meta');
+                        if (fileMeta) {
+                            fileMeta.textContent = `${prog.file_name || file.name} / ${formatBytes(prog.file_size || file.size)}${crcStr}`;
+                        }
+                        setMaintenanceStatus(
+                            'maintenance-action-status',
+                            `Upgrade complete (${prog.percent.toFixed(0)}%). Device rebooting, waiting for reconnect.`,
+                            'success',
+                            { sticky: true }
+                        );
+                        maintenanceBusy = false;
+                        updateMaintenanceControlsState();
+                        scheduleMaintenanceRefresh();
+                    } else if (prog.state === 'error') {
+                        stopMaintenanceProgressTimer();
+                        setMaintenanceStatus('maintenance-action-status', prog.message || 'Firmware upgrade failed', 'error', { sticky: true });
+                        maintenanceBusy = false;
+                        updateMaintenanceControlsState();
+                    } else if (prog.state === 'flashing') {
+                        const pct = prog.percent.toFixed(1);
+                        setMaintenanceStatus(
+                            'maintenance-action-status',
+                            `Flashing... ${pct}% (${prog.step_label || 'writing'}) — ${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)}`,
+                            'pending',
+                            { sticky: false }
+                        );
+                    }
+                }, 500);
             } catch (error) {
+                console.error('Firmware upgrade error:', error);
+                stopMaintenanceProgressTimer();
                 setMaintenanceStatus('maintenance-action-status', `Firmware upgrade failed: ${error.message}`, 'error', { sticky: true });
-            } finally {
                 maintenanceBusy = false;
                 updateMaintenanceControlsState();
             }
@@ -1248,6 +1342,7 @@
                 setMaintenanceStatus('maintenance-reset-status', 'Factory defaults restored. Device rebooting, waiting for reconnect.', 'success', { sticky: true });
                 scheduleMaintenanceRefresh();
             } catch (error) {
+                console.error('Reset to default error:', error);
                 setMaintenanceStatus('maintenance-reset-status', `Reset to default failed: ${error.message}`, 'error', { sticky: true });
             } finally {
                 maintenanceBusy = false;
@@ -3884,6 +3979,9 @@
                     console.error('Failed to load maintenance info:', error);
                     showMaintenanceInfoError(error);
                 });
+                loadMaintenanceBootDiagnostics().catch((error) => {
+                    console.error('Failed to load maintenance boot diagnostics:', error);
+                });
             });
         }
 
@@ -4090,6 +4188,9 @@
         loadMaintenanceInfo().catch((error) => {
             console.error('Failed to load maintenance info:', error);
             showMaintenanceInfoError(error);
+        });
+        loadMaintenanceBootDiagnostics().catch((error) => {
+            console.error('Failed to load maintenance boot diagnostics:', error);
         });
 
         window.setInterval(() => {

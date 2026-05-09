@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, Notify, RwLock};
 use tower_http::{
     cors::CorsLayer,
+    limit::RequestBodyLimitLayer,
     services::ServeDir,
     set_header::SetResponseHeaderLayer,
 };
@@ -107,6 +108,8 @@ struct MaintenanceVersionInfo {
     software_version: String,
     software_build: String,
     compile_time: String,
+    running_system: String,
+    boot_reason: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -114,6 +117,14 @@ struct MaintenanceActionResponse {
     success: bool,
     message: String,
     reboot_expected: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct BootDiagnosticsResponse {
+    success: bool,
+    running_system: String,
+    boot_reason: String,
+    message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -196,6 +207,8 @@ struct WirelessRuntimeView {
     software_version: String,
     hardware_version: String,
     firmware_version: String,
+    running_system: String,
+    boot_reason: String,
     band_auto: Option<bool>,
     work_band: String,
     channel_auto: Option<bool>,
@@ -491,7 +504,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/api/system/info", get(get_system_info))
         .route("/api/system/maintenance", get(get_maintenance_info))
+        .route("/api/system/maintenance/boot-diagnostics", get(get_boot_diagnostics))
         .route("/api/system/maintenance/upgrade", post(apply_firmware_upgrade))
+        .route("/api/system/maintenance/upgrade-progress", get(get_upgrade_progress))
         .route("/api/system/maintenance/reset-defaults", post(reset_default_config))
         .route("/api/baseband/health", get(get_baseband_health))
         .route("/api/baseband/test", get(test_baseband_communication))
@@ -511,6 +526,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             HeaderValue::from_static("0"),
         ))
         .layer(CorsLayer::permissive())
+        .layer(RequestBodyLimitLayer::new(200 * 1024 * 1024))
         .with_state(state);
 
     let server_port = std::env::var("SERVER_PORT")
@@ -890,12 +906,58 @@ async fn get_system_info() -> Json<SystemInfo> {
     Json(build_system_info())
 }
 
+async fn fetch_boot_diagnostics_response(
+    baseband: Option<&Arc<BasebandManager>>,
+) -> BootDiagnosticsResponse {
+    let Some(baseband) = baseband else {
+        return BootDiagnosticsResponse {
+            success: false,
+            running_system: "Unavailable".to_string(),
+            boot_reason: "Unavailable".to_string(),
+            message: "Baseband SDK not available; boot diagnostics are disabled in simulator mode".to_string(),
+        };
+    };
+
+    let baseband = Arc::clone(baseband);
+    let diagnostics_task = tokio::task::spawn_blocking(move || baseband.get_boot_diagnostics());
+
+    match tokio::time::timeout(Duration::from_secs(2), diagnostics_task).await {
+        Ok(Ok(Ok(diagnostics))) => BootDiagnosticsResponse {
+            success: true,
+            running_system: diagnostics.running_system,
+            boot_reason: diagnostics.boot_reason,
+            message: "Boot diagnostics loaded".to_string(),
+        },
+        Ok(Ok(Err(err))) => BootDiagnosticsResponse {
+            success: false,
+            running_system: format!("Error: {}", err),
+            boot_reason: format!("Error: {}", err),
+            message: format!("Failed to load boot diagnostics: {}", err),
+        },
+        Ok(Err(err)) => BootDiagnosticsResponse {
+            success: false,
+            running_system: format!("Join error: {}", err),
+            boot_reason: format!("Join error: {}", err),
+            message: format!("Boot diagnostics task failed: {}", err),
+        },
+        Err(_) => BootDiagnosticsResponse {
+            success: false,
+            running_system: "Timeout".to_string(),
+            boot_reason: "Timeout".to_string(),
+            message: "Boot diagnostics timed out after 2 seconds".to_string(),
+        },
+    }
+}
+
 async fn get_maintenance_info(
     State(state): State<Arc<AppState>>,
 ) -> Json<MaintenanceInfoResponse> {
     let system_info = build_system_info();
     let current = state.wireless_runtime.read().await.current.clone();
-    let version = build_maintenance_version_info(state.as_ref(), &system_info, current.as_ref());
+    let mut version = build_maintenance_version_info(state.as_ref(), &system_info, current.as_ref());
+    let diagnostics = fetch_boot_diagnostics_response(state.baseband.as_ref()).await;
+    version.running_system = diagnostics.running_system;
+    version.boot_reason = diagnostics.boot_reason;
     let actions_supported = state.baseband.is_some();
     let message = if actions_supported {
         "Maintenance information loaded".to_string()
@@ -912,11 +974,20 @@ async fn get_maintenance_info(
     })
 }
 
+async fn get_boot_diagnostics(
+    State(state): State<Arc<AppState>>,
+) -> Json<BootDiagnosticsResponse> {
+    Json(fetch_boot_diagnostics_response(state.baseband.as_ref()).await)
+}
+
 async fn apply_firmware_upgrade(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> Json<FirmwareUpgradeActionResponse> {
+    info!("Firmware upgrade request received");
+
     let Some(baseband) = state.baseband.as_ref() else {
+        warn!("Firmware upgrade rejected: baseband SDK not available");
         return Json(FirmwareUpgradeActionResponse {
             success: false,
             message: "Baseband SDK not available; firmware upgrade is disabled in simulator mode".to_string(),
@@ -936,6 +1007,7 @@ async fn apply_firmware_upgrade(
         let next_field = match multipart.next_field().await {
             Ok(field) => field,
             Err(err) => {
+                warn!("Multipart next_field error: {}", err);
                 return Json(FirmwareUpgradeActionResponse {
                     success: false,
                     message: format!("Failed to read firmware upload: {}", err),
@@ -955,6 +1027,13 @@ async fn apply_firmware_upgrade(
 
         let field_name = field.name().unwrap_or_default().to_string();
         let detected_file_name = field.file_name().unwrap_or("firmware.bin").to_string();
+
+        info!(
+            "Multipart field: name='{}', file_name='{}', content_type={:?}",
+            field_name,
+            detected_file_name,
+            field.content_type()
+        );
 
         if !file_name.is_empty() || (!field_name.is_empty() && field_name != "firmware") {
             continue;
@@ -1010,25 +1089,50 @@ async fn apply_firmware_upgrade(
     };
 
     let file_size = firmware.len();
-    match baseband.upgrade_firmware(&firmware) {
-        Ok(result) => Json(build_firmware_upgrade_response(
-            &file_name,
-            file_size,
-            result,
-            true,
-            format!("Upgrade complete for '{}'. CRC32 verified; device rebooting to apply the new firmware.", file_name),
-        )),
-        Err(err) => Json(FirmwareUpgradeActionResponse {
-            success: false,
-            message: format!("Firmware upgrade failed: {}", err),
-            file_name,
-            file_size,
-            bytes_written: 0,
-            chunk_count: 0,
-            crc32: String::new(),
-            reboot_expected: false,
-        }),
-    }
+    info!(
+        "Firmware file '{}' received: {} bytes, dispatching to background upgrade",
+        file_name,
+        file_size
+    );
+
+    // 后台异步升级
+    baseband.start_upgrade_background(firmware, file_name.clone());
+
+    Json(FirmwareUpgradeActionResponse {
+        success: true,
+        message: format!("Firmware '{}' upload accepted. Flashing in background...", file_name),
+        file_name,
+        file_size,
+        bytes_written: 0,
+        chunk_count: 0,
+        crc32: String::new(),
+        reboot_expected: true,
+    })
+}
+
+/// 轮询固件升级进度
+async fn get_upgrade_progress(
+    State(state): State<Arc<AppState>>,
+) -> Json<bb_api::FirmwareUpgradeProgress> {
+    let default_progress = bb_api::FirmwareUpgradeProgress {
+        state: "idle".to_string(),
+        file_name: String::new(),
+        file_size: 0,
+        bytes_written: 0,
+        total_steps: 0,
+        current_step: 0,
+        step_label: String::new(),
+        percent: 0.0,
+        message: "No upgrade in progress".to_string(),
+        crc32: None,
+        reboot_expected: false,
+    };
+
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(default_progress);
+    };
+
+    Json(baseband.get_upgrade_progress().unwrap_or(default_progress))
 }
 
 async fn reset_default_config(
@@ -1109,6 +1213,14 @@ fn build_maintenance_version_info(
         .map(|runtime| runtime.compile_time.trim().to_string())
         .filter(|value| !value.is_empty() && value != "Unavailable")
         .unwrap_or_else(|| format!("{} {}", system_info.build_date, system_info.build_time));
+    let running_system = current
+        .map(|runtime| runtime.running_system.clone())
+        .filter(|value| !value.is_empty() && value != "Unavailable")
+        .unwrap_or_else(|| "Unavailable".to_string());
+    let boot_reason = current
+        .map(|runtime| runtime.boot_reason.clone())
+        .filter(|value| !value.is_empty() && value != "Unavailable")
+        .unwrap_or_else(|| "Unavailable".to_string());
 
     MaintenanceVersionInfo {
         product_name: system_info.product_name.clone(),
@@ -1138,6 +1250,8 @@ fn build_maintenance_version_info(
         software_version: system_info.software_version.clone(),
         software_build: system_info.software_build.clone(),
         compile_time,
+        running_system,
+        boot_reason,
     }
 }
 
@@ -2095,6 +2209,16 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             .system_info
             .as_ref()
             .map(|info| info.firmware_version.clone())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        running_system: details
+            .system_info
+            .as_ref()
+            .and_then(|info| info.running_system.clone())
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        boot_reason: details
+            .system_info
+            .as_ref()
+            .and_then(|info| info.boot_reason.clone())
             .unwrap_or_else(|| "Unavailable".to_string()),
         band_auto: configured_band.auto,
         work_band: live_rf.band.clone(),
