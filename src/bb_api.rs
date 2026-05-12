@@ -178,8 +178,6 @@ pub struct BootDiagnostics {
 
 #[derive(Debug, Clone)]
 pub struct FirmwareUpgradeResult {
-    pub bytes_written: usize,
-    pub chunk_count: usize,
     pub crc32: u32,
 }
 
@@ -1578,12 +1576,6 @@ impl BasebandApi {
             // BB_SET_HOT_UPGRADE_WRITE 的 addr 字段为 u32，截断高位（flash 地址在 32 位范围内）
             let ioctl_addr = chunk_addr as u32;
 
-            if let Some(ref prog) = progress_arc {
-                if let Ok(mut guard) = prog.lock() {
-                    guard.bytes_written = offset as usize + chunk.len();
-                }
-            }
-
             let handle = self.handle_ptr();
             run_remote_sdk_call(is_remote, || {
                 ffi::hot_upgrade_write(handle, HOT_UPGRADE_WRITE_SEQ, ioctl_addr, chunk)
@@ -1598,12 +1590,20 @@ impl BasebandApi {
             if let Some(ref prog) = progress_arc {
                 if let Ok(mut guard) = prog.lock() {
                     let chunk_done = i + 1;
-                    let part_pct = if chunk_count > 0 { chunk_done as f64 / chunk_count as f64 } else { 1.0 };
-                    guard.percent = part_pct * 100.0;
+                    guard.bytes_written = guard.bytes_written.saturating_add(chunk.len());
+                    if guard.file_size > 0 {
+                        guard.percent = (guard.bytes_written as f64 / guard.file_size as f64) * 100.0;
+                    }
                     guard.current_step = chunk_done;
                     guard.total_steps = chunk_count;
-                    guard.step_label = format!("Partition 0x{:X} chunk {}/{}", flash_addr, chunk_done, chunk_count);
-                    guard.bytes_written = offset as usize;
+                    if guard.step_label.is_empty() {
+                        guard.step_label = "Writing firmware data".to_string();
+                    }
+                    guard.message = format!(
+                        "Board write acknowledged {} / {} bytes",
+                        guard.bytes_written,
+                        guard.file_size
+                    );
                     guard.state = "flashing".to_string();
                 }
             }
@@ -1649,9 +1649,16 @@ impl BasebandApi {
                 if let Ok(mut guard) = prog.lock() {
                     guard.current_step = i + 1;
                     guard.total_steps = chunk_count;
-                    guard.step_label = format!("Raw write chunk {}/{}", i + 1, chunk_count);
+                    guard.step_label = "Writing firmware image".to_string();
                     guard.bytes_written = addr as usize;
-                    guard.percent = ((i + 1) as f64 / chunk_count as f64) * 100.0;
+                    if guard.file_size > 0 {
+                        guard.percent = (guard.bytes_written as f64 / guard.file_size as f64) * 100.0;
+                    }
+                    guard.message = format!(
+                        "Board write acknowledged {} / {} bytes",
+                        guard.bytes_written,
+                        guard.file_size
+                    );
                     guard.state = "flashing".to_string();
                 }
             }
@@ -1663,11 +1670,7 @@ impl BasebandApi {
             ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, firmware.len() as u32, 0, crc32)
         })?;
 
-        Ok(FirmwareUpgradeResult {
-            bytes_written: firmware.len(),
-            chunk_count,
-            crc32,
-        })
+        Ok(FirmwareUpgradeResult { crc32 })
     }
 
     fn upgrade_partition_by_name_pc<F>(
@@ -1820,12 +1823,17 @@ impl BasebandApi {
             part_name, flash_addr, size_dec, img_off, segment_idx
         );
 
-        update_progress(*current_step, &format!("Flashing partition '{}'", part_name), *total_bytes_written);
+        let (progress_label, complete_label) = match part_name {
+            "app0" | "app1" => ("Writing application image", "Application image written"),
+            _ => ("Writing firmware data", "Firmware segment written"),
+        };
+
+        update_progress(*current_step, progress_label, *total_bytes_written);
         self.upgrade_partition(flash_addr, size_dec as u32, seg_data)?;
         *total_bytes_written += size_dec as usize;
         *partition_cnt += 1;
         *current_step += 1;
-        update_progress(*current_step, &format!("Partition '{}' written", part_name), *total_bytes_written);
+        update_progress(*current_step, complete_label, *total_bytes_written);
         Ok(true)
     }
 
@@ -1963,9 +1971,14 @@ impl BasebandApi {
                     guard.total_steps = total_steps;
                     guard.step_label = label.to_string();
                     guard.bytes_written = bytes;
-                    if total_steps > 0 {
-                        guard.percent = (step as f64 / total_steps as f64) * 100.0;
+                    if guard.file_size > 0 {
+                        guard.percent = (bytes as f64 / guard.file_size as f64) * 100.0;
                     }
+                    guard.message = format!(
+                        "Board write acknowledged {} / {} bytes",
+                        guard.bytes_written,
+                        guard.file_size
+                    );
                     guard.state = "flashing".to_string();
                 }
             }
@@ -2041,11 +2054,7 @@ impl BasebandApi {
             partition_cnt, total_bytes_written, overall_crc
         );
 
-        Ok(FirmwareUpgradeResult {
-            bytes_written: total_bytes_written,
-            chunk_count: partition_cnt,
-            crc32: overall_crc,
-        })
+        Ok(FirmwareUpgradeResult { crc32: overall_crc })
     }
 
     pub fn upgrade_firmware(&mut self, firmware: &[u8]) -> Result<FirmwareUpgradeResult, String> {
@@ -2103,13 +2112,6 @@ impl BasebandApi {
             tracing::info!("Firmware upgrade complete, device rebooting");
             Ok(result)
         }
-    }
-
-    pub fn reset_to_default_config(&mut self) -> Result<(), String> {
-        self.with_device_operation("reset_to_default_config", |handle| {
-            ffi::reset_config(handle)?;
-            ffi::reboot_device(handle, 2000)
-        })
     }
 
     pub fn set_signal_user_preference(&mut self, user: u8) -> Result<(), String> {
@@ -2172,7 +2174,7 @@ impl Drop for BasebandApi {
 /// 管理基带通信的核心模块
 pub struct BasebandManager {
     api: Arc<Mutex<BasebandApi>>,
-    upgrade_progress: Mutex<Option<FirmwareUpgradeProgress>>,
+    upgrade_progress: Mutex<Option<Arc<Mutex<FirmwareUpgradeProgress>>>>,
 }
 
 impl BasebandManager {
@@ -2377,34 +2379,29 @@ impl BasebandManager {
         api.set_baseband_role(role)
     }
 
-    pub fn upgrade_firmware(&self, firmware: &[u8]) -> Result<FirmwareUpgradeResult, String> {
-        let mut api = self.api.lock().unwrap();
-        api.upgrade_firmware(firmware)
-    }
-
     /// 在后台线程中执行固件升级，立即返回（通过 progress 轮询进度）
     pub fn start_upgrade_background(self: &Arc<Self>, firmware: Vec<u8>, file_name: String) {
-        let progress = FirmwareUpgradeProgress {
-            state: "flashing".to_string(),
+        let progress = Arc::new(Mutex::new(FirmwareUpgradeProgress {
+            state: "idle".to_string(),
             file_name: file_name.clone(),
             file_size: firmware.len(),
             bytes_written: 0,
             total_steps: 0,
             current_step: 0,
-            step_label: "Preparing...".to_string(),
+            step_label: String::new(),
             percent: 0.0,
-            message: "Starting firmware upgrade...".to_string(),
+            message: "Waiting for first board write acknowledgement...".to_string(),
             crc32: None,
             reboot_expected: true,
-        };
-        *self.upgrade_progress.lock().unwrap() = Some(progress.clone());
+        }));
+        *self.upgrade_progress.lock().unwrap() = Some(Arc::clone(&progress));
 
         let mgr = Arc::clone(self);
         std::thread::spawn(move || {
             // 将进度追踪器注入 BasebandApi
             {
                 let mut api = mgr.api.lock().unwrap();
-                api.upgrade_progress = Some(Arc::new(Mutex::new(progress)));
+                api.upgrade_progress = Some(Arc::clone(&progress));
             }
 
             let result = {
@@ -2413,8 +2410,7 @@ impl BasebandManager {
             };
 
             // 更新最终进度
-            let mut final_progress = mgr.upgrade_progress.lock().unwrap();
-            if let Some(ref mut s) = *final_progress {
+            if let Ok(mut s) = progress.lock() {
                 match &result {
                     Ok(r) => {
                         s.state = "done".to_string();
@@ -2440,16 +2436,11 @@ impl BasebandManager {
     }
 
     pub fn get_upgrade_progress(&self) -> Option<FirmwareUpgradeProgress> {
-        self.upgrade_progress.lock().unwrap().clone()
-    }
-
-    pub fn set_upgrade_progress(&self, progress: Option<FirmwareUpgradeProgress>) {
-        *self.upgrade_progress.lock().unwrap() = progress;
-    }
-
-    pub fn reset_to_default_config(&self) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.reset_to_default_config()
+        self.upgrade_progress
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|progress| progress.lock().ok().map(|guard| guard.clone()))
     }
 
     /// 发送数据到 SOC

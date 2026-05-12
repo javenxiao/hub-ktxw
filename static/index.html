@@ -233,46 +233,77 @@
                     </div>
                     <div class="sys-tab-content" id="sys-tab-services" style="display:none"><div class="sys-section"><h2>Services</h2><p>Services 配置内容占位</p></div></div>
                     <div class="sys-tab-content" id="sys-tab-maintenance" style="display:none">
-                        <div class="sys-section">
-                            <h3 class="sys-section-title">Version Information</h3>
-                            <table class="sys-table">
-                                <tr><td>Product Name</td><td id="maintenance-product-name">--</td><td>Host Name</td><td id="maintenance-host-name">--</td></tr>
-                                <tr><td>Active Device</td><td id="maintenance-active-device">--</td><td>Operation Mode</td><td id="maintenance-operation-mode">--</td></tr>
-                                <tr><td>Access Mode</td><td id="maintenance-access-mode">--</td><td>Local MAC Address</td><td id="maintenance-local-mac">--</td></tr>
-                                <tr><td>Running Time</td><td id="maintenance-uptime">--</td><td>Hardware Version</td><td id="maintenance-hardware-version">--</td></tr>
-                                <tr><td>Firmware Version</td><td id="maintenance-firmware-version">--</td><td>Software Version</td><td id="maintenance-software-version">--</td></tr>
-                                <tr><td>Software Build</td><td id="maintenance-software-build">--</td><td>Compile Time</td><td id="maintenance-compile-time">--</td></tr>
-                                <tr><td>Running System</td><td id="maintenance-running-system">--</td><td>Boot Reason</td><td id="maintenance-boot-reason">--</td></tr>
-                            </table>
-                        </div>
-                        <hr class="sys-divider">
-                        <div class="sys-section">
-                            <h3 class="sys-section-title">Firmware Upgrade</h3>
-                            <div class="sys-form">
-                                <div class="sys-form-row">
-                                    <div class="sys-form-group maintenance-form-group">
-                                        <label class="sys-label" for="maintenance-firmware-file">Firmware Image</label>
-                                        <input type="file" id="maintenance-firmware-file" class="sys-input maintenance-file-input" accept=".bin,.img,.fw,.rom,.pack,application/octet-stream">
+                        <div class="maintenance-panel-group">
+                            <div class="sys-section maintenance-overview-section">
+                                <div class="maintenance-section-header">
+                                    <div class="maintenance-section-heading">
+                                        <h3 class="sys-section-title">Version Information</h3>
                                     </div>
                                 </div>
-                                <div class="sys-form-row">
-                                    <div class="sys-form-group">
-                                        <label class="sys-label">Selected File</label>
-                                        <div class="maintenance-file-meta" id="maintenance-file-meta">No file selected.</div>
-                                    </div>
-                                </div>
-                                <p class="maintenance-action-status" id="maintenance-action-status" data-state="idle">Ready to upgrade.</p>
-                                <div class="maintenance-actions">
-                                    <button id="maintenance-upgrade-btn" class="sys-button-primary" type="button" disabled>Upgrade</button>
+                                <div class="maintenance-metrics-grid">
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Local MAC Configuration</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-local-mac-config">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Running Time</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-uptime">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Hardware Version</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-hardware-version">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card maintenance-metric-card-accent">
+                                        <span class="maintenance-metric-label">Firmware Version</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-firmware-version">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Software Version</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-software-version">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Compile Time</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-compile-time">--</strong>
+                                    </article>
                                 </div>
                             </div>
-                        </div>
-                        <hr class="sys-divider">
-                        <div class="sys-section">
-                            <h3 class="sys-section-title">Reset to Default Configurations</h3>
-                            <p class="maintenance-action-status" id="maintenance-reset-status" data-state="idle">Ready to restore factory defaults.</p>
-                            <div class="maintenance-actions">
-                                <button id="maintenance-reset-btn" class="sys-button-danger" type="button">Reset to Default</button>
+                            <div class="maintenance-action-row">
+                                <div class="sys-section maintenance-action-section">
+                                    <div class="maintenance-section-header">
+                                        <div class="maintenance-section-heading">
+                                            <h3 class="sys-section-title">Firmware Upgrade</h3>
+                                        </div>
+                                    </div>
+                                    <div class="maintenance-upgrade-shell">
+                                        <div class="sys-form maintenance-upgrade-form">
+                                            <div class="maintenance-upgrade-stage" id="maintenance-upgrade-stage" data-state="idle">
+                                                <div class="maintenance-upgrade-stage-header">
+                                                    <div>
+                                                        <p class="maintenance-upgrade-stage-label">Upgrade Progress</p>
+                                                        <h4 class="maintenance-upgrade-stage-title" id="maintenance-upgrade-stage-title">Standby</h4>
+                                                    </div>
+                                                    <strong class="maintenance-upgrade-stage-percent" id="maintenance-upgrade-progress-percent">0%</strong>
+                                                </div>
+                                                <div class="maintenance-upgrade-progress-bar" aria-hidden="true">
+                                                    <span id="maintenance-upgrade-progress-fill"></span>
+                                                </div>
+                                                <p class="maintenance-upgrade-stage-detail" id="maintenance-upgrade-progress-detail" aria-live="polite">Select a firmware package to start validation and flashing.</p>
+                                            </div>
+                                            <div class="maintenance-upgrade-body">
+                                                <div class="maintenance-file-picker-compact">
+                                                    <span class="maintenance-file-picker-label">Firmware Image</span>
+                                                    <button id="maintenance-file-trigger-btn" class="sys-button-default maintenance-file-trigger" type="button">Choose File</button>
+                                                    <span class="maintenance-file-meta" id="maintenance-file-meta">No file selected.</span>
+                                                    <input type="file" id="maintenance-firmware-file" class="maintenance-file-input" accept=".bin,.img,.fw,.rom,.pack,application/octet-stream">
+                                                </div>
+                                                <p class="maintenance-action-status" id="maintenance-action-status" data-state="idle" role="status" aria-live="polite" hidden>Ready to upgrade.</p>
+                                                <div class="maintenance-card-actions">
+                                                    <button id="maintenance-upgrade-btn" class="sys-button-primary" type="button" disabled>Upgrade</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -379,9 +410,7 @@
                                                 <th>MAC Address</th>
                                                 <th>Operation Mode</th>
                                                 <th>Compatibility Mode</th>
-                                                <th>Configured Band</th>
                                                 <th>Live Band</th>
-                                                <th>Live Channel Mode</th>
                                                 <th>Live Channel</th>
                                                 <th>Bandwidth</th>
                                                 <th>Current MCS</th>
@@ -393,9 +422,7 @@
                                                 <td id="general-mac">--</td>
                                                 <td id="general-mode">--</td>
                                                 <td id="general-compatibility">--</td>
-                                                <td id="general-configured-band">--</td>
                                                 <td id="general-live-band">--</td>
-                                                <td id="general-channel-mode">--</td>
                                                 <td id="general-work-channel">--</td>
                                                 <td id="general-bandwidth">--</td>
                                                 <td id="general-current-mcs">--</td>
@@ -766,6 +793,10 @@
         let roleApplyInFlight = false;
         let maintenanceInfoCache = null;
         let maintenanceBusy = false;
+        let maintenanceUpgradeDisplayedPercent = 0;
+        let maintenanceUpgradeCompletionAnimationFrame = null;
+        let maintenanceUpgradePendingAnimationFrame = null;
+        let maintenanceRefreshTimer = null;
         let channelDirectionValue = 'rx';
         let channelIndexValue = null;
         let powerModeValue = null;
@@ -802,19 +833,35 @@
         const defaultWirelessControlStatusMessage = 'Most RF settings apply automatically. Role switching requires manual Apply.';
         const daemonUnavailableWirelessControlStatusMessage = 'Remote bb_host daemon is unavailable. Start daemon.exe and refresh the RF page.';
         const defaultMaintenanceUpgradeMessage = 'Ready to upgrade.';
-        const defaultMaintenanceResetMessage = 'Ready to restore factory defaults.';
+        const defaultMaintenanceUpgradePhase = 'Standby';
+        const defaultMaintenanceUpgradeDetail = 'Select a firmware package to start validation and flashing.';
+        const maintenanceStatusId = 'maintenance-action-status';
+        const maintenanceValueFallback = '--';
+        const maintenanceUpgradeWaitingMessage = 'Waiting for first board write acknowledgement...';
+        const maintenanceUpgradeWaitingDetail = 'Waiting for the first board write acknowledgement from the device.';
+        const maintenanceUpgradeProgressPollIntervalMs = 250;
         const maintenanceStatusStore = {
-            'maintenance-action-status': {
+            [maintenanceStatusId]: {
                 message: defaultMaintenanceUpgradeMessage,
                 state: 'idle',
                 sticky: false,
             },
-            'maintenance-reset-status': {
-                message: defaultMaintenanceResetMessage,
-                state: 'idle',
-                sticky: false,
-            },
         };
+        const maintenanceVersionFieldBindings = [
+            ['maintenance-local-mac-config', 'local_mac_address'],
+            ['maintenance-host-name', 'host_name'],
+            ['maintenance-active-device', 'active_device'],
+            ['maintenance-operation-mode', 'operation_mode'],
+            ['maintenance-access-mode', 'access_mode'],
+            ['maintenance-uptime', 'system_uptime'],
+            ['maintenance-hardware-version', 'hardware_version'],
+            ['maintenance-firmware-version', 'firmware_version'],
+            ['maintenance-software-version', 'software_version'],
+            ['maintenance-software-build', 'software_build'],
+            ['maintenance-compile-time', 'compile_time'],
+            ['maintenance-running-system', 'running_system'],
+            ['maintenance-boot-reason', 'boot_reason'],
+        ];
         const defaultPairNoteMessage = 'Red dot means pairing is in progress. Green dot means the slot is paired. Enter or select a DEV MAC in the box to target a specific device; leave the box unchanged to keep automatic matching.';
         const devPairNoteMessage = 'DEV mode follows PQ tool behavior: only one AP MAC address is editable. Update the AP MAC if needed, then click Pair.';
         const pairBlockedVersionMismatchMessage = 'AP/DEV version mismatch. Pair is unavailable until both devices run the same release.';
@@ -868,6 +915,18 @@
                 xAxisTitle: 'Sample',
                 yAxisTitle: 'Value',
             },
+        };
+        const maintenanceElements = {
+            stage: document.getElementById('maintenance-upgrade-stage'),
+            title: document.getElementById('maintenance-upgrade-stage-title'),
+            percent: document.getElementById('maintenance-upgrade-progress-percent'),
+            fill: document.getElementById('maintenance-upgrade-progress-fill'),
+            detail: document.getElementById('maintenance-upgrade-progress-detail'),
+            status: document.getElementById(maintenanceStatusId),
+            fileInput: document.getElementById('maintenance-firmware-file'),
+            fileTriggerButton: document.getElementById('maintenance-file-trigger-btn'),
+            fileMeta: document.getElementById('maintenance-file-meta'),
+            upgradeButton: document.getElementById('maintenance-upgrade-btn'),
         };
 
         function switchWirelessSubTab(tabName) {
@@ -983,12 +1042,9 @@
         }
 
         function updateGeneralRuntimeStatus(current = wirelessRuntimeCurrent) {
-            const configuredBand = current?.configured_band || null;
             const liveRf = current?.live_rf || current || null;
 
-            setText('general-configured-band', configuredBand?.label || current?.band_bitmap || '--');
             setText('general-live-band', liveRf?.band || current?.work_band || '--');
-            setText('general-channel-mode', formatDiagnosticsMode(liveRf?.channel_auto));
             setText('general-work-channel', formatDiagnosticsChannel(current));
             setText('general-current-mcs', formatDiagnosticsMcs(current));
             setText('general-power-control', formatDiagnosticsPower(current));
@@ -1029,14 +1085,286 @@
             );
         }
 
+        function getMaintenanceSelectedFile() {
+            return maintenanceElements.fileInput?.files?.[0] || null;
+        }
+
         function renderMaintenanceStatusElement(id, message, state = 'idle') {
-            const statusElement = document.getElementById(id);
+            const statusElement = id === maintenanceStatusId
+                ? maintenanceElements.status
+                : document.getElementById(id);
             if (!statusElement) {
                 return;
             }
 
-            statusElement.textContent = message;
+            const normalizedMessage = String(message || '').trim();
+            statusElement.textContent = normalizedMessage;
             statusElement.dataset.state = state;
+            statusElement.hidden = normalizedMessage.length === 0 || state === 'idle' || state === 'pending' || state === 'success';
+        }
+
+        function formatMaintenanceUpgradePercent(value, state = 'idle') {
+            const normalized = Math.max(0, Math.min(100, Number(value) || 0));
+            if (state === 'pending') {
+                return Math.min(99, Math.round(normalized)).toFixed(0);
+            }
+
+            return Math.round(normalized).toFixed(0);
+        }
+
+        function stopMaintenanceUpgradePendingAnimation() {
+            if (maintenanceUpgradePendingAnimationFrame !== null) {
+                window.cancelAnimationFrame(maintenanceUpgradePendingAnimationFrame);
+                maintenanceUpgradePendingAnimationFrame = null;
+            }
+        }
+
+        function stopMaintenanceUpgradeCompletionAnimation() {
+            if (maintenanceUpgradeCompletionAnimationFrame !== null) {
+                window.cancelAnimationFrame(maintenanceUpgradeCompletionAnimationFrame);
+                maintenanceUpgradeCompletionAnimationFrame = null;
+            }
+        }
+
+        function renderMaintenanceUpgradeProgress(percent, state = 'idle') {
+            const normalizedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
+
+            maintenanceUpgradeDisplayedPercent = normalizedPercent;
+
+            if (maintenanceElements.percent) {
+                maintenanceElements.percent.textContent = `${formatMaintenanceUpgradePercent(normalizedPercent, state)}%`;
+            }
+            if (maintenanceElements.fill) {
+                maintenanceElements.fill.style.width = `${normalizedPercent}%`;
+            }
+        }
+
+        function showMaintenanceUpgradeUploadingState(file) {
+            setMaintenanceStatus(maintenanceStatusId, 'Uploading firmware image...', 'pending', { sticky: false });
+            setMaintenanceUpgradeStage({
+                phase: 'Uploading package',
+                detail: `Sending ${file.name} (${formatBytes(file.size)}) to the device...`,
+                percent: 8,
+                state: 'pending',
+            });
+        }
+
+        function showMaintenanceUpgradeWaitingState() {
+            setMaintenanceStatus(maintenanceStatusId, maintenanceUpgradeWaitingMessage, 'pending', { sticky: false });
+            setMaintenanceUpgradeStage({
+                phase: 'Starting flash',
+                detail: maintenanceUpgradeWaitingDetail,
+                percent: 0,
+                state: 'pending',
+            });
+        }
+
+        function showMaintenanceUpgradeFailureState(message, percent = 0) {
+            const detail = message || 'Firmware upgrade failed.';
+            setMaintenanceUpgradeStage({
+                phase: 'Upgrade failed',
+                detail,
+                percent,
+                state: 'error',
+            });
+            setMaintenanceStatus(maintenanceStatusId, detail, 'error', { sticky: true });
+        }
+
+        function renderMaintenanceUpgradeFlashingState(prog, file) {
+            const pct = formatMaintenanceUpgradePercent(prog.percent, 'pending');
+
+            setMaintenanceUpgradeStage({
+                phase: prog.step_label || 'Writing firmware image',
+                detail: `${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)} written.`,
+                percent: prog.percent,
+                state: 'pending',
+            });
+            setMaintenanceStatus(
+                maintenanceStatusId,
+                `Flashing... ${pct}% (${prog.step_label || 'writing'}) — ${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)}`,
+                'pending',
+                { sticky: false }
+            );
+        }
+
+        function completeMaintenanceUpgrade(prog, file) {
+            if (maintenanceElements.fileMeta) {
+                maintenanceElements.fileMeta.textContent = prog.file_name || file.name;
+            }
+
+            animateMaintenanceUpgradeCompletion({
+                phase: 'Rebooting device',
+                detail: 'Waiting for the device to reconnect after reboot.',
+                percent: 100,
+                state: 'success',
+            });
+            setMaintenanceStatus(maintenanceStatusId, '', 'success', { sticky: true });
+            maintenanceBusy = false;
+            updateMaintenanceControlsState();
+            scheduleMaintenanceRefresh();
+        }
+
+        async function fetchMaintenanceUpgradeProgress() {
+            try {
+                const response = await fetch('/api/system/maintenance/upgrade-progress', { cache: 'no-store' });
+                const progress = await response.json();
+                return !progress || progress.state === 'idle' ? null : progress;
+            } catch (error) {
+                console.warn('Progress poll failed:', error);
+                return null;
+            }
+        }
+
+        function animateMaintenanceUpgradePendingProgress(percent) {
+            const targetPercent = Math.max(0, Math.min(99.9, Number(percent) || 0));
+            const startPercent = Math.max(0, Math.min(targetPercent, maintenanceUpgradeDisplayedPercent));
+
+            stopMaintenanceUpgradePendingAnimation();
+
+            if (targetPercent <= startPercent + 0.01) {
+                renderMaintenanceUpgradeProgress(targetPercent, 'pending');
+                return;
+            }
+
+            const startTime = window.performance.now();
+            const durationMs = 220;
+            const tick = (now) => {
+                const progress = Math.min(1, (now - startTime) / durationMs);
+                const eased = 1 - Math.pow(1 - progress, 2.4);
+                const nextPercent = startPercent + ((targetPercent - startPercent) * eased);
+
+                renderMaintenanceUpgradeProgress(nextPercent, 'pending');
+
+                if (progress < 1) {
+                    maintenanceUpgradePendingAnimationFrame = window.requestAnimationFrame(tick);
+                    return;
+                }
+
+                maintenanceUpgradePendingAnimationFrame = null;
+                renderMaintenanceUpgradeProgress(targetPercent, 'pending');
+            };
+
+            maintenanceUpgradePendingAnimationFrame = window.requestAnimationFrame(tick);
+        }
+
+        function animateMaintenanceUpgradeCompletion({
+            phase = 'Rebooting device',
+            detail = 'Waiting for the device to reconnect after reboot.',
+            percent = 100,
+            state = 'success',
+            durationMs = 720,
+        } = {}) {
+            const targetPercent = Math.max(0, Math.min(100, Number(percent) || 0));
+            const startPercent = Math.max(0, Math.min(targetPercent, maintenanceUpgradeDisplayedPercent));
+
+            stopMaintenanceUpgradePendingAnimation();
+            stopMaintenanceUpgradeCompletionAnimation();
+
+            if (maintenanceElements.stage) {
+                maintenanceElements.stage.dataset.state = state;
+            }
+            if (maintenanceElements.title) {
+                maintenanceElements.title.textContent = phase;
+            }
+            if (maintenanceElements.detail) {
+                maintenanceElements.detail.textContent = detail;
+            }
+
+            renderMaintenanceUpgradeProgress(startPercent, state);
+
+            if (targetPercent <= startPercent + 0.01) {
+                renderMaintenanceUpgradeProgress(targetPercent, state);
+                return;
+            }
+
+            const startTime = window.performance.now();
+            const tick = (now) => {
+                const progress = Math.min(1, (now - startTime) / durationMs);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const nextPercent = startPercent + ((targetPercent - startPercent) * eased);
+
+                renderMaintenanceUpgradeProgress(nextPercent, state);
+
+                if (progress < 1) {
+                    maintenanceUpgradeCompletionAnimationFrame = window.requestAnimationFrame(tick);
+                    return;
+                }
+
+                maintenanceUpgradeCompletionAnimationFrame = null;
+                renderMaintenanceUpgradeProgress(targetPercent, state);
+            };
+
+            maintenanceUpgradeCompletionAnimationFrame = window.requestAnimationFrame(tick);
+        }
+
+        function setMaintenanceUpgradeStage({
+            phase = defaultMaintenanceUpgradePhase,
+            detail = defaultMaintenanceUpgradeDetail,
+            percent = 0,
+            state = 'idle',
+        } = {}) {
+            const normalizedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
+
+            stopMaintenanceUpgradeCompletionAnimation();
+
+            if (maintenanceElements.stage) {
+                maintenanceElements.stage.dataset.state = state;
+            }
+            if (maintenanceElements.title) {
+                maintenanceElements.title.textContent = phase;
+            }
+
+            if (state === 'pending' && normalizedPercent > maintenanceUpgradeDisplayedPercent + 0.05) {
+                animateMaintenanceUpgradePendingProgress(normalizedPercent);
+            } else {
+                stopMaintenanceUpgradePendingAnimation();
+                renderMaintenanceUpgradeProgress(normalizedPercent, state);
+            }
+
+            if (maintenanceElements.detail) {
+                maintenanceElements.detail.textContent = detail;
+            }
+        }
+
+        function syncMaintenanceUpgradeVisualState(force = false) {
+            if (maintenanceBusy && !force) {
+                return;
+            }
+
+            const upgradeSupported = Boolean(maintenanceInfoCache?.upgrade_supported);
+            const file = getMaintenanceSelectedFile();
+            const currentStatus = maintenanceStatusStore[maintenanceStatusId];
+
+            if (!upgradeSupported) {
+                setMaintenanceUpgradeStage({
+                    phase: 'Unavailable',
+                    detail: getDefaultMaintenanceUpgradeStatus(),
+                    percent: 0,
+                    state: 'error',
+                });
+                return;
+            }
+
+            if (!force && currentStatus?.sticky && (currentStatus.state === 'success' || currentStatus.state === 'error')) {
+                return;
+            }
+
+            if (file) {
+                setMaintenanceUpgradeStage({
+                    phase: 'Package selected',
+                    detail: `${file.name} · ${formatBytes(file.size)} ready for validation and flashing.`,
+                    percent: 0,
+                    state: 'pending',
+                });
+                return;
+            }
+
+            setMaintenanceUpgradeStage({
+                phase: defaultMaintenanceUpgradePhase,
+                detail: defaultMaintenanceUpgradeDetail,
+                percent: 0,
+                state: 'idle',
+            });
         }
 
         function setMaintenanceStatus(id, message, state = 'idle', options = {}) {
@@ -1051,9 +1379,7 @@
 
         function syncMaintenanceStatus(id, supported, force = false) {
             const current = maintenanceStatusStore[id];
-            const message = id === 'maintenance-action-status'
-                ? getDefaultMaintenanceUpgradeStatus()
-                : getDefaultMaintenanceResetStatus();
+            const message = getDefaultMaintenanceUpgradeStatus();
 
             if (!supported) {
                 setMaintenanceStatus(id, message, 'error', { sticky: false });
@@ -1076,53 +1402,39 @@
             return defaultMaintenanceUpgradeMessage;
         }
 
-        function getDefaultMaintenanceResetStatus() {
-            if (!maintenanceInfoCache?.reset_supported) {
-                return maintenanceInfoCache?.message || 'Reset to default is currently unavailable.';
-            }
-
-            return defaultMaintenanceResetMessage;
-        }
-
         function syncMaintenanceStatuses() {
             if (maintenanceBusy) {
                 return;
             }
 
-            syncMaintenanceStatus('maintenance-action-status', Boolean(maintenanceInfoCache?.upgrade_supported));
-            syncMaintenanceStatus('maintenance-reset-status', Boolean(maintenanceInfoCache?.reset_supported));
+            syncMaintenanceStatus(maintenanceStatusId, Boolean(maintenanceInfoCache?.upgrade_supported));
+            syncMaintenanceUpgradeVisualState();
         }
 
         function renderMaintenanceFileMeta(file) {
-            const meta = document.getElementById('maintenance-file-meta');
-            if (!meta) {
-                return;
+            if (maintenanceElements.fileMeta) {
+                if (!file) {
+                    maintenanceElements.fileMeta.textContent = 'No file selected.';
+                } else {
+                    maintenanceElements.fileMeta.textContent = `${file.name} · ${formatBytes(file.size)}`;
+                }
             }
 
-            if (!file) {
-                meta.textContent = 'No file selected.';
-                return;
-            }
-
-            meta.textContent = `${file.name} / ${formatBytes(file.size)} / ${file.type || 'binary image'}`;
+            syncMaintenanceUpgradeVisualState(true);
         }
 
         function updateMaintenanceControlsState() {
-            const fileInput = document.getElementById('maintenance-firmware-file');
-            const upgradeButton = document.getElementById('maintenance-upgrade-btn');
-            const resetButton = document.getElementById('maintenance-reset-btn');
             const upgradeSupported = Boolean(maintenanceInfoCache?.upgrade_supported);
-            const resetSupported = Boolean(maintenanceInfoCache?.reset_supported);
-            const hasFile = Boolean(fileInput?.files && fileInput.files.length > 0);
+            const hasFile = Boolean(getMaintenanceSelectedFile());
 
-            if (fileInput) {
-                fileInput.disabled = maintenanceBusy || !upgradeSupported;
+            if (maintenanceElements.fileInput) {
+                maintenanceElements.fileInput.disabled = maintenanceBusy || !upgradeSupported;
             }
-            if (upgradeButton) {
-                upgradeButton.disabled = maintenanceBusy || !upgradeSupported || !hasFile;
+            if (maintenanceElements.fileTriggerButton) {
+                maintenanceElements.fileTriggerButton.disabled = maintenanceBusy || !upgradeSupported;
             }
-            if (resetButton) {
-                resetButton.disabled = maintenanceBusy || !resetSupported;
+            if (maintenanceElements.upgradeButton) {
+                maintenanceElements.upgradeButton.disabled = maintenanceBusy || !upgradeSupported || !hasFile;
             }
         }
 
@@ -1130,20 +1442,9 @@
             maintenanceInfoCache = payload || null;
             const version = payload?.version || {};
 
-            setText('maintenance-product-name', version.product_name || '--');
-            setText('maintenance-host-name', version.host_name || '--');
-            setText('maintenance-active-device', version.active_device || '--');
-            setText('maintenance-operation-mode', version.operation_mode || '--');
-            setText('maintenance-access-mode', version.access_mode || '--');
-            setText('maintenance-local-mac', version.local_mac_address || '--');
-            setText('maintenance-uptime', version.system_uptime || '--');
-            setText('maintenance-hardware-version', version.hardware_version || '--');
-            setText('maintenance-firmware-version', version.firmware_version || '--');
-            setText('maintenance-software-version', version.software_version || '--');
-            setText('maintenance-software-build', version.software_build || '--');
-            setText('maintenance-compile-time', version.compile_time || '--');
-            setText('maintenance-running-system', version.running_system || '--');
-            setText('maintenance-boot-reason', version.boot_reason || '--');
+            maintenanceVersionFieldBindings.forEach(([elementId, field]) => {
+                setText(elementId, version[field] || maintenanceValueFallback);
+            });
 
             updateMaintenanceControlsState();
             syncMaintenanceStatuses();
@@ -1151,14 +1452,13 @@
 
         function showMaintenanceInfoError(error) {
             const message = `Failed to load maintenance info: ${error.message}`;
-            ['maintenance-action-status', 'maintenance-reset-status'].forEach((id) => {
-                if (maintenanceStatusStore[id]?.sticky) {
-                    renderMaintenanceStatusElement(id, maintenanceStatusStore[id].message, maintenanceStatusStore[id].state);
-                    return;
-                }
+            const currentStatus = maintenanceStatusStore[maintenanceStatusId];
+            if (currentStatus?.sticky) {
+                renderMaintenanceStatusElement(maintenanceStatusId, currentStatus.message, currentStatus.state);
+                return;
+            }
 
-                setMaintenanceStatus(id, message, 'error', { sticky: false });
-            });
+            setMaintenanceStatus(maintenanceStatusId, message, 'error', { sticky: false });
         }
 
         async function loadMaintenanceInfo() {
@@ -1188,12 +1488,45 @@
             return payload;
         }
 
+        async function refreshMaintenanceInfoForActiveDeviceChange() {
+            if (!isMaintenancePanelVisible()) {
+                return;
+            }
+
+            try {
+                await loadMaintenanceInfo();
+            } catch (error) {
+                console.error('Failed to refresh maintenance info after Active Device change:', error);
+                showMaintenanceInfoError(error);
+            }
+        }
+
         function scheduleMaintenanceRefresh(delayMs = 4000) {
-            window.setTimeout(() => {
-                loadMaintenanceInfo().catch(() => {});
-                loadMaintenanceBootDiagnostics().catch(() => {});
+            if (maintenanceRefreshTimer !== null) {
+                window.clearTimeout(maintenanceRefreshTimer);
+            }
+
+            maintenanceRefreshTimer = window.setTimeout(() => {
+                maintenanceRefreshTimer = null;
+
+                if (deviceSelectionInFlight || pendingDeviceSelectionMac) {
+                    scheduleMaintenanceRefresh(1200);
+                    return;
+                }
+
+                if (isMaintenancePanelVisible()) {
+                    loadMaintenanceInfo().catch(() => {});
+                }
+
                 loadWirelessRuntimeDetails().catch(() => {});
             }, delayMs);
+        }
+
+        function cancelScheduledMaintenanceRefresh() {
+            if (maintenanceRefreshTimer !== null) {
+                window.clearTimeout(maintenanceRefreshTimer);
+                maintenanceRefreshTimer = null;
+            }
         }
 
         let maintenanceProgressTimer = null;
@@ -1206,11 +1539,16 @@
         }
 
         async function submitMaintenanceUpgrade() {
-            const fileInput = document.getElementById('maintenance-firmware-file');
-            const file = fileInput?.files?.[0];
+            const file = getMaintenanceSelectedFile();
 
             if (!file) {
-                setMaintenanceStatus('maintenance-action-status', 'Select one firmware file before starting the upgrade.', 'error', { sticky: true });
+                setMaintenanceStatus(maintenanceStatusId, 'Select one firmware file before starting the upgrade.', 'error', { sticky: true });
+                setMaintenanceUpgradeStage({
+                    phase: 'Package required',
+                    detail: 'Select one firmware file before starting the upgrade.',
+                    percent: 0,
+                    state: 'error',
+                });
                 return;
             }
 
@@ -1222,7 +1560,7 @@
             stopMaintenanceProgressTimer();
             maintenanceBusy = true;
             updateMaintenanceControlsState();
-            setMaintenanceStatus('maintenance-action-status', 'Uploading firmware image...', 'pending', { sticky: false });
+            showMaintenanceUpgradeUploadingState(file);
 
             try {
                 const formData = new FormData();
@@ -1241,110 +1579,37 @@
                 }
 
                 console.log('Firmware upload accepted, starting progress poll:', payload);
-
-                // 开始轮询进度
-                const pollProgress = async () => {
-                    try {
-                        const res = await fetch('/api/system/maintenance/upgrade-progress', { cache: 'no-store' });
-                        const prog = await res.json();
-                        if (!prog || prog.state === 'idle') {
-                            return null;
-                        }
-                        return prog;
-                    } catch (e) {
-                        console.warn('Progress poll failed:', e);
-                        return null;
-                    }
-                };
-
-                // 第一次轮询，等待后端准备好
-                let firstProg = null;
-                for (let i = 0; i < 10; i++) {
-                    await new Promise(r => setTimeout(r, 300));
-                    firstProg = await pollProgress();
-                    if (firstProg && firstProg.state !== 'idle') break;
-                }
-
-                if (!firstProg || firstProg.state === 'idle') {
-                    // 降级: 没有进度, 可能是快速完成
-                    setMaintenanceStatus('maintenance-action-status', 'Firmware flashing started. Waiting for completion...', 'pending', { sticky: false });
-                    if (firstProg && firstProg.reboot_expected) {
-                        scheduleMaintenanceRefresh(6000);
-                    }
-                    return;
-                }
+                showMaintenanceUpgradeWaitingState();
 
                 // 持续轮询直到完成或出错
+                let hasSeenDeviceProgress = false;
                 maintenanceProgressTimer = window.setInterval(async () => {
-                    const prog = await pollProgress();
-                    if (!prog) return;
+                    const prog = await fetchMaintenanceUpgradeProgress();
+                    if (!prog) {
+                        if (!hasSeenDeviceProgress) {
+                            showMaintenanceUpgradeWaitingState();
+                        }
+                        return;
+                    }
+
+                    hasSeenDeviceProgress = true;
 
                     if (prog.state === 'done') {
                         stopMaintenanceProgressTimer();
-                        const crcStr = prog.crc32 ? ` / CRC32 ${prog.crc32}` : '';
-                        const fileMeta = document.getElementById('maintenance-file-meta');
-                        if (fileMeta) {
-                            fileMeta.textContent = `${prog.file_name || file.name} / ${formatBytes(prog.file_size || file.size)}${crcStr}`;
-                        }
-                        setMaintenanceStatus(
-                            'maintenance-action-status',
-                            `Upgrade complete (${prog.percent.toFixed(0)}%). Device rebooting, waiting for reconnect.`,
-                            'success',
-                            { sticky: true }
-                        );
-                        maintenanceBusy = false;
-                        updateMaintenanceControlsState();
-                        scheduleMaintenanceRefresh();
+                        completeMaintenanceUpgrade(prog, file);
                     } else if (prog.state === 'error') {
                         stopMaintenanceProgressTimer();
-                        setMaintenanceStatus('maintenance-action-status', prog.message || 'Firmware upgrade failed', 'error', { sticky: true });
+                        showMaintenanceUpgradeFailureState(prog.message || 'Firmware upgrade failed.', prog.percent || 0);
                         maintenanceBusy = false;
                         updateMaintenanceControlsState();
                     } else if (prog.state === 'flashing') {
-                        const pct = prog.percent.toFixed(1);
-                        setMaintenanceStatus(
-                            'maintenance-action-status',
-                            `Flashing... ${pct}% (${prog.step_label || 'writing'}) — ${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)}`,
-                            'pending',
-                            { sticky: false }
-                        );
+                        renderMaintenanceUpgradeFlashingState(prog, file);
                     }
-                }, 500);
+                }, maintenanceUpgradeProgressPollIntervalMs);
             } catch (error) {
                 console.error('Firmware upgrade error:', error);
                 stopMaintenanceProgressTimer();
-                setMaintenanceStatus('maintenance-action-status', `Firmware upgrade failed: ${error.message}`, 'error', { sticky: true });
-                maintenanceBusy = false;
-                updateMaintenanceControlsState();
-            }
-        }
-
-        async function submitMaintenanceReset() {
-            const confirmed = window.confirm('Reset to default configurations? Current baseband settings will be cleared and the device will reboot immediately.');
-            if (!confirmed) {
-                return;
-            }
-
-            maintenanceBusy = true;
-            updateMaintenanceControlsState();
-            setMaintenanceStatus('maintenance-reset-status', 'Restoring factory defaults...', 'pending', { sticky: false });
-
-            try {
-                const response = await fetch('/api/system/maintenance/reset-defaults', {
-                    method: 'POST',
-                });
-                const payload = await response.json();
-
-                if (!response.ok || payload.success === false) {
-                    throw new Error(payload.message || `HTTP ${response.status}`);
-                }
-
-                setMaintenanceStatus('maintenance-reset-status', 'Factory defaults restored. Device rebooting, waiting for reconnect.', 'success', { sticky: true });
-                scheduleMaintenanceRefresh();
-            } catch (error) {
-                console.error('Reset to default error:', error);
-                setMaintenanceStatus('maintenance-reset-status', `Reset to default failed: ${error.message}`, 'error', { sticky: true });
-            } finally {
+                showMaintenanceUpgradeFailureState(`Firmware upgrade failed: ${error.message}`);
                 maintenanceBusy = false;
                 updateMaintenanceControlsState();
             }
@@ -3510,11 +3775,13 @@
             }
 
             deviceSelectionInFlight = true;
+            cancelScheduledMaintenanceRefresh();
             if (select) {
                 select.disabled = true;
             }
 
             try {
+                let deviceSelectionChanged = false;
                 while (pendingDeviceSelectionMac) {
                     const targetMac = normalizeRfDeviceMac(pendingDeviceSelectionMac);
                     pendingDeviceSelectionMac = null;
@@ -3529,6 +3796,11 @@
                     }
 
                     await applyWirelessSetting('select_device', { device_mac: targetMac });
+                    deviceSelectionChanged = true;
+                }
+
+                if (deviceSelectionChanged) {
+                    await refreshMaintenanceInfoForActiveDeviceChange();
                 }
             } finally {
                 deviceSelectionInFlight = false;
@@ -3985,26 +4257,28 @@
             });
         }
 
-        const maintenanceFileInput = document.getElementById('maintenance-firmware-file');
+        const maintenanceFileInput = maintenanceElements.fileInput;
         if (maintenanceFileInput) {
             maintenanceFileInput.addEventListener('change', () => {
                 renderMaintenanceFileMeta(maintenanceFileInput.files?.[0] || null);
-                syncMaintenanceStatus('maintenance-action-status', Boolean(maintenanceInfoCache?.upgrade_supported), true);
+                syncMaintenanceStatus(maintenanceStatusId, Boolean(maintenanceInfoCache?.upgrade_supported), true);
                 updateMaintenanceControlsState();
             });
         }
 
-        const maintenanceUpgradeButton = document.getElementById('maintenance-upgrade-btn');
-        if (maintenanceUpgradeButton) {
-            maintenanceUpgradeButton.addEventListener('click', () => {
-                submitMaintenanceUpgrade().catch(() => {});
+        const maintenanceFileTriggerButton = maintenanceElements.fileTriggerButton;
+        if (maintenanceFileTriggerButton && maintenanceFileInput) {
+            maintenanceFileTriggerButton.addEventListener('click', () => {
+                if (!maintenanceFileTriggerButton.disabled) {
+                    maintenanceFileInput.click();
+                }
             });
         }
 
-        const maintenanceResetButton = document.getElementById('maintenance-reset-btn');
-        if (maintenanceResetButton) {
-            maintenanceResetButton.addEventListener('click', () => {
-                submitMaintenanceReset().catch(() => {});
+        const maintenanceUpgradeButton = maintenanceElements.upgradeButton;
+        if (maintenanceUpgradeButton) {
+            maintenanceUpgradeButton.addEventListener('click', () => {
+                submitMaintenanceUpgrade().catch(() => {});
             });
         }
 

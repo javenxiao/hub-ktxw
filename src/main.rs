@@ -29,7 +29,7 @@ use tower_http::{
 };
 use tracing::{error, info, warn};
 
-use bb_api::{BasebandHealthStatus, BasebandManager, FirmwareUpgradeResult, WirelessRuntimeDetails};
+use bb_api::{BasebandHealthStatus, BasebandManager, WirelessRuntimeDetails};
 use ffi::BbGetStatusSummary;
 
 const DEFAULT_RUST_LOG: &str = "info";
@@ -91,7 +91,6 @@ struct MaintenanceInfoResponse {
     message: String,
     version: MaintenanceVersionInfo,
     upgrade_supported: bool,
-    reset_supported: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -110,13 +109,6 @@ struct MaintenanceVersionInfo {
     compile_time: String,
     running_system: String,
     boot_reason: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct MaintenanceActionResponse {
-    success: bool,
-    message: String,
-    reboot_expected: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -507,7 +499,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/system/maintenance/boot-diagnostics", get(get_boot_diagnostics))
         .route("/api/system/maintenance/upgrade", post(apply_firmware_upgrade))
         .route("/api/system/maintenance/upgrade-progress", get(get_upgrade_progress))
-        .route("/api/system/maintenance/reset-defaults", post(reset_default_config))
         .route("/api/baseband/health", get(get_baseband_health))
         .route("/api/baseband/test", get(test_baseband_communication))
         .route("/api/baseband/link/exercise", post(exercise_baseband_link))
@@ -970,7 +961,6 @@ async fn get_maintenance_info(
         message,
         version,
         upgrade_supported: actions_supported,
-        reset_supported: actions_supported,
     })
 }
 
@@ -1135,31 +1125,6 @@ async fn get_upgrade_progress(
     Json(baseband.get_upgrade_progress().unwrap_or(default_progress))
 }
 
-async fn reset_default_config(
-    State(state): State<Arc<AppState>>,
-) -> Json<MaintenanceActionResponse> {
-    let Some(baseband) = state.baseband.as_ref() else {
-        return Json(MaintenanceActionResponse {
-            success: false,
-            message: "Baseband SDK not available; reset to default is disabled in simulator mode".to_string(),
-            reboot_expected: false,
-        });
-    };
-
-    match baseband.reset_to_default_config() {
-        Ok(()) => Json(MaintenanceActionResponse {
-            success: true,
-            message: "Factory default configuration restored. Device rebooting to apply the settings.".to_string(),
-            reboot_expected: true,
-        }),
-        Err(err) => Json(MaintenanceActionResponse {
-            success: false,
-            message: format!("Failed to reset device configuration: {}", err),
-            reboot_expected: false,
-        }),
-    }
-}
-
 fn build_system_info() -> SystemInfo {
     SystemInfo {
         host_name: "UserDevice".to_string(),
@@ -1252,25 +1217,6 @@ fn build_maintenance_version_info(
         compile_time,
         running_system,
         boot_reason,
-    }
-}
-
-fn build_firmware_upgrade_response(
-    file_name: &str,
-    file_size: usize,
-    result: FirmwareUpgradeResult,
-    reboot_expected: bool,
-    message: String,
-) -> FirmwareUpgradeActionResponse {
-    FirmwareUpgradeActionResponse {
-        success: true,
-        message,
-        file_name: file_name.to_string(),
-        file_size,
-        bytes_written: result.bytes_written,
-        chunk_count: result.chunk_count,
-        crc32: format!("{:08X}", result.crc32),
-        reboot_expected,
     }
 }
 
