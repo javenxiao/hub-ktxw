@@ -1058,6 +1058,9 @@ tbody td {
 }
 
 .wireless-status-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -1069,7 +1072,7 @@ tbody td {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 
 .wireless-runtime-notice {
@@ -1117,7 +1120,7 @@ tbody td {
 }
 
 .wireless-status-section {
-    margin-top: 8px;
+    margin-top: 0;
     padding: 6px 12px 8px;
 }
 
@@ -2174,13 +2177,13 @@ tbody td {
 
 .maintenance-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
 }
 
 .maintenance-metric-card {
     min-width: 0;
-    padding: 16px;
+    padding: 14px 12px;
     border-radius: 16px;
     border: 1px solid #e4ebf2;
     background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
@@ -2195,16 +2198,16 @@ tbody td {
 .maintenance-metric-label {
     display: block;
     color: #64788d;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
-    line-height: 1.45;
+    line-height: 1.35;
 }
 
 .maintenance-metric-value {
     display: block;
-    margin-top: 10px;
+    margin-top: 8px;
     color: #1d3557;
-    font-size: 20px;
+    font-size: 18px;
     line-height: 1.25;
     font-weight: 800;
     letter-spacing: -0.02em;
@@ -2670,7 +2673,8 @@ tbody td {
     }
 
     .maintenance-metrics-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
     }
 
     .maintenance-upgrade-form {
@@ -2680,8 +2684,8 @@ tbody td {
     .maintenance-upgrade-body,
     .maintenance-upgrade-stage,
     .maintenance-metric-card {
-        padding-left: 14px;
-        padding-right: 14px;
+        padding-left: 12px;
+        padding-right: 12px;
     }
 
     .maintenance-upgrade-stage-percent {
@@ -2689,7 +2693,7 @@ tbody td {
     }
 
     .maintenance-metric-value {
-        font-size: 18px;
+        font-size: 16px;
     }
 
     .maintenance-file-picker-compact {
@@ -2703,8 +2707,15 @@ tbody td {
 }
 
 .rf-config-box {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
     margin-top: 0;
     padding-top: 0;
+}
+
+.rf-config-box > .rf-summary-section {
+    margin-top: 0;
 }
 
 .rf-config-box h3:not(.sys-section-title) {
@@ -2806,7 +2817,7 @@ tbody td {
 .rf-summary-pair {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    gap: 12px;
     align-items: start;
 }
 
@@ -2839,13 +2850,21 @@ tbody td {
 }
 
 .rf-summary-table td:first-child {
-    width: 132px;
+    width: 148px;
+    padding-right: 10px;
     color: #223;
     font-size: 15px;
     font-weight: 400;
-    white-space: nowrap;
+    line-height: 1.25;
+    white-space: normal;
     word-break: keep-all;
     overflow-wrap: normal;
+}
+
+.rf-config-group-bandwidth .rf-summary-table td:first-child {
+    width: 184px;
+    min-width: 184px;
+    white-space: nowrap;
 }
 
 .rf-summary-table td:nth-child(2) {
@@ -3655,11 +3674,19 @@ tbody td {
     }
 
     .rf-summary-table td:first-child {
-        width: 132px;
+        width: 148px;
+        padding-right: 10px;
         padding-bottom: 1px;
         color: #223;
         font-size: 14px;
         font-weight: 400;
+        line-height: 1.25;
+        white-space: normal;
+    }
+
+    .rf-config-group-bandwidth .rf-summary-table td:first-child {
+        width: 184px;
+        min-width: 184px;
         white-space: nowrap;
     }
 

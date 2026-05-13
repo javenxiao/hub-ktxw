@@ -3179,11 +3179,13 @@ fn summarize_link_status(
         }
     });
     let slot_mask = 1_u8.checked_shl(slot as u32).unwrap_or(0);
-    let slot_declared = (cfg_sbmp & slot_mask) != 0 || (rt_sbmp & slot_mask) != 0;
+        let slot_declared = (cfg_sbmp & slot_mask) != 0 || (rt_sbmp & slot_mask) != 0;
 
-    if !slot_declared {
-        return None;
-    }
+        let both_bmp_zero = cfg_sbmp == 0 && rt_sbmp == 0;
+        // DEV mode uses zero slot bitmaps; show connections when the link is live
+        if !slot_declared && !(both_bmp_zero && slot_live) {
+            return None;
+        }
 
     let peer_mac_hex = peer_mac_bytes
         .map(|addr| format_bb_mac(&bb_mac_t { addr }))

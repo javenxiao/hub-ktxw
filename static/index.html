@@ -97,10 +97,11 @@
                     </nav>
                     <div class="sys-tab-content" id="sys-tab-summary">
                         <div class="sys-section">
-                            <h3 class="sys-section-title">System Information</h3>
+                            <h3 class="sys-section-title">Current System Info</h3>
                             <table class="sys-table">
                                 <tr><td>Local MAC</td><td id="runtime-mac">--</td><td>Running time</td><td id="runtime-system-uptime">--</td></tr>
-                                <tr><td>Hardware Version</td><td id="runtime-version">--</td><td>FW Version</td><td id="runtime-firmware-version">--</td></tr>
+                                <tr><td>Hardware Version</td><td id="runtime-version">--</td><td>Firmware Version</td><td id="runtime-firmware-version">--</td></tr>
+                                <tr><td>Compile Time</td><td id="runtime-compile-time">--</td><td></td><td></td></tr>
                             </table>
                         </div>
                         <hr class="sys-divider">
@@ -237,7 +238,7 @@
                             <div class="sys-section maintenance-overview-section">
                                 <div class="maintenance-section-header">
                                     <div class="maintenance-section-heading">
-                                        <h3 class="sys-section-title">Version Information</h3>
+                                        <h3 class="sys-section-title">Version Details</h3>
                                     </div>
                                 </div>
                                 <div class="maintenance-metrics-grid">
@@ -258,12 +259,12 @@
                                         <strong class="maintenance-metric-value" id="maintenance-firmware-version">--</strong>
                                     </article>
                                     <article class="maintenance-metric-card">
-                                        <span class="maintenance-metric-label">Software Version</span>
-                                        <strong class="maintenance-metric-value" id="maintenance-software-version">--</strong>
-                                    </article>
-                                    <article class="maintenance-metric-card">
                                         <span class="maintenance-metric-label">Compile Time</span>
                                         <strong class="maintenance-metric-value" id="maintenance-compile-time">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Boot Reason</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-boot-reason">--</strong>
                                     </article>
                                 </div>
                             </div>
@@ -613,7 +614,7 @@
                                         <table class="sys-table rf-summary-table">
                                             <tbody>
                                                 <tr>
-                                                    <td>Auto Mode</td>
+                                                    <td>Auto Mode (cached)</td>
                                                     <td>
                                                         <div class="rf-boolean-group" role="radiogroup" aria-label="Bandwidth automatic selection">
                                                             <label class="rf-boolean-option" for="control-bandwidth-auto-on">
@@ -651,7 +652,7 @@
                                                 </tr>
                                             </tbody>
                                         </table>
-                                        <div class="rf-control-note" id="control-mcs-note" hidden></div>
+                                        <div class="rf-control-note" id="control-bandwidth-note" hidden></div>
                                     </div>
                                 </div>
 
@@ -762,6 +763,7 @@
                                                 </tr>
                                             </tbody>
                                         </table>
+                                        <div class="rf-control-note" id="control-mcs-note" hidden></div>
                                     </div>
                                 </div>
 
@@ -925,7 +927,6 @@
             ['maintenance-uptime', 'system_uptime'],
             ['maintenance-hardware-version', 'hardware_version'],
             ['maintenance-firmware-version', 'firmware_version'],
-            ['maintenance-software-version', 'software_version'],
             ['maintenance-software-build', 'software_build'],
             ['maintenance-compile-time', 'compile_time'],
             ['maintenance-running-system', 'running_system'],
@@ -943,7 +944,7 @@
             set_band: 'Frequency Band',
             set_channel_mode: 'Channel Auto Mode',
             set_channel: 'Channel',
-            set_bandwidth_mode: 'Bandwidth Auto Mode',
+            set_bandwidth_mode: 'Bandwidth Auto Mode (cached)',
             set_power_mode: 'Power Mode',
             set_power_auto: 'Adaptive Power',
             set_power: 'Power',
@@ -2324,8 +2325,19 @@
             return resolvePairPanelRole() === 1;
         }
 
-        function getDevPairMacDisplayValue() {
-            return '';
+        function getDevPairMacDisplayValue(slotConnection) {
+            const panelDeviceMac = normalizeRfDeviceMac(
+                latestWirelessSnapshot?.general?.mac_address
+                || document.getElementById('rf-operation-mode')?.value
+            );
+            const runtimeDeviceMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
+            const runtimeDisplayValue = formatPairMacDisplay(wirelessRuntimeCurrent?.dev_pair_target_mac);
+
+            if (runtimeDisplayValue && (!panelDeviceMac || runtimeDeviceMac === panelDeviceMac)) {
+                return runtimeDisplayValue;
+            }
+
+            return formatPairMacDisplay(slotConnection?.mac_address);
         }
 
         function resetPairInputState() {
@@ -3759,11 +3771,10 @@
         }
 
         function getMcsControlNotice(current = wirelessRuntimeCurrent) {
-            const operationMode = String(current?.operation_mode || '').toUpperCase();
-            if (operationMode.includes('DEV')) {
-                return 'Current DEV runtime ignores MCS mode/value changes. Use the AP side to control MCS.';
-            }
+            return '';
+        }
 
+        function getBandwidthControlNotice(current = wirelessRuntimeCurrent) {
             return '';
         }
 
@@ -4187,6 +4198,7 @@
                 setText('runtime-system-uptime', '--');
                 setText('runtime-version', '--');
                 setText('runtime-firmware-version', '--');
+                setText('runtime-compile-time', '--');
                 if (isDaemonUnavailableMessage(payload?.message)) {
                     setWirelessControlStatus(daemonUnavailableWirelessControlStatusMessage, 'error');
                 }
@@ -4242,6 +4254,7 @@
             setText('runtime-system-uptime', current.system_uptime || '--');
             setText('runtime-version', current.hardware_version || '--');
             setText('runtime-firmware-version', current.firmware_version || '--');
+            setText('runtime-compile-time', current.compile_time || '--');
 
             populateChannelOptions(current.channels, channelIndexValue ?? current.work_channel_index);
             syncMcsValueSelection(current);
@@ -4676,13 +4689,31 @@
             }
         }
 
-        function updateBandwidthControlsState() {
+        function updateBandwidthControlsState(current = wirelessRuntimeCurrent) {
             const isAuto = getSelectedBandwidthAuto();
+            const bandwidthControlNotice = getBandwidthControlNotice(current);
             bandwidthAutoMode = isAuto;
             setRfControlsDisabled([
                 'control-bandwidth-direction',
                 'control-bandwidth-value',
             ], isAuto);
+
+            document.querySelectorAll('input[name="control-bandwidth-auto"]').forEach((radio) => {
+                radio.title = bandwidthControlNotice;
+            });
+
+            ['control-bandwidth-direction', 'control-bandwidth-value'].forEach((controlId) => {
+                const control = document.getElementById(controlId);
+                if (control) {
+                    control.title = bandwidthControlNotice;
+                }
+            });
+
+            const note = document.getElementById('control-bandwidth-note');
+            if (note) {
+                note.hidden = !bandwidthControlNotice;
+                note.textContent = bandwidthControlNotice;
+            }
         }
 
         async function applyBandwidthAutoMode(autoMode) {

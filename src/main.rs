@@ -503,17 +503,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let initial = match (baseband.as_ref(), baseband_health.runtime.status_snapshot.as_ref()) {
-        (Some(_), Some(status)) => {
-            build_hardware_snapshot(
-                0,
-                status,
-                None,
-                DEFAULT_AP_PLOT_SAMPLE_POINTS,
-            )
-        }
-        _ => build_simulated_snapshot(0, DEFAULT_AP_PLOT_SAMPLE_POINTS),
-    };
     let initial_runtime = match baseband.as_ref() {
         Some(baseband) => match baseband.get_wireless_runtime_details() {
             Ok(details) => runtime_response_from_details(&details),
@@ -522,6 +511,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => runtime_unavailable_response(
             "Baseband SDK not available; runtime controls require real hardware mode".to_string(),
         ),
+    };
+    let initial = match (baseband.as_ref(), baseband_health.runtime.status_snapshot.as_ref()) {
+        (Some(_), Some(status)) => {
+            build_hardware_snapshot(
+                0,
+                status,
+                None,
+                DEFAULT_AP_PLOT_SAMPLE_POINTS,
+                initial_runtime.current.as_ref(),
+            )
+        }
+        _ => build_simulated_snapshot(0, DEFAULT_AP_PLOT_SAMPLE_POINTS),
     };
     let initial_plot_refresh_interval_ms = default_plot_refresh_interval_ms(&baseband_health);
     let initial_plot_sample_count = DEFAULT_AP_PLOT_SAMPLE_POINTS;
@@ -919,8 +920,8 @@ async fn apply_wireless_setting(
                 state.clear_expected_reboot_window().await;
             }
 
-            refresh_snapshot_from_baseband(&state, &baseband).await;
             refresh_runtime_from_baseband(&state, &baseband).await;
+            refresh_snapshot_from_baseband(&state, &baseband).await;
             let current = state.wireless_runtime.read().await.current.clone();
 
             if let Err(err) = verify_wireless_setting_effect(&request, current.as_ref()) {
@@ -1695,6 +1696,7 @@ fn spawn_data_feeder(state: Arc<AppState>) {
             }
 
             let sample_count = *state.plot_sample_count.read().await;
+            let runtime_current = state.wireless_runtime.read().await.current.clone();
             let snapshot = match state.baseband.as_ref() {
                 Some(baseband) => match baseband.get_status_snapshot() {
                     Ok(status) => {
@@ -1703,6 +1705,7 @@ fn spawn_data_feeder(state: Arc<AppState>) {
                             &status,
                             Some(&previous),
                             sample_count,
+                            runtime_current.as_ref(),
                         )
                     }
                     Err(err) => {
@@ -1897,6 +1900,7 @@ fn build_hardware_snapshot(
     status: &BbGetStatusSummary,
     previous: Option<&WirelessSnapshot>,
     plot_sample_count: usize,
+    runtime_current: Option<&WirelessRuntimeView>,
 ) -> WirelessSnapshot {
     let plot_prefix = plot_series_prefix_for_role(status.role);
     let peer_plot_prefix = plot_series_prefix_for_role(1);
@@ -1907,6 +1911,7 @@ fn build_hardware_snapshot(
         || status.ldpc_num.is_some()
         || status.signal_main.is_some()
         || status.signal_aux.is_some();
+    let render_chart_series = has_selected_user_signal && should_render_chart_series(status);
     let connections = status
         .links
         .iter()
@@ -1922,10 +1927,7 @@ fn build_hardware_snapshot(
                 pair_state: format_pair_state(link),
                 pairing_active: link.pair_state,
                 candidate_macs: link.candidate_macs.clone(),
-                mac_address: link
-                    .peer_mac_hex
-                    .clone()
-                    .unwrap_or_else(|| format!("SLOT {} Peer Unknown", link.slot)),
+                mac_address: resolve_connection_mac_address(status, link, runtime_current),
                 tx_mod: status
                     .tx_mcs
                     .map(format_mcs)
@@ -1951,7 +1953,7 @@ fn build_hardware_snapshot(
         })
         .collect::<Vec<_>>();
     let chart_target = status.mac_hex.clone();
-    let mut chart_series = if has_selected_user_signal {
+    let mut chart_series = if render_chart_series {
         vec![
             build_chart_series_from_source(
                 "ap_snr",
@@ -2028,7 +2030,7 @@ fn build_hardware_snapshot(
         Vec::new()
     };
 
-    if has_selected_user_signal && status.role == 0 {
+    if render_chart_series && status.role == 0 {
         let active_link = status.links.first();
         chart_series.extend(
             [
@@ -2249,6 +2251,44 @@ fn chart_range(points: &[i32]) -> (Option<i32>, Option<i32>) {
 fn carry_forward_snapshot(mut previous: WirelessSnapshot, sequence: u64) -> WirelessSnapshot {
     previous.sequence = sequence;
     previous
+}
+
+fn should_render_chart_series(status: &BbGetStatusSummary) -> bool {
+    if status.role == ffi::BB_ROLE_DEV && status.active_user.or(status.detected_active_user) == Some(0) {
+        return false;
+    }
+
+    true
+}
+
+fn runtime_view_matches_status(current: &WirelessRuntimeView, status: &BbGetStatusSummary) -> bool {
+    let runtime_mac = normalize_device_mac(&current.local_mac_address);
+    let status_mac = normalize_device_mac(&status.mac_hex);
+
+    !runtime_mac.is_empty() && runtime_mac == status_mac
+}
+
+fn resolve_connection_mac_address(
+    status: &BbGetStatusSummary,
+    link: &ffi::BbLinkStatusSummary,
+    runtime_current: Option<&WirelessRuntimeView>,
+) -> String {
+    if status.role == ffi::BB_ROLE_DEV {
+        if let Some(current) = runtime_current.filter(|current| runtime_view_matches_status(current, status)) {
+            if let Some(target_mac) = resolve_dev_pair_target_mac(
+                current.dev_pair_target_mac.as_deref(),
+                status,
+                &current.available_devices,
+            ) {
+                return target_mac;
+            }
+        }
+    }
+
+    link
+        .peer_mac_hex
+        .clone()
+        .unwrap_or_else(|| format!("SLOT {} Peer Unknown", link.slot))
 }
 
 fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRuntimeView {
@@ -2487,11 +2527,13 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
         let previous = state.snapshot.read().await.clone();
         let next_sequence = previous.sequence.wrapping_add(1);
         let sample_count = *state.plot_sample_count.read().await;
+        let runtime_current = state.wireless_runtime.read().await.current.clone();
         let snapshot = build_hardware_snapshot(
             next_sequence,
             &status,
             Some(&previous),
             sample_count,
+            runtime_current.as_ref(),
         );
 
         {
@@ -3090,6 +3132,63 @@ mod tests {
         ]
     }
 
+    fn sample_runtime_view(local_mac_address: &str, dev_pair_target_mac: Option<&str>) -> WirelessRuntimeView {
+        WirelessRuntimeView {
+            local_mac_address: local_mac_address.to_string(),
+            operation_mode: "DEV (Async)".to_string(),
+            dev_pair_target_mac: dev_pair_target_mac.map(str::to_string),
+            available_devices: sample_available_devices(),
+            selected_signal_user: None,
+            detected_signal_user: None,
+            compatibility_mode: "Single User".to_string(),
+            configured_band: WirelessConfiguredBandView {
+                bitmap: None,
+                label: "Unavailable".to_string(),
+                auto: None,
+            },
+            live_rf: WirelessLiveRfView {
+                band_code: None,
+                band: "Unavailable".to_string(),
+                channel_auto: None,
+                channel_count: None,
+                channel_index: None,
+                channel_frequency: "Unavailable".to_string(),
+            },
+            work_band_code: None,
+            band_bitmap: None,
+            bandwidth_code: None,
+            bandwidth: "Unavailable".to_string(),
+            frequency_khz: None,
+            frequency: "Unavailable".to_string(),
+            system_uptime: "Unavailable".to_string(),
+            compile_time: "Unavailable".to_string(),
+            software_version: "Unavailable".to_string(),
+            hardware_version: "Unavailable".to_string(),
+            firmware_version: "Unavailable".to_string(),
+            running_system: "Unavailable".to_string(),
+            boot_reason: "Unavailable".to_string(),
+            band_auto: None,
+            work_band: "Unavailable".to_string(),
+            channel_auto: None,
+            channel_count: None,
+            work_channel_index: None,
+            work_channel_frequency: "Unavailable".to_string(),
+            channels: Vec::new(),
+            bandwidth_auto: None,
+            current_slot: None,
+            current_mcs_direction: "Unavailable".to_string(),
+            current_mcs_auto: None,
+            current_mcs_value: None,
+            current_mcs_label: "Unavailable".to_string(),
+            current_mcs_throughput_kbps: None,
+            current_power_user: None,
+            current_power_mode: "Unavailable".to_string(),
+            current_power_auto: None,
+            current_power_dbm: None,
+            warnings: Vec::new(),
+        }
+    }
+
     #[test]
     fn resolve_dev_pair_target_mac_filters_stale_idle_peer() {
         let status = sample_dev_status(Some("66:00:00:00"));
@@ -3114,6 +3213,46 @@ mod tests {
         );
 
         assert_eq!(resolved.as_deref(), Some("A5:68:B0:33"));
+    }
+
+    #[test]
+    fn resolve_connection_mac_address_prefers_dev_ap_target_for_matching_runtime() {
+        let status = sample_dev_status(Some("66:00:00:00"));
+        let link = sample_link_status(1, true, Some("66:00:00:00"));
+        let runtime = sample_runtime_view("A5:54:F6:2C", Some("66:00:00:00"));
+
+        let resolved = resolve_connection_mac_address(&status, &link, Some(&runtime));
+
+        assert_eq!(resolved, "A5:68:B0:33");
+    }
+
+    #[test]
+    fn resolve_connection_mac_address_ignores_runtime_for_other_device() {
+        let status = sample_dev_status(Some("66:00:00:00"));
+        let link = sample_link_status(1, true, Some("66:00:00:00"));
+        let runtime = sample_runtime_view("A5:68:B0:33", Some("A5:68:B0:33"));
+
+        let resolved = resolve_connection_mac_address(&status, &link, Some(&runtime));
+
+        assert_eq!(resolved, "66:00:00:00");
+    }
+
+    #[test]
+    fn should_render_chart_series_hides_dev_user_zero() {
+        let mut status = sample_dev_status(None);
+        status.active_user = Some(0);
+        status.snr_db = Some(24);
+
+        assert!(!should_render_chart_series(&status));
+    }
+
+    #[test]
+    fn should_render_chart_series_keeps_dev_nonzero_user() {
+        let mut status = sample_dev_status(None);
+        status.active_user = Some(8);
+        status.snr_db = Some(24);
+
+        assert!(should_render_chart_series(&status));
     }
 
     #[test]
