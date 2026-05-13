@@ -443,6 +443,7 @@
                         <div class="sub-tabs" aria-label="无线二级栏目" role="tablist">
                             <button class="sub-tab active" type="button" data-wireless-tab="status" role="tab" aria-selected="true" aria-controls="wireless-panel-status">Status</button>
                             <button class="sub-tab" type="button" data-wireless-tab="rf" role="tab" aria-selected="false" aria-controls="wireless-panel-rf">RF Settings</button>
+                            <button class="sub-tab" type="button" data-wireless-tab="configuration" role="tab" aria-selected="false" aria-controls="wireless-panel-configuration">Configuration</button>
                         </div>
                     </div>
 
@@ -777,6 +778,210 @@
                             <p class="wireless-control-status" id="wireless-control-status" data-state="idle">Most RF settings apply automatically. Role switching requires manual Apply.</p>
                         </section>
                     </div>
+
+                    <div class="wireless-subpage" id="wireless-panel-configuration" data-wireless-panel="configuration" role="tabpanel" hidden>
+                        <section class="panel-box wireless-configuration-panel">
+                            <div class="wireless-runtime-notices" id="wireless-configuration-notices" aria-live="polite" hidden></div>
+
+                            <div class="configuration-toolbar">
+                                <div class="configuration-toolbar-primary">
+                                    <label class="configuration-toolbar-field" for="configuration-mode">
+                                        <span>Config Source</span>
+                                        <select id="configuration-mode" class="sys-input configuration-mode-select">
+                                            <option value="0">Auto</option>
+                                            <option value="1">Memory</option>
+                                            <option value="2">Flash</option>
+                                        </select>
+                                    </label>
+                                    <div class="configuration-toolbar-actions configuration-toolbar-text-actions">
+                                        <button class="sys-button-primary" id="configuration-read-btn" type="button">Read Config</button>
+                                        <button class="sys-button-default" id="configuration-save-btn" type="button">Save Config</button>
+                                        <button class="sys-button-default" id="configuration-clear-text-btn" type="button">Clear Text</button>
+                                    </div>
+                                </div>
+                                <div class="configuration-toolbar-actions configuration-toolbar-secondary-actions">
+                                    <button class="sys-button-default" id="configuration-restore-factory-btn" type="button">Restore Factory Config</button>
+                                    <button class="sys-button-default" id="configuration-help-btn" type="button" aria-expanded="false" aria-controls="configuration-help-panel">Help</button>
+                                </div>
+                            </div>
+
+                            <div class="configuration-help-panel" id="configuration-help-panel" hidden>
+                                <p>Read Config pulls the selected source into the editor. Save Config writes the current editor text back through the board API. Clear Text only clears the editor content.</p>
+                                <p>MiniDB actions update the staged role, band, power, and MAC table without forcing a reboot. Use RF Settings for live runtime tuning.</p>
+                            </div>
+
+                            <div class="configuration-layout">
+                                <section class="sys-section rf-summary-section configuration-editor-section">
+                                    <div class="configuration-section-heading">
+                                        <h3 class="sys-section-title">Configuration Text</h3>
+                                        <p class="configuration-section-note">Keep this editor aligned with the selected source before saving.</p>
+                                    </div>
+                                    <textarea id="configuration-text" class="configuration-textarea" spellcheck="false" placeholder="Click Read Config to load the current board configuration."></textarea>
+                                </section>
+
+                                <aside class="configuration-sidebar">
+                                    <section class="sys-section rf-summary-section configuration-minidb-section">
+                                        <div class="configuration-section-heading configuration-section-heading-inline">
+                                            <div class="configuration-section-heading-copy">
+                                                <h3 class="sys-section-title">MiniDB</h3>
+                                                <p class="configuration-section-note">Stage role, band, power, and MAC entries exactly like PQ Tool.</p>
+                                            </div>
+                                            <button class="sys-button-default configuration-inline-button" id="configuration-clear-minidb-btn" type="button">Clear MiniDB Config</button>
+                                        </div>
+
+                                        <div class="configuration-group">
+                                            <div class="configuration-group-header">
+                                                <span>Role</span>
+                                                <button class="sys-button-default configuration-inline-button" id="configuration-set-role-btn" type="button">Set Role</button>
+                                            </div>
+                                            <div class="rf-boolean-group configuration-radio-group" role="radiogroup" aria-label="MiniDB role">
+                                                <label class="rf-boolean-option" for="configuration-role-ap">
+                                                    <input id="configuration-role-ap" type="radio" name="configuration-role" value="0">
+                                                    <span>AP</span>
+                                                </label>
+                                                <label class="rf-boolean-option" for="configuration-role-dev">
+                                                    <input id="configuration-role-dev" type="radio" name="configuration-role" value="1">
+                                                    <span>DEV</span>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div class="configuration-group">
+                                            <div class="configuration-group-header">
+                                                <span>Band</span>
+                                                <button class="sys-button-default configuration-inline-button" id="configuration-set-band-btn" type="button">Set Band</button>
+                                            </div>
+                                            <div class="rf-boolean-group configuration-radio-group configuration-band-group" role="radiogroup" aria-label="MiniDB band">
+                                                <label class="rf-boolean-option" for="configuration-band-1g">
+                                                    <input id="configuration-band-1g" type="radio" name="configuration-band" value="1">
+                                                    <span>600M</span>
+                                                </label>
+                                                <label class="rf-boolean-option" for="configuration-band-2g">
+                                                    <input id="configuration-band-2g" type="radio" name="configuration-band" value="2">
+                                                    <span>2.4G</span>
+                                                </label>
+                                                <label class="rf-boolean-option" for="configuration-band-5g">
+                                                    <input id="configuration-band-5g" type="radio" name="configuration-band" value="4">
+                                                    <span>5.8G</span>
+                                                </label>
+                                                <label class="rf-boolean-option" for="configuration-band-auto">
+                                                    <input id="configuration-band-auto" type="radio" name="configuration-band" value="7">
+                                                    <span>Auto</span>
+                                                </label>
+                                            </div>
+                                            <p class="configuration-group-status" id="configuration-band-status">Current: --</p>
+                                        </div>
+
+                                        <div class="configuration-group">
+                                            <div class="configuration-group-header">
+                                                <span>Power</span>
+                                                <button class="sys-button-default configuration-inline-button" id="configuration-set-power-btn" type="button">Set Power</button>
+                                            </div>
+                                            <div class="configuration-power-block">
+                                                <div class="rf-boolean-group configuration-radio-group" role="radiogroup" aria-label="MiniDB power auto mode">
+                                                    <label class="rf-boolean-option" for="configuration-power-auto-on">
+                                                        <input id="configuration-power-auto-on" type="radio" name="configuration-power-auto" value="true">
+                                                        <span>Auto</span>
+                                                    </label>
+                                                    <label class="rf-boolean-option" for="configuration-power-auto-off">
+                                                        <input id="configuration-power-auto-off" type="radio" name="configuration-power-auto" value="false">
+                                                        <span>Manual</span>
+                                                    </label>
+                                                </div>
+                                                <div class="configuration-power-grid">
+                                                    <label class="configuration-field" for="configuration-power-min">
+                                                        <span>Min</span>
+                                                        <input id="configuration-power-min" class="sys-input" type="number" min="0" max="255" step="1" placeholder="0">
+                                                    </label>
+                                                    <label class="configuration-field" for="configuration-power-max">
+                                                        <span>Max</span>
+                                                        <input id="configuration-power-max" class="sys-input" type="number" min="0" max="255" step="1" placeholder="0">
+                                                    </label>
+                                                    <label class="configuration-field" for="configuration-power-init">
+                                                        <span>Init</span>
+                                                        <input id="configuration-power-init" class="sys-input" type="number" min="0" max="255" step="1" placeholder="0">
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <p class="configuration-group-status" id="configuration-power-status">Current: --</p>
+                                        </div>
+
+                                        <div class="configuration-group">
+                                            <div class="configuration-group-header">
+                                                <span>MAC Table</span>
+                                            </div>
+                                            <div class="configuration-mac-stack">
+                                                <div class="configuration-inline-form">
+                                                    <label class="configuration-field configuration-field-wide" for="configuration-local-mac">
+                                                        <span>Local MAC</span>
+                                                        <input id="configuration-local-mac" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    </label>
+                                                    <button class="sys-button-default configuration-inline-button" id="configuration-set-local-mac-btn" type="button">Set</button>
+                                                </div>
+                                                <div class="configuration-inline-form">
+                                                    <label class="configuration-field configuration-field-wide" for="configuration-ap-mac">
+                                                        <span>AP MAC</span>
+                                                        <input id="configuration-ap-mac" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    </label>
+                                                    <button class="sys-button-default configuration-inline-button" id="configuration-set-ap-mac-btn" type="button">Set</button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="configuration-group">
+                                            <div class="configuration-group-header">
+                                                <span>Slot MAC</span>
+                                            </div>
+                                            <div class="configuration-slot-grid">
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 0</span>
+                                                    <input id="configuration-slot-mac-0" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="0">Set</button>
+                                                </div>
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 1</span>
+                                                    <input id="configuration-slot-mac-1" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="1">Set</button>
+                                                </div>
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 2</span>
+                                                    <input id="configuration-slot-mac-2" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="2">Set</button>
+                                                </div>
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 3</span>
+                                                    <input id="configuration-slot-mac-3" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="3">Set</button>
+                                                </div>
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 4</span>
+                                                    <input id="configuration-slot-mac-4" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="4">Set</button>
+                                                </div>
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 5</span>
+                                                    <input id="configuration-slot-mac-5" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="5">Set</button>
+                                                </div>
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 6</span>
+                                                    <input id="configuration-slot-mac-6" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="6">Set</button>
+                                                </div>
+                                                <div class="configuration-slot-row">
+                                                    <span class="configuration-slot-label">Slot 7</span>
+                                                    <input id="configuration-slot-mac-7" class="sys-input configuration-mac-input" type="text" inputmode="text" placeholder="00:11:22:33:44:55">
+                                                    <button class="sys-button-default configuration-slot-button" type="button" data-slot="7">Set</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+                                </aside>
+                            </div>
+
+                            <p class="wireless-control-status configuration-control-status" id="configuration-control-status" data-state="idle">Read or update flash config and MiniDB values here.</p>
+                        </section>
+                    </div>
                 </div>
             </section>
 
@@ -836,6 +1041,11 @@
         let socket = null;
         let latestWirelessSnapshot = null;
         let wirelessRuntimeCurrent = null;
+        let wirelessConfigurationCurrent = null;
+        let wirelessConfigurationLoadedMode = null;
+        let wirelessConfigurationDirty = false;
+        let wirelessConfigurationLoadInFlight = false;
+        let wirelessConfigurationActionInFlight = false;
         let lastKnownRfDevices = [];
         let lastKnownRfDeviceMac = '';
         let runtimeUnavailableFallbackDeviceMac = '';
@@ -887,6 +1097,8 @@
             { value: 1, label: 'DEV' },
         ];
         const defaultWirelessControlStatusMessage = 'Most RF settings apply automatically. Role switching requires manual Apply.';
+        const defaultWirelessConfigurationStatusMessage = 'Read or update flash config and MiniDB values here.';
+        const configurationUnsetLabel = '未设置';
         const daemonUnavailableWirelessControlStatusMessage = 'Remote bb_host daemon is unavailable. Start daemon.exe and refresh the RF page.';
         const defaultMaintenanceUpgradeMessage = 'Ready to upgrade.';
         const defaultMaintenanceUpgradePhase = 'Standby';
@@ -1009,6 +1221,45 @@
             delaySecondInput: document.getElementById('reboot-delay-seconds'),
             submitButton: document.getElementById('reboot-submit-btn'),
         };
+        const configurationElements = {
+            panel: document.getElementById('wireless-panel-configuration'),
+            notices: document.getElementById('wireless-configuration-notices'),
+            status: document.getElementById('configuration-control-status'),
+            modeSelect: document.getElementById('configuration-mode'),
+            textArea: document.getElementById('configuration-text'),
+            bandStatus: document.getElementById('configuration-band-status'),
+            powerStatus: document.getElementById('configuration-power-status'),
+            helpPanel: document.getElementById('configuration-help-panel'),
+            helpButton: document.getElementById('configuration-help-btn'),
+            readButton: document.getElementById('configuration-read-btn'),
+            saveButton: document.getElementById('configuration-save-btn'),
+            clearTextButton: document.getElementById('configuration-clear-text-btn'),
+            clearMinidbButton: document.getElementById('configuration-clear-minidb-btn'),
+            restoreFactoryButton: document.getElementById('configuration-restore-factory-btn'),
+            setRoleButton: document.getElementById('configuration-set-role-btn'),
+            setBandButton: document.getElementById('configuration-set-band-btn'),
+            setPowerButton: document.getElementById('configuration-set-power-btn'),
+            setLocalMacButton: document.getElementById('configuration-set-local-mac-btn'),
+            setApMacButton: document.getElementById('configuration-set-ap-mac-btn'),
+            powerMinInput: document.getElementById('configuration-power-min'),
+            powerMaxInput: document.getElementById('configuration-power-max'),
+            powerInitInput: document.getElementById('configuration-power-init'),
+            localMacInput: document.getElementById('configuration-local-mac'),
+            apMacInput: document.getElementById('configuration-ap-mac'),
+            slotMacInputs: Array.from({ length: 8 }, (_, slot) => document.getElementById(`configuration-slot-mac-${slot}`)),
+        };
+        const configurationPlaceholderInputs = [
+            configurationElements.powerMinInput,
+            configurationElements.powerMaxInput,
+            configurationElements.powerInitInput,
+            configurationElements.localMacInput,
+            configurationElements.apMacInput,
+            ...configurationElements.slotMacInputs,
+        ].filter(Boolean);
+
+        configurationPlaceholderInputs.forEach((input) => {
+            input.dataset.defaultPlaceholder = input.getAttribute('placeholder') || '';
+        });
 
         populateRebootDelayOptions();
         setRebootDelayFromSeconds(defaultScheduledRebootDelaySeconds);
@@ -1028,6 +1279,14 @@
 
             if (tabName === 'rf') {
                 loadWirelessRuntimeDetails().catch(() => {});
+            }
+
+            if (tabName === 'configuration') {
+                const selectedMode = getSelectedWirelessConfigurationMode();
+                const shouldLoad = wirelessConfigurationCurrent === null || wirelessConfigurationLoadedMode !== selectedMode;
+                if (shouldLoad && !wirelessConfigurationDirty) {
+                    loadWirelessConfiguration({ silentStatus: true }).catch(() => {});
+                }
             }
         }
 
@@ -1142,6 +1401,395 @@
 
             statusElement.textContent = message || defaultWirelessControlStatusMessage;
             statusElement.dataset.state = state;
+        }
+
+        function setWirelessConfigurationStatus(message, state = 'idle') {
+            if (!configurationElements.status) {
+                return;
+            }
+
+            configurationElements.status.textContent = message || defaultWirelessConfigurationStatusMessage;
+            configurationElements.status.dataset.state = state;
+        }
+
+        function getSelectedWirelessConfigurationMode() {
+            return Number(configurationElements.modeSelect?.value || wirelessConfigurationLoadedMode || 0);
+        }
+
+        function setConfigurationRadioValue(name, value) {
+            document.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+                input.checked = value !== null && value !== undefined && String(input.value) === String(value);
+            });
+        }
+
+        function getConfigurationRadioValue(name) {
+            return document.querySelector(`input[name="${name}"]:checked`)?.value ?? null;
+        }
+
+        function setConfigurationGroupStatus(element, message) {
+            if (!element) {
+                return;
+            }
+
+            element.textContent = message || 'Current: --';
+        }
+
+        function formatConfigurationBandSummary(bandBitmap) {
+            if (bandBitmap === null || bandBitmap === undefined) {
+                return `Current: ${configurationUnsetLabel}`;
+            }
+
+            const bandLabel = {
+                1: '600M',
+                2: '2.4G',
+                4: '5.8G',
+                7: 'Auto',
+            }[Number(bandBitmap)];
+
+            return `Current: ${bandLabel || `0x${Number(bandBitmap).toString(16).toUpperCase()}`}`;
+        }
+
+        function formatConfigurationPowerSummary(power) {
+            if (!power) {
+                return `Current: ${configurationUnsetLabel}`;
+            }
+
+            if (power.auto_mode) {
+                return `Current: Auto ${power.min_dbm}-${power.max_dbm} dBm`;
+            }
+
+            return `Current: Manual Init ${power.init_dbm} dBm`;
+        }
+
+        function resetConfigurationInputDisplay(input) {
+            if (!input) {
+                return;
+            }
+
+            input.value = '';
+            input.placeholder = input.dataset.defaultPlaceholder || '';
+            input.classList.remove('configuration-input-unset');
+        }
+
+        function setConfigurationInputDisplay(input, value, options = {}) {
+            if (!input) {
+                return;
+            }
+
+            const normalizedValue = value === null || value === undefined ? '' : String(value);
+            const isUnset = normalizedValue === '';
+
+            input.value = isUnset ? '' : normalizedValue;
+            input.placeholder = isUnset
+                ? (options.unsetPlaceholder || configurationUnsetLabel)
+                : (input.dataset.defaultPlaceholder || '');
+            input.classList.toggle('configuration-input-unset', isUnset);
+        }
+
+        function setConfigurationMacInputDisplay(input, value) {
+            setConfigurationInputDisplay(
+                input,
+                value === null || value === undefined ? null : formatConfigurationMacDisplay(value),
+                { unsetPlaceholder: configurationUnsetLabel },
+            );
+        }
+
+        function confirmWirelessConfigurationDangerousAction(actionLabel, detail) {
+            const confirmed = window.confirm(`${actionLabel}? ${detail}`);
+            if (!confirmed) {
+                setWirelessConfigurationStatus(`${actionLabel} cancelled.`, 'idle');
+            }
+
+            return confirmed;
+        }
+
+        function formatConfigurationMacDisplay(value) {
+            const normalized = normalizeRfDeviceMac(value).toUpperCase();
+            if (normalized.length !== 12) {
+                return String(value || '').trim().toUpperCase();
+            }
+
+            return normalized.match(/.{1,2}/g)?.join(':') || normalized;
+        }
+
+        function normalizeConfigurationMacForSubmit(value) {
+            const normalized = normalizeRfDeviceMac(value);
+            if (normalized.length !== 12) {
+                throw new Error('MAC address must contain 12 hex digits.');
+            }
+
+            return normalized.toUpperCase().match(/.{1,2}/g)?.join(':') || normalized.toUpperCase();
+        }
+
+        function clearWirelessConfigurationNotices() {
+            if (!configurationElements.notices) {
+                return;
+            }
+
+            configurationElements.notices.hidden = true;
+            configurationElements.notices.innerHTML = '';
+        }
+
+        function renderWirelessConfigurationNotices(payload) {
+            if (!configurationElements.notices) {
+                return;
+            }
+
+            const notices = [];
+            if (Array.isArray(payload?.current?.warnings)) {
+                payload.current.warnings.forEach((warning) => {
+                    const text = String(warning || '').trim();
+                    if (!text) {
+                        return;
+                    }
+
+                    notices.push({
+                        text,
+                        tone: 'warning',
+                        badge: 'Warning',
+                    });
+                });
+            }
+
+            if ((!payload?.success || !payload?.current) && payload?.message) {
+                notices.unshift({
+                    text: String(payload.message).trim(),
+                    tone: isDaemonUnavailableMessage(payload.message) ? 'warning' : 'notice',
+                    badge: isDaemonUnavailableMessage(payload.message) ? 'Warning' : 'Status',
+                });
+            }
+
+            const deduped = Array.from(new Map(
+                notices
+                    .filter((notice) => notice.text)
+                    .map((notice) => [notice.text, notice]),
+            ).values());
+
+            if (deduped.length === 0) {
+                clearWirelessConfigurationNotices();
+                return;
+            }
+
+            configurationElements.notices.hidden = false;
+            configurationElements.notices.innerHTML = deduped.map((notice) => `
+                <div class="wireless-runtime-notice ${notice.tone === 'warning' ? 'is-warning' : ''}" role="${notice.tone === 'warning' ? 'alert' : 'status'}">
+                    <span class="wireless-runtime-notice-badge ${notice.tone === 'warning' ? 'is-warning' : ''}">${escapeHtml(notice.badge)}</span>
+                    <span class="wireless-runtime-notice-text">${escapeHtml(notice.text)}</span>
+                </div>
+            `).join('');
+        }
+
+        function clearWirelessConfigurationForm(options = {}) {
+            const preserveText = options.preserveText === true;
+
+            if (!preserveText && configurationElements.textArea) {
+                configurationElements.textArea.value = '';
+            }
+
+            setConfigurationRadioValue('configuration-role', null);
+            setConfigurationRadioValue('configuration-band', null);
+            setConfigurationRadioValue('configuration-power-auto', null);
+
+            [
+                configurationElements.powerMinInput,
+                configurationElements.powerMaxInput,
+                configurationElements.powerInitInput,
+                configurationElements.localMacInput,
+                configurationElements.apMacInput,
+                ...configurationElements.slotMacInputs,
+            ].forEach(resetConfigurationInputDisplay);
+
+            setConfigurationGroupStatus(configurationElements.bandStatus, 'Current: --');
+            setConfigurationGroupStatus(configurationElements.powerStatus, 'Current: --');
+
+            updateConfigurationPowerState();
+        }
+
+        function updateConfigurationPowerState() {
+            const busy = wirelessConfigurationLoadInFlight || wirelessConfigurationActionInFlight;
+            const powerMode = getConfigurationRadioValue('configuration-power-auto');
+            const hasSelection = powerMode !== null;
+            const isAuto = powerMode === 'true';
+
+            if (configurationElements.powerMinInput) {
+                configurationElements.powerMinInput.disabled = busy || !hasSelection || !isAuto;
+            }
+            if (configurationElements.powerMaxInput) {
+                configurationElements.powerMaxInput.disabled = busy || !hasSelection || !isAuto;
+            }
+            if (configurationElements.powerInitInput) {
+                configurationElements.powerInitInput.disabled = busy || !hasSelection || isAuto;
+            }
+        }
+
+        function updateWirelessConfigurationControlsState() {
+            const busy = wirelessConfigurationLoadInFlight || wirelessConfigurationActionInFlight;
+            const controls = configurationElements.panel?.querySelectorAll('button, select, input, textarea') || [];
+
+            controls.forEach((control) => {
+                if (control === configurationElements.helpButton) {
+                    return;
+                }
+                control.disabled = busy;
+            });
+
+            if (configurationElements.panel) {
+                configurationElements.panel.dataset.busy = busy ? 'true' : 'false';
+            }
+
+            updateConfigurationPowerState();
+        }
+
+        function renderWirelessConfiguration(payload, options = {}) {
+            const preserveDraft = options.preserveDraft === true;
+            renderWirelessConfigurationNotices(payload);
+
+            if (!payload?.success || !payload?.current) {
+                wirelessConfigurationCurrent = null;
+                wirelessConfigurationLoadedMode = null;
+                if (!preserveDraft) {
+                    clearWirelessConfigurationForm();
+                }
+                return;
+            }
+
+            const current = payload.current;
+            const minidb = current.minidb || {};
+            const power = minidb.power || null;
+            wirelessConfigurationCurrent = current;
+            wirelessConfigurationLoadedMode = Number(current.mode ?? getSelectedWirelessConfigurationMode());
+
+            if (configurationElements.modeSelect) {
+                configurationElements.modeSelect.value = String(wirelessConfigurationLoadedMode);
+                updateSelectWidth(configurationElements.modeSelect);
+            }
+
+            if (!preserveDraft && configurationElements.textArea) {
+                configurationElements.textArea.value = current.config_text || '';
+                wirelessConfigurationDirty = false;
+            }
+
+            setConfigurationRadioValue('configuration-role', minidb.role);
+            setConfigurationRadioValue('configuration-band', minidb.band_bitmap);
+            setConfigurationRadioValue('configuration-power-auto', power ? String(Boolean(power.auto_mode)) : null);
+            setConfigurationGroupStatus(configurationElements.bandStatus, formatConfigurationBandSummary(minidb.band_bitmap));
+            setConfigurationGroupStatus(configurationElements.powerStatus, formatConfigurationPowerSummary(power));
+
+            if (configurationElements.powerMinInput) {
+                setConfigurationInputDisplay(configurationElements.powerMinInput, power ? power.min_dbm : null, {
+                    unsetPlaceholder: configurationUnsetLabel,
+                });
+            }
+            if (configurationElements.powerMaxInput) {
+                setConfigurationInputDisplay(configurationElements.powerMaxInput, power ? power.max_dbm : null, {
+                    unsetPlaceholder: configurationUnsetLabel,
+                });
+            }
+            if (configurationElements.powerInitInput) {
+                setConfigurationInputDisplay(configurationElements.powerInitInput, power ? power.init_dbm : null, {
+                    unsetPlaceholder: configurationUnsetLabel,
+                });
+            }
+            if (configurationElements.localMacInput) {
+                setConfigurationMacInputDisplay(configurationElements.localMacInput, minidb.local_mac);
+            }
+            if (configurationElements.apMacInput) {
+                setConfigurationMacInputDisplay(configurationElements.apMacInput, minidb.ap_mac);
+            }
+
+            configurationElements.slotMacInputs.forEach((input, slot) => {
+                setConfigurationMacInputDisplay(input, minidb.slot_macs?.[slot]);
+            });
+
+            updateConfigurationPowerState();
+        }
+
+        async function loadWirelessConfiguration(options = {}) {
+            const mode = options.mode ?? getSelectedWirelessConfigurationMode();
+            wirelessConfigurationLoadInFlight = true;
+            updateWirelessConfigurationControlsState();
+
+            if (!options.silentStatus) {
+                setWirelessConfigurationStatus(options.pendingMessage || 'Loading configuration...', 'pending');
+            }
+
+            try {
+                const response = await fetch(`/api/wireless/configuration?mode=${encodeURIComponent(mode)}`, { cache: 'no-store' });
+                const result = await response.json();
+
+                if (!response.ok || result.success === false) {
+                    renderWirelessConfiguration(result, { preserveDraft: options.preserveDraftOnError || wirelessConfigurationDirty });
+                    throw new Error(result.message || `HTTP ${response.status}`);
+                }
+
+                renderWirelessConfiguration(result);
+                if (!options.silentStatus) {
+                    setWirelessConfigurationStatus(
+                        result.message || 'Configuration loaded.',
+                        Array.isArray(result.current?.warnings) && result.current.warnings.length > 0 ? 'pending' : 'success',
+                    );
+                }
+                return result;
+            } catch (error) {
+                if (!options.silentStatus) {
+                    setWirelessConfigurationStatus(`Configuration load failed: ${error.message}`, 'error');
+                }
+                throw error;
+            } finally {
+                wirelessConfigurationLoadInFlight = false;
+                updateWirelessConfigurationControlsState();
+            }
+        }
+
+        async function applyWirelessConfigurationAction(action, payload = {}, options = {}) {
+            const actionLabel = options.actionLabel || action;
+            wirelessConfigurationActionInFlight = true;
+            updateWirelessConfigurationControlsState();
+            setWirelessConfigurationStatus(options.pendingMessage || `${actionLabel} applying...`, 'pending');
+
+            try {
+                const response = await fetch('/api/wireless/configuration/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action,
+                        mode: getSelectedWirelessConfigurationMode(),
+                        ...payload,
+                    }),
+                });
+                const result = await response.json();
+
+                if (!response.ok || result.success === false) {
+                    if (action !== 'save_config' && result.current) {
+                        renderWirelessConfiguration(result);
+                    }
+                    throw new Error(result.message || `HTTP ${response.status}`);
+                }
+
+                if (result.current) {
+                    renderWirelessConfiguration(result);
+                }
+                if (action === 'save_config') {
+                    wirelessConfigurationDirty = false;
+                }
+
+                setWirelessConfigurationStatus(
+                    options.successMessage || result.message || `${actionLabel} applied.`,
+                    'success',
+                );
+                return result;
+            } catch (error) {
+                setWirelessConfigurationStatus(
+                    options.failureMessage || `${actionLabel} failed: ${error.message}`,
+                    'error',
+                );
+                throw error;
+            } finally {
+                wirelessConfigurationActionInFlight = false;
+                updateWirelessConfigurationControlsState();
+            }
         }
 
         function getWirelessActionLabel(action) {
@@ -4188,6 +4836,8 @@
             if (!payload || !payload.available || !payload.current) {
                 const hadCurrentDevice = Boolean(previousDeviceMac);
                 wirelessRuntimeCurrent = null;
+                wirelessConfigurationCurrent = null;
+                wirelessConfigurationLoadedMode = null;
                 resetPairInputState();
                 resetPairCandidatesCache('');
                 renderRfProfile();
@@ -4216,6 +4866,13 @@
                 updateMcsControlsState();
                 updateBandwidthControlsState();
                 updateGeneralRuntimeStatus(null);
+                if (!wirelessConfigurationDirty) {
+                    renderWirelessConfiguration({
+                        success: false,
+                        message: payload?.message || 'Wireless runtime unavailable.',
+                        current: null,
+                    });
+                }
                 if (hadCurrentDevice) {
                     refreshMaintenanceInfoForActiveDeviceChange().catch((error) => {
                         console.error('Failed to refresh maintenance info after runtime became unavailable:', error);
@@ -4230,6 +4887,8 @@
             const currentDeviceMac = normalizeRfDeviceMac(current.local_mac_address);
             const deviceChanged = currentDeviceMac !== previousDeviceMac;
             if (deviceChanged) {
+                wirelessConfigurationCurrent = null;
+                wirelessConfigurationLoadedMode = null;
                 resetPairInputState();
                 resetPairCandidatesCache(currentDeviceMac);
             }
@@ -4327,6 +4986,13 @@
                     console.error('Failed to refresh maintenance info after runtime device change:', error);
                     showMaintenanceInfoError(error);
                 });
+
+                if (
+                    configurationElements.panel?.classList.contains('active')
+                    && !wirelessConfigurationDirty
+                ) {
+                    loadWirelessConfiguration({ silentStatus: true }).catch(() => {});
+                }
             }
         }
 
@@ -5161,6 +5827,211 @@
             });
         });
 
+        configurationElements.modeSelect?.addEventListener('change', () => {
+            updateSelectWidth(configurationElements.modeSelect);
+
+            if (wirelessConfigurationDirty) {
+                setWirelessConfigurationStatus('Config source changed. Click Read Config to replace the edited text with this source.', 'pending');
+                return;
+            }
+
+            loadWirelessConfiguration({ silentStatus: true }).catch(() => {});
+        });
+
+        configurationElements.helpButton?.addEventListener('click', () => {
+            const willShow = configurationElements.helpPanel?.hidden !== false;
+            if (configurationElements.helpPanel) {
+                configurationElements.helpPanel.hidden = !willShow;
+            }
+            configurationElements.helpButton.setAttribute('aria-expanded', String(willShow));
+        });
+
+        configurationElements.textArea?.addEventListener('input', () => {
+            wirelessConfigurationDirty = true;
+            setWirelessConfigurationStatus('Configuration text edited. Click Save Config to write it back to the device.', 'pending');
+        });
+
+        document.querySelectorAll('input[name="configuration-power-auto"]').forEach((radio) => {
+            radio.addEventListener('change', () => {
+                updateConfigurationPowerState();
+            });
+        });
+
+        document.querySelectorAll('.configuration-mac-input').forEach((input) => {
+            input.addEventListener('blur', () => {
+                input.value = formatConfigurationMacDisplay(input.value);
+            });
+        });
+
+        configurationElements.readButton?.addEventListener('click', async () => {
+            try {
+                await loadWirelessConfiguration();
+            } catch (_) {
+            }
+        });
+
+        configurationElements.saveButton?.addEventListener('click', async () => {
+            try {
+                await applyWirelessConfigurationAction('save_config', {
+                    config_text: configurationElements.textArea?.value || '',
+                }, {
+                    actionLabel: 'Save Config',
+                    pendingMessage: 'Saving configuration text...',
+                    successMessage: 'Configuration text saved.',
+                });
+            } catch (_) {
+            }
+        });
+
+        configurationElements.clearTextButton?.addEventListener('click', () => {
+            if (!configurationElements.textArea) {
+                return;
+            }
+
+            configurationElements.textArea.value = '';
+            wirelessConfigurationDirty = true;
+            setWirelessConfigurationStatus('Configuration text cleared. Click Read Config to reload it or Save Config after editing.', 'pending');
+            configurationElements.textArea.focus();
+        });
+
+        configurationElements.clearMinidbButton?.addEventListener('click', async () => {
+            if (!confirmWirelessConfigurationDangerousAction(
+                'Clear MiniDB Config',
+                'This writes directly to the board and clears all staged MiniDB values.',
+            )) {
+                return;
+            }
+
+            try {
+                await applyWirelessConfigurationAction('clear_minidb_config', {}, {
+                    actionLabel: 'Clear MiniDB Config',
+                    pendingMessage: 'Clearing MiniDB configuration...',
+                    successMessage: 'MiniDB configuration cleared.',
+                });
+            } catch (_) {
+            }
+        });
+
+        configurationElements.restoreFactoryButton?.addEventListener('click', async () => {
+            if (!confirmWirelessConfigurationDangerousAction(
+                'Restore Factory Config',
+                'This writes directly to the board, clears flash config, and clears MiniDB values.',
+            )) {
+                return;
+            }
+
+            try {
+                await applyWirelessConfigurationAction('restore_factory_config', {}, {
+                    actionLabel: 'Restore Factory Config',
+                    pendingMessage: 'Restoring factory configuration...',
+                    successMessage: 'Factory configuration restored.',
+                });
+            } catch (_) {
+            }
+        });
+
+        configurationElements.setRoleButton?.addEventListener('click', async () => {
+            const role = getConfigurationRadioValue('configuration-role');
+            if (role === null) {
+                setWirelessConfigurationStatus('Select a MiniDB role before applying.', 'error');
+                return;
+            }
+
+            try {
+                await applyWirelessConfigurationAction('set_minidb_role', { role: Number(role) }, {
+                    actionLabel: 'MiniDB Role',
+                    pendingMessage: 'Updating MiniDB role...',
+                    successMessage: 'MiniDB role updated.',
+                });
+            } catch (_) {
+            }
+        });
+
+        configurationElements.setBandButton?.addEventListener('click', async () => {
+            const bandBitmap = getConfigurationRadioValue('configuration-band');
+            if (bandBitmap === null) {
+                setWirelessConfigurationStatus('Select a MiniDB band before applying.', 'error');
+                return;
+            }
+
+            try {
+                await applyWirelessConfigurationAction('set_minidb_band', { band_bitmap: Number(bandBitmap) }, {
+                    actionLabel: 'MiniDB Band',
+                    pendingMessage: 'Updating MiniDB band...',
+                    successMessage: 'MiniDB band updated.',
+                });
+            } catch (_) {
+            }
+        });
+
+        configurationElements.setPowerButton?.addEventListener('click', async () => {
+            const powerAuto = getConfigurationRadioValue('configuration-power-auto');
+            if (powerAuto === null) {
+                setWirelessConfigurationStatus('Select MiniDB power mode before applying.', 'error');
+                return;
+            }
+
+            const autoMode = powerAuto === 'true';
+            try {
+                await applyWirelessConfigurationAction('set_minidb_power', {
+                    power_auto: autoMode,
+                    power_min: autoMode ? Number(configurationElements.powerMinInput?.value || 0) : undefined,
+                    power_max: autoMode ? Number(configurationElements.powerMaxInput?.value || 0) : undefined,
+                    power_init: autoMode ? undefined : Number(configurationElements.powerInitInput?.value || 0),
+                }, {
+                    actionLabel: 'MiniDB Power',
+                    pendingMessage: 'Updating MiniDB power...',
+                    successMessage: 'MiniDB power updated.',
+                });
+            } catch (_) {
+            }
+        });
+
+        configurationElements.setLocalMacButton?.addEventListener('click', async () => {
+            try {
+                await applyWirelessConfigurationAction('set_minidb_local_mac', {
+                    mac_address: normalizeConfigurationMacForSubmit(configurationElements.localMacInput?.value),
+                }, {
+                    actionLabel: 'MiniDB Local MAC',
+                    pendingMessage: 'Updating MiniDB local MAC...',
+                    successMessage: 'MiniDB local MAC updated.',
+                });
+            } catch (_) {
+            }
+        });
+
+        configurationElements.setApMacButton?.addEventListener('click', async () => {
+            try {
+                await applyWirelessConfigurationAction('set_minidb_ap_mac', {
+                    mac_address: normalizeConfigurationMacForSubmit(configurationElements.apMacInput?.value),
+                }, {
+                    actionLabel: 'MiniDB AP MAC',
+                    pendingMessage: 'Updating MiniDB AP MAC...',
+                    successMessage: 'MiniDB AP MAC updated.',
+                });
+            } catch (_) {
+            }
+        });
+
+        document.querySelectorAll('.configuration-slot-button').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const slot = Number(button.dataset.slot);
+                const input = document.getElementById(`configuration-slot-mac-${slot}`);
+
+                try {
+                    await applyWirelessConfigurationAction('set_minidb_slot_mac', {
+                        slot,
+                        mac_address: normalizeConfigurationMacForSubmit(input?.value),
+                    }, {
+                        actionLabel: `MiniDB Slot ${slot} MAC`,
+                        pendingMessage: `Updating MiniDB slot ${slot} MAC...`,
+                        successMessage: `MiniDB slot ${slot} MAC updated.`,
+                    });
+                } catch (_) {
+                }
+            });
+        });
+
         wirelessSubTabs.forEach((tab) => {
             tab.addEventListener('click', () => {
                 switchWirelessSubTab(tab.dataset.wirelessTab || 'status');
@@ -5181,6 +6052,9 @@
 
         bindPlotToolbarButtons();
         updatePlotToolbarState(0, 0);
+        clearWirelessConfigurationNotices();
+        setWirelessConfigurationStatus(defaultWirelessConfigurationStatusMessage, 'idle');
+        updateWirelessConfigurationControlsState();
         switchWirelessSubTab('status');
 
         loadPlotRefreshSettings().catch((error) => {

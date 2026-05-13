@@ -171,6 +171,24 @@ pub struct WirelessRuntimeDetails {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct WirelessConfigurationMinidbDetails {
+    pub role: Option<u8>,
+    pub band_bitmap: Option<u8>,
+    pub local_mac: Option<String>,
+    pub ap_mac: Option<String>,
+    pub slot_macs: Vec<Option<String>>,
+    pub power: Option<ffi::BbMinidbPowerSummary>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WirelessConfigurationDetails {
+    pub config_mode: u8,
+    pub config_text: String,
+    pub minidb: WirelessConfigurationMinidbDetails,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BootDiagnostics {
     pub running_system: String,
     pub boot_reason: String,
@@ -1372,6 +1390,97 @@ impl BasebandApi {
         }
     }
 
+    fn load_wireless_configuration_details(&mut self, mode: u8) -> Result<WirelessConfigurationDetails, String> {
+        let is_remote = self.is_remote_mode();
+        let mut warnings = Vec::new();
+
+        let config_text = match run_remote_sdk_call(is_remote, || ffi::get_configuration_text(self.handle_ptr(), mode)) {
+            Ok(value) => value,
+            Err(err) => {
+                warnings.push(format!("Failed to read configuration text: {}", err));
+                String::new()
+            }
+        };
+
+        let role = match run_remote_sdk_call(is_remote, || ffi::get_minidb_role(self.handle_ptr())) {
+            Ok(value) => value,
+            Err(err) => {
+                warnings.push(format!("Failed to read MiniDB role: {}", err));
+                None
+            }
+        };
+
+        let band_bitmap = match run_remote_sdk_call(is_remote, || ffi::get_minidb_band_bitmap_optional(self.handle_ptr())) {
+            Ok(value) => value,
+            Err(err) => {
+                warnings.push(format!("Failed to read MiniDB band: {}", err));
+                None
+            }
+        };
+
+        let local_mac = match run_remote_sdk_call(is_remote, || ffi::get_minidb_local_mac(self.handle_ptr())) {
+            Ok(value) => value,
+            Err(err) => {
+                warnings.push(format!("Failed to read MiniDB local MAC: {}", err));
+                None
+            }
+        };
+
+        let ap_mac = match run_remote_sdk_call(is_remote, || ffi::get_minidb_ap_mac(self.handle_ptr())) {
+            Ok(value) => value,
+            Err(err) => {
+                warnings.push(format!("Failed to read MiniDB AP MAC: {}", err));
+                None
+            }
+        };
+
+        let power = match run_remote_sdk_call(is_remote, || ffi::get_minidb_power(self.handle_ptr())) {
+            Ok(value) => value,
+            Err(err) => {
+                warnings.push(format!("Failed to read MiniDB power: {}", err));
+                None
+            }
+        };
+
+        let slot_macs = (0..ffi::BB_SLOT_MAX)
+            .map(|slot| match run_remote_sdk_call(is_remote, || ffi::get_minidb_slot_mac(self.handle_ptr(), slot as u8)) {
+                Ok(value) => value,
+                Err(err) => {
+                    warnings.push(format!("Failed to read MiniDB slot {} MAC: {}", slot, err));
+                    None
+                }
+            })
+            .collect();
+
+        Ok(WirelessConfigurationDetails {
+            config_mode: mode,
+            config_text,
+            minidb: WirelessConfigurationMinidbDetails {
+                role,
+                band_bitmap,
+                local_mac,
+                ap_mac,
+                slot_macs,
+                power,
+            },
+            warnings,
+        })
+    }
+
+    pub fn get_wireless_configuration_details(&mut self, mode: u8) -> Result<WirelessConfigurationDetails, String> {
+        if self.is_remote_mode() {
+            self.execute_remote_operation("get_wireless_configuration_details", |api| {
+                api.load_wireless_configuration_details(mode)
+            })
+        } else {
+            if !self.initialized {
+                return Err("Baseband API not initialized".to_string());
+            }
+
+            self.load_wireless_configuration_details(mode)
+        }
+    }
+
     pub fn get_boot_diagnostics(&mut self) -> Result<BootDiagnostics, String> {
         let is_remote = self.is_remote_mode();
 
@@ -1505,6 +1614,41 @@ impl BasebandApi {
     pub fn set_minidb_ap_mac(&mut self, mac: &str) -> Result<(), String> {
         self.with_device_operation("set_minidb_ap_mac", |handle| {
             ffi::set_minidb_ap_mac(handle, mac)
+        })
+    }
+
+    pub fn set_minidb_local_mac(&mut self, mac: &str) -> Result<(), String> {
+        self.with_device_operation("set_minidb_local_mac", |handle| {
+            ffi::set_minidb_local_mac(handle, mac)
+        })
+    }
+
+    pub fn set_minidb_role(&mut self, role: u8) -> Result<(), String> {
+        self.with_device_operation("set_minidb_role", |handle| ffi::set_minidb_role(handle, role))
+    }
+
+    pub fn set_minidb_power(&mut self, power: ffi::bb_phy_pwr_basic_t) -> Result<(), String> {
+        self.with_device_operation("set_minidb_power", |handle| ffi::set_minidb_power(handle, power))
+    }
+
+    pub fn save_configuration_text(&mut self, text: &str) -> Result<(), String> {
+        self.with_device_operation("save_configuration_text", |handle| {
+            ffi::set_configuration_text(handle, text)
+        })
+    }
+
+    pub fn clear_flash_configuration(&mut self) -> Result<(), String> {
+        self.with_device_operation("clear_flash_configuration", |handle| ffi::reset_config(handle))
+    }
+
+    pub fn clear_minidb_configuration(&mut self) -> Result<(), String> {
+        self.with_device_operation("clear_minidb_configuration", |handle| ffi::reset_minidb(handle))
+    }
+
+    pub fn restore_factory_configuration(&mut self) -> Result<(), String> {
+        self.with_device_operation("restore_factory_configuration", |handle| {
+            ffi::reset_config(handle)?;
+            ffi::reset_minidb(handle)
         })
     }
 
@@ -2311,6 +2455,11 @@ impl BasebandManager {
         api.get_wireless_runtime_details()
     }
 
+    pub fn get_wireless_configuration_details(&self, mode: u8) -> Result<WirelessConfigurationDetails, String> {
+        let mut api = self.api.lock().unwrap();
+        api.get_wireless_configuration_details(mode)
+    }
+
     pub fn get_boot_diagnostics(&self) -> Result<BootDiagnostics, String> {
         let mut api = self.api.lock().unwrap();
         api.get_boot_diagnostics()
@@ -2349,6 +2498,41 @@ impl BasebandManager {
     pub fn set_minidb_ap_mac(&self, mac: &str) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.set_minidb_ap_mac(mac)
+    }
+
+    pub fn set_minidb_local_mac(&self, mac: &str) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_minidb_local_mac(mac)
+    }
+
+    pub fn set_minidb_role(&self, role: u8) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_minidb_role(role)
+    }
+
+    pub fn set_minidb_power(&self, power: ffi::bb_phy_pwr_basic_t) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.set_minidb_power(power)
+    }
+
+    pub fn save_configuration_text(&self, text: &str) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.save_configuration_text(text)
+    }
+
+    pub fn clear_flash_configuration(&self) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.clear_flash_configuration()
+    }
+
+    pub fn clear_minidb_configuration(&self) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.clear_minidb_configuration()
+    }
+
+    pub fn restore_factory_configuration(&self) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.restore_factory_configuration()
     }
 
     pub fn set_minidb_slot_mac(&self, slot: u8, mac: &str) -> Result<(), String> {

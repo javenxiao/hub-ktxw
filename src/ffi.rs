@@ -192,6 +192,15 @@ pub struct BbPowerAutoSummary {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct BbMinidbPowerSummary {
+    pub pwr_mode: u8,
+    pub pwr_init: u8,
+    pub pwr_auto: bool,
+    pub pwr_min: u8,
+    pub pwr_max: u8,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BbBandwidthModeSummary {
     pub slot: u8,
     pub auto_mode: bool,
@@ -717,6 +726,16 @@ pub struct bb_set_pwr_auto_in_t {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
+pub struct bb_phy_pwr_basic_t {
+    pub pwr_mode: u8,
+    pub pwr_init: u8,
+    pub pwr_auto: u8,
+    pub pwr_min: u8,
+    pub pwr_max: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_band_mode_t {
     pub auto_mode: u8,
 }
@@ -752,6 +771,66 @@ pub struct bb_set_orig_cfg_t {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_reboot_t {
     pub delay_ms: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_get_cfg_in_t {
+    pub seq: u16,
+    pub mode: u8,
+    pub rsv: u8,
+    pub offset: u16,
+    pub length: u16,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_get_cfg_out_t {
+    pub seq: u16,
+    pub rsv: u16,
+    pub total_length: u16,
+    pub total_crc16: u16,
+    pub offset: u16,
+    pub length: u16,
+    pub data: [u8; BB_CFG_PAGE_SIZE - 12],
+}
+
+impl Default for bb_get_cfg_out_t {
+    fn default() -> Self {
+        Self {
+            seq: 0,
+            rsv: 0,
+            total_length: 0,
+            total_crc16: 0,
+            offset: 0,
+            length: 0,
+            data: [0; BB_CFG_PAGE_SIZE - 12],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_cfg_t {
+    pub seq: u32,
+    pub total_length: u16,
+    pub total_crc16: u16,
+    pub offset: u16,
+    pub length: u16,
+    pub data: [u8; BB_CFG_PAGE_SIZE - 12],
+}
+
+impl Default for bb_set_cfg_t {
+    fn default() -> Self {
+        Self {
+            seq: 0,
+            total_length: 0,
+            total_crc16: 0,
+            offset: 0,
+            length: 0,
+            data: [0; BB_CFG_PAGE_SIZE - 12],
+        }
+    }
 }
 
 #[repr(C)]
@@ -803,6 +882,31 @@ impl Default for bb_set_prj_dispatch_in_t {
     fn default() -> Self {
         Self { data: [0; 256] }
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_set_mac_t {
+    pub mac: bb_mac_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_set_slot_mac_t {
+    pub slot_id: u8,
+    pub slot_mac: bb_mac_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_get_slot_mac_in_t {
+    pub slot_id: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_get_slot_mac_out_t {
+    pub mac: bb_mac_t,
 }
 
 // ============ OTA 热升级镜像格式，对齐 PC Tool ar8030_upgrade_ota.cpp ============
@@ -1019,6 +1123,8 @@ pub const BB_REG_PAGE_SIZE: usize = 256;
 pub const BB_CFG_PAGE_SIZE: usize = 1024;
 /// BB_CFG_PAGE_SIZE - 8 = 1016 bytes，与 C 头文件 bb_set_hot_upgrade_write_in_t.data 对齐
 pub const BB_HOT_UPGRADE_DATA_SIZE: usize = BB_CFG_PAGE_SIZE - 8;
+const BB_CFG_CHUNK_DATA_SIZE: usize = BB_CFG_PAGE_SIZE - 12;
+const MAX_CFG_TEXT_SIZE: usize = 1024 * 1024;
 /// 固件热升级单次传输 chunk 上限（≤ BB_HOT_UPGRADE_DATA_SIZE）
 pub const BB_HOT_UPGRADE_CHUNK_SIZE: usize = 0x300;
 pub const BB_PLOT_POINT_MAX: usize = 10;
@@ -1098,6 +1204,7 @@ pub const BB_GET_POWER_AUTO: u32 = bb_request(BB_REQ_GET, 9);
 pub const BB_GET_CHAN_INFO: u32 = bb_request(BB_REQ_GET, 10);
 pub const BB_GET_PEER_QUALITY: u32 = bb_request(BB_REQ_GET, 11);
 pub const BB_GET_BAND_INFO: u32 = bb_request(BB_REQ_GET, 13);
+pub const BB_GET_CFG: u32 = bb_request(BB_REQ_GET, 101);
 pub const BB_GET_BOOT_REASON: u32 = bb_request(BB_REQ_GET, 115);
 pub const BB_GET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_GET, 200);
 pub const BB_GET_SYS_INFO: u32 = bb_request(BB_REQ_GET, 105);
@@ -1123,6 +1230,7 @@ pub const BB_SET_MCS: u32 = bb_request(BB_REQ_SET, 13);
 pub const BB_SET_BANDWIDTH: u32 = bb_request(BB_REQ_SET, 22);
 pub const BB_SET_BANDWIDTH_MODE: u32 = bb_request(BB_REQ_SET, 32);
 pub const BB_SET_LOCAL_MAC: u32 = bb_request(BB_REQ_SET, 33);
+pub const BB_SET_CFG: u32 = bb_request(BB_REQ_SET, 101);
 pub const BB_SET_SYS_REBOOT: u32 = bb_request(BB_REQ_SET, 14);
 pub const BB_SET_PLOT: u32 = bb_request(BB_REQ_SET, 103);
 pub const BB_RESET_CFG: u32 = bb_request(BB_REQ_SET, 102);
@@ -1133,8 +1241,16 @@ pub const PRJ_CMD_SET_ROLE: u8 = 0;
 pub const PRJ_CMD_SET_AP_MAC: u8 = 1;
 pub const PRJ_CMD_SET_SLOT_MAC: u8 = 2;
 pub const PRJ_CMD_SET_BAND: u8 = 3;
+pub const PRJ_CMD_SET_RESET_DB: u8 = 4;
+pub const PRJ_CMD_SET_PWR: u8 = 5;
+pub const PRJ_CMD_SET_MAC: u8 = 11;
 pub const PRJ_CMD_GET_BAND: u8 = 128;
+pub const PRJ_CMD_GET_ROLE: u8 = 129;
+pub const PRJ_CMD_GET_AP_MAC: u8 = 130;
+pub const PRJ_CMD_GET_SLOT_MAC: u8 = 131;
+pub const PRJ_CMD_GET_PWR: u8 = 132;
 pub const PRJ_CMD_GET_RUNSYS: u8 = 133;
+pub const PRJ_CMD_GET_MAC: u8 = 134;
 
 const PRJ_BAND_1G_BITMAP: u8 = 0x01;
 const PRJ_BAND_2G_BITMAP: u8 = 0x02;
@@ -2297,11 +2413,11 @@ fn set_prj_dispatch_payload(
     }
 }
 
-fn get_prj_dispatch_payload(
+fn get_prj_dispatch_payload_with_status(
     handle: *mut bb_dev_handle_t,
     cmd_id: u8,
     payload: &[u8],
-) -> Result<bb_set_prj_dispatch_in_t, String> {
+) -> Result<(i32, bb_set_prj_dispatch_in_t), String> {
     if payload.len() + 4 > bb_set_prj_dispatch_in_t::default().data.len() {
         return Err(format!(
             "PRJ dispatch payload is too large: {} bytes exceeds limit {}",
@@ -2317,19 +2433,29 @@ fn get_prj_dispatch_payload(
     let mut output = input;
 
     unsafe {
-        match (sdk.bb_ioctl)(
+        let status = (sdk.bb_ioctl)(
             handle,
             BB_GET_PRJ_DISPATCH as c_uint,
             &input as *const bb_set_prj_dispatch_in_t as *const c_void,
             &mut output as *mut bb_set_prj_dispatch_in_t as *mut c_void,
-        ) {
-            0 | -8 => Ok(output),
+        );
+
+        match status {
+            0 | -8 => Ok((status, output)),
             e => Err(format!(
                 "bb_ioctl(BB_GET_PRJ_DISPATCH:cmd={}) failed with code: {}",
                 cmd_id, e
             )),
         }
     }
+}
+
+fn get_prj_dispatch_payload(
+    handle: *mut bb_dev_handle_t,
+    cmd_id: u8,
+    payload: &[u8],
+) -> Result<bb_set_prj_dispatch_in_t, String> {
+    get_prj_dispatch_payload_with_status(handle, cmd_id, payload).map(|(_, output)| output)
 }
 
 fn validate_prj_band_bitmap(band_bitmap: u8) -> Result<(), String> {
@@ -2360,6 +2486,38 @@ pub fn get_minidb_band_bitmap(handle: *mut bb_dev_handle_t) -> Result<u8, String
     Ok(output.data[4])
 }
 
+pub fn get_minidb_band_bitmap_optional(handle: *mut bb_dev_handle_t) -> Result<Option<u8>, String> {
+    let (status, output) = get_prj_dispatch_payload_with_status(handle, PRJ_CMD_GET_BAND, &[])?;
+    if status == -8 {
+        Ok(None)
+    } else {
+        Ok(Some(output.data[4]))
+    }
+}
+
+pub fn get_minidb_role(handle: *mut bb_dev_handle_t) -> Result<Option<u8>, String> {
+    let (status, output) = get_prj_dispatch_payload_with_status(handle, PRJ_CMD_GET_ROLE, &[])?;
+    if status == -8 {
+        return Ok(None);
+    }
+
+    match output.data[4] {
+        BB_ROLE_AP | BB_ROLE_DEV => Ok(Some(output.data[4])),
+        _ => Ok(None),
+    }
+}
+
+pub fn set_minidb_role(handle: *mut bb_dev_handle_t, role: u8) -> Result<(), String> {
+    if !matches!(role, BB_ROLE_AP | BB_ROLE_DEV) {
+        return Err(format!(
+            "Unsupported role '{}'; expected {}(AP) or {}(DEV)",
+            role, BB_ROLE_AP, BB_ROLE_DEV
+        ));
+    }
+
+    set_prj_dispatch_payload(handle, PRJ_CMD_SET_ROLE, &[role])
+}
+
 pub fn set_band_selection_bitmap(handle: *mut bb_dev_handle_t, band_bitmap: u8) -> Result<(), String> {
     validate_prj_band_bitmap(band_bitmap)?;
     set_prj_dispatch_payload(handle, PRJ_CMD_SET_BAND, &[band_bitmap])
@@ -2368,6 +2526,20 @@ pub fn set_band_selection_bitmap(handle: *mut bb_dev_handle_t, band_bitmap: u8) 
 pub fn set_minidb_ap_mac(handle: *mut bb_dev_handle_t, mac: &str) -> Result<(), String> {
     let parsed = parse_bb_mac(mac)?;
     set_prj_dispatch_payload(handle, PRJ_CMD_SET_AP_MAC, &parsed.addr)
+}
+
+pub fn get_minidb_ap_mac(handle: *mut bb_dev_handle_t) -> Result<Option<String>, String> {
+    let (status, output) = get_prj_dispatch_payload_with_status(handle, PRJ_CMD_GET_AP_MAC, &[])?;
+    if status == -8 {
+        return Ok(None);
+    }
+
+    let mac = read_bb_mac_from_prj_payload(&output.data[4..4 + BB_MAC_LEN])?;
+    if is_zero_mac(&mac.addr) {
+        Ok(None)
+    } else {
+        Ok(Some(format_bb_mac(&mac)))
+    }
 }
 
 pub fn set_minidb_slot_mac(
@@ -2380,6 +2552,164 @@ pub fn set_minidb_slot_mac(
     payload[0] = slot;
     payload[1..].copy_from_slice(&parsed.addr);
     set_prj_dispatch_payload(handle, PRJ_CMD_SET_SLOT_MAC, &payload)
+}
+
+pub fn get_minidb_slot_mac(handle: *mut bb_dev_handle_t, slot: u8) -> Result<Option<String>, String> {
+    let input = prj_cmd_get_slot_mac_in_t { slot_id: slot };
+    let payload = [input.slot_id];
+    let (status, output) = get_prj_dispatch_payload_with_status(handle, PRJ_CMD_GET_SLOT_MAC, &payload)?;
+    if status == -8 {
+        return Ok(None);
+    }
+
+    let raw = read_bb_mac_from_prj_payload(&output.data[4..4 + BB_MAC_LEN])?;
+    if is_zero_mac(&raw.addr) {
+        Ok(None)
+    } else {
+        Ok(Some(format_bb_mac(&raw)))
+    }
+}
+
+pub fn set_minidb_local_mac(handle: *mut bb_dev_handle_t, mac: &str) -> Result<(), String> {
+    let parsed = parse_bb_mac(mac)?;
+    set_prj_dispatch_payload(handle, PRJ_CMD_SET_MAC, &parsed.addr)
+}
+
+pub fn get_minidb_local_mac(handle: *mut bb_dev_handle_t) -> Result<Option<String>, String> {
+    let (status, output) = get_prj_dispatch_payload_with_status(handle, PRJ_CMD_GET_MAC, &[])?;
+    if status == -8 {
+        return Ok(None);
+    }
+
+    let mac = read_bb_mac_from_prj_payload(&output.data[4..4 + BB_MAC_LEN])?;
+    if is_zero_mac(&mac.addr) {
+        Ok(None)
+    } else {
+        Ok(Some(format_bb_mac(&mac)))
+    }
+}
+
+pub fn get_minidb_power(handle: *mut bb_dev_handle_t) -> Result<Option<BbMinidbPowerSummary>, String> {
+    let (status, output) = get_prj_dispatch_payload_with_status(handle, PRJ_CMD_GET_PWR, &[])?;
+    if status == -8 {
+        return Ok(None);
+    }
+
+    let pwr = read_bb_phy_pwr_basic_from_prj_payload(&output.data[4..4 + 5])?;
+    Ok(Some(BbMinidbPowerSummary {
+        pwr_mode: pwr.pwr_mode,
+        pwr_init: pwr.pwr_init,
+        pwr_auto: pwr.pwr_auto != 0,
+        pwr_min: pwr.pwr_min,
+        pwr_max: pwr.pwr_max,
+    }))
+}
+
+pub fn set_minidb_power(handle: *mut bb_dev_handle_t, power: bb_phy_pwr_basic_t) -> Result<(), String> {
+    let payload = [power.pwr_mode, power.pwr_init, power.pwr_auto, power.pwr_min, power.pwr_max];
+    set_prj_dispatch_payload(handle, PRJ_CMD_SET_PWR, &payload)
+}
+
+pub fn reset_minidb(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    set_prj_dispatch_payload(handle, PRJ_CMD_SET_RESET_DB, &[])
+}
+
+pub fn get_configuration_text(handle: *mut bb_dev_handle_t, mode: u8) -> Result<String, String> {
+    validate_config_mode(mode)?;
+    let sdk = sdk()?;
+    let mut input = bb_get_cfg_in_t {
+        seq: 0,
+        mode,
+        rsv: 0,
+        offset: 0,
+        length: (BB_CFG_CHUNK_DATA_SIZE.saturating_sub(1)) as u16,
+    };
+    let mut output = bb_get_cfg_out_t::default();
+    let mut bytes = Vec::new();
+
+    loop {
+        unsafe {
+            match (sdk.bb_ioctl)(
+                handle,
+                BB_GET_CFG as c_uint,
+                &input as *const bb_get_cfg_in_t as *const c_void,
+                &mut output as *mut bb_get_cfg_out_t as *mut c_void,
+            ) {
+                0 => {}
+                e => return Err(format!("bb_ioctl(BB_GET_CFG) failed with code: {}", e)),
+            }
+        }
+
+        let chunk_len = usize::from(output.length).min(output.data.len());
+        if bytes.len() + chunk_len > MAX_CFG_TEXT_SIZE {
+            return Err(format!(
+                "Configuration text exceeds maximum supported size {} bytes",
+                MAX_CFG_TEXT_SIZE
+            ));
+        }
+        bytes.extend_from_slice(&output.data[..chunk_len]);
+
+        if chunk_len == 0 {
+            break;
+        }
+
+        input.offset = input.offset.saturating_add(output.length);
+        input.seq = input.seq.wrapping_add(1);
+        output = bb_get_cfg_out_t::default();
+    }
+
+    Ok(String::from_utf8_lossy(&bytes).trim_end_matches('\0').to_string())
+}
+
+pub fn set_configuration_text(handle: *mut bb_dev_handle_t, text: &str) -> Result<(), String> {
+    let bytes = text.as_bytes();
+    if bytes.is_empty() {
+        return Err("Configuration text cannot be empty".to_string());
+    }
+    if bytes.len() > u16::MAX as usize {
+        return Err(format!(
+            "Configuration text is too large: {} bytes exceeds limit {}",
+            bytes.len(),
+            u16::MAX
+        ));
+    }
+
+    let sdk = sdk()?;
+    let total_crc16 = crc16_ccitt(bytes);
+    let mut input = bb_set_cfg_t {
+        total_length: bytes.len() as u16,
+        total_crc16,
+        ..Default::default()
+    };
+    let mut remaining = bytes.len();
+
+    while remaining > 0 {
+        let chunk_len = remaining.min(input.data.len().saturating_sub(1));
+        let chunk_start = usize::from(input.offset);
+        let chunk_end = chunk_start + chunk_len;
+        input.length = chunk_len as u16;
+        input.data[..chunk_len].copy_from_slice(&bytes[chunk_start..chunk_end]);
+        input.data[chunk_len] = 0;
+
+        unsafe {
+            match (sdk.bb_ioctl)(
+                handle,
+                BB_SET_CFG as c_uint,
+                &input as *const bb_set_cfg_t as *const c_void,
+                std::ptr::null_mut(),
+            ) {
+                0 => {}
+                e => return Err(format!("bb_ioctl(BB_SET_CFG) failed with code: {}", e)),
+            }
+        }
+
+        input.offset = input.offset.saturating_add(input.length);
+        input.seq = input.seq.wrapping_add(1);
+        remaining -= chunk_len;
+        input.data.fill(0);
+    }
+
+    Ok(())
 }
 
 pub fn set_pair_candidates(
@@ -2773,6 +3103,62 @@ pub fn reset_config(handle: *mut bb_dev_handle_t) -> Result<(), String> {
             e => Err(format!("bb_ioctl(BB_RESET_CFG) failed with code: {}", e)),
         }
     }
+}
+
+fn validate_config_mode(mode: u8) -> Result<(), String> {
+    if matches!(mode, 0 | 1 | 2) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unsupported configuration mode '{}'; expected 0(Auto), 1(Memory), or 2(Flash)",
+            mode
+        ))
+    }
+}
+
+fn read_bb_mac_from_prj_payload(payload: &[u8]) -> Result<bb_mac_t, String> {
+    if payload.len() < BB_MAC_LEN {
+        return Err(format!(
+            "PRJ dispatch payload is too short for MAC: {} bytes",
+            payload.len()
+        ));
+    }
+
+    let mut addr = [0_u8; BB_MAC_LEN];
+    addr.copy_from_slice(&payload[..BB_MAC_LEN]);
+    Ok(bb_mac_t { addr })
+}
+
+fn read_bb_phy_pwr_basic_from_prj_payload(payload: &[u8]) -> Result<bb_phy_pwr_basic_t, String> {
+    if payload.len() < 5 {
+        return Err(format!(
+            "PRJ dispatch payload is too short for power config: {} bytes",
+            payload.len()
+        ));
+    }
+
+    Ok(bb_phy_pwr_basic_t {
+        pwr_mode: payload[0],
+        pwr_init: payload[1],
+        pwr_auto: payload[2],
+        pwr_min: payload[3],
+        pwr_max: payload[4],
+    })
+}
+
+fn crc16_ccitt(bytes: &[u8]) -> u16 {
+    let mut crc = 0xffff_u16;
+    for byte in bytes {
+        crc ^= u16::from(*byte) << 8;
+        for _ in 0..8 {
+            if (crc & 0x8000) != 0 {
+                crc = (crc << 1) ^ 0x1021;
+            } else {
+                crc <<= 1;
+            }
+        }
+    }
+    crc
 }
 
 pub fn reboot_device(handle: *mut bb_dev_handle_t, delay_ms: u32) -> Result<(), String> {
