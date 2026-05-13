@@ -2474,6 +2474,181 @@ tbody td {
     white-space: nowrap;
 }
 
+.reboot-mode-panel {
+    width: 100%;
+    display: grid;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid #dfe7f0;
+    border-radius: 14px;
+    background: #fff;
+}
+
+#sys-tab-reboot .maintenance-upgrade-body {
+    gap: 18px;
+    padding: 14px 16px 16px;
+    border: 1px solid #dfe7f0;
+    border-radius: 14px;
+    background: #fff;
+}
+
+.reboot-mode-toggle-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.reboot-mode-toggle-row > .maintenance-file-picker-label {
+    margin: 0;
+}
+
+.reboot-mode-toggle-row > .reboot-toggle-switch {
+    margin-left: auto;
+}
+
+.reboot-toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.reboot-toggle-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.reboot-toggle-slider {
+    position: relative;
+    width: 48px;
+    height: 28px;
+    border-radius: 999px;
+    background: #d2dbe7;
+    transition: background 0.2s ease;
+}
+
+.reboot-toggle-slider::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(36, 56, 78, 0.18);
+    transition: transform 0.2s ease;
+}
+
+.reboot-toggle-input:checked + .reboot-toggle-slider {
+    background: #4d95e8;
+}
+
+.reboot-toggle-input:checked + .reboot-toggle-slider::after {
+    transform: translateX(20px);
+}
+
+.reboot-toggle-input:focus-visible + .reboot-toggle-slider {
+    outline: 2px solid rgba(77, 149, 232, 0.35);
+    outline-offset: 2px;
+}
+
+.reboot-toggle-input:disabled + .reboot-toggle-slider {
+    background: #e3e9f1;
+    cursor: not-allowed;
+}
+
+.reboot-toggle-state {
+    min-width: 24px;
+    color: #506477;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: right;
+}
+
+.reboot-delay-grid {
+    display: grid;
+    width: max-content;
+    max-width: 100%;
+    gap: 12px;
+    justify-self: end;
+}
+
+.reboot-delay-grid[data-disabled="true"] {
+    opacity: 0.58;
+}
+
+.reboot-delay-controls {
+    --reboot-delay-input-width: 52px;
+    display: grid;
+    width: max-content;
+    grid-template-columns: repeat(4, max-content);
+    gap: 8px 10px;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.reboot-delay-field {
+    width: max-content;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.reboot-delay-field-label {
+    color: #6a7d90;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.reboot-delay-input {
+    width: var(--reboot-delay-input-width);
+    flex: 0 0 var(--reboot-delay-input-width);
+    min-width: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: none;
+    text-align: center;
+    text-align-last: center;
+    cursor: pointer;
+}
+
+.reboot-delay-input option {
+    text-align: center;
+}
+
+.reboot-delay-input:disabled {
+    background: #f2f5f8;
+    border-color: #d8e0e9;
+    color: #8ea0b2;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.reboot-delay-note {
+    width: max-content;
+    color: #6a7d90;
+    white-space: normal;
+}
+
 @media (max-width: 1160px) {
     .maintenance-metrics-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2481,6 +2656,14 @@ tbody td {
 }
 
 @media (max-width: 760px) {
+    .reboot-mode-panel {
+        gap: 12px;
+    }
+
+    .reboot-mode-toggle-row {
+        align-items: center;
+    }
+
     .maintenance-section-header,
     .maintenance-upgrade-stage-header {
         flex-direction: column;

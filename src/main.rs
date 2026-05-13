@@ -1,7 +1,7 @@
 mod ffi;
 mod bb_api;
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::{Duration, Instant}};
 
 use axum::{
     extract::{
@@ -36,6 +36,9 @@ const DEFAULT_RUST_LOG: &str = "info";
 const DEFAULT_BB_HOST_ADDR: &str = "127.0.0.1";
 const DEFAULT_BB_HOST_PORT: &str = "50000";
 const DEFAULT_SERVER_PORT: &str = "8080";
+const IMMEDIATE_REBOOT_DELAY_MS: u32 = 2_000;
+const MAX_REBOOT_DELAY_SECONDS: u32 = (30 * 24 * 60 * 60) + (24 * 60 * 60) + (60 * 60) + 60;
+const SCHEDULED_REBOOT_TRIGGER_DELAY_MS: u32 = 0;
 
 fn set_default_env_var(key: &str, value: &str) {
     let should_set = std::env::var(key)
@@ -117,6 +120,19 @@ struct BootDiagnosticsResponse {
     running_system: String,
     boot_reason: String,
     message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RebootActionRequest {
+    delay_seconds: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct RebootActionResponse {
+    success: bool,
+    message: String,
+    delay_seconds: u32,
+    reboot_expected: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -349,10 +365,13 @@ const CONNECTION_HISTORY_POINTS: usize = 18;
 const DEFAULT_AP_PLOT_SAMPLE_POINTS: usize = 200;
 const RSSI_UNAVAILABLE_DBM: i32 = -127;
 const SNR_UNAVAILABLE_DB: i32 = -1;
+const REBOOT_REFRESH_QUIET_WINDOW_SECS: u64 = 15;
+const REBOOT_RUNTIME_UNAVAILABLE_MESSAGE: &str = "Device reboot in progress. Waiting for reconnect.";
 
 struct AppState {
     snapshot: RwLock<WirelessSnapshot>,
     wireless_runtime: RwLock<WirelessRuntimeResponse>,
+    expected_reboot_until: RwLock<Option<Instant>>,
     plot_refresh_interval_ms: RwLock<u64>,
     plot_sample_count: RwLock<usize>,
     plot_refresh_interval_notify: Notify,
@@ -374,12 +393,46 @@ impl AppState {
         Self {
             snapshot: RwLock::new(initial),
             wireless_runtime: RwLock::new(initial_runtime),
+            expected_reboot_until: RwLock::new(None),
             plot_refresh_interval_ms: RwLock::new(clamp_plot_refresh_interval_ms(initial_plot_refresh_interval_ms)),
             plot_sample_count: RwLock::new(clamp_plot_sample_count(initial_plot_sample_count)),
             plot_refresh_interval_notify: Notify::new(),
             tx,
             baseband,
             baseband_health,
+        }
+    }
+
+    async fn begin_expected_reboot_window(&self, duration: Duration) {
+        {
+            let mut guard = self.expected_reboot_until.write().await;
+            *guard = Some(Instant::now() + duration);
+        }
+
+        {
+            let mut guard = self.wireless_runtime.write().await;
+            *guard = runtime_unavailable_response(REBOOT_RUNTIME_UNAVAILABLE_MESSAGE.to_string());
+        }
+    }
+
+    async fn clear_expected_reboot_window(&self) {
+        let mut guard = self.expected_reboot_until.write().await;
+        *guard = None;
+    }
+
+    async fn expected_reboot_window_active(&self) -> bool {
+        let deadline = {
+            let guard = self.expected_reboot_until.read().await;
+            *guard
+        };
+
+        match deadline {
+            Some(until) if until > Instant::now() => true,
+            Some(_) => {
+                self.clear_expected_reboot_window().await;
+                false
+            }
+            None => false,
         }
     }
 }
@@ -495,6 +548,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(get_plot_refresh_settings).post(apply_plot_refresh_settings),
         )
         .route("/api/system/info", get(get_system_info))
+        .route("/api/system/reboot", post(request_system_reboot))
         .route("/api/system/maintenance", get(get_maintenance_info))
         .route("/api/system/maintenance/boot-diagnostics", get(get_boot_diagnostics))
         .route("/api/system/maintenance/upgrade", post(apply_firmware_upgrade))
@@ -861,6 +915,10 @@ async fn apply_wireless_setting(
 
     match result {
         Ok(()) => {
+            if request.action == "select_device" {
+                state.clear_expected_reboot_window().await;
+            }
+
             refresh_snapshot_from_baseband(&state, &baseband).await;
             refresh_runtime_from_baseband(&state, &baseband).await;
             let current = state.wireless_runtime.read().await.current.clone();
@@ -946,10 +1004,24 @@ async fn get_maintenance_info(
     let system_info = build_system_info();
     let current = state.wireless_runtime.read().await.current.clone();
     let mut version = build_maintenance_version_info(state.as_ref(), &system_info, current.as_ref());
+    let actions_supported = state.baseband.is_some();
+    let reboot_window_active = state.expected_reboot_window_active().await;
+
+    if reboot_window_active {
+        version.running_system = "Rebooting".to_string();
+        version.boot_reason = "Rebooting".to_string();
+
+        return Json(MaintenanceInfoResponse {
+            success: true,
+            message: "Device reboot in progress. Maintenance information will refresh after reconnect.".to_string(),
+            version,
+            upgrade_supported: actions_supported,
+        });
+    }
+
     let diagnostics = fetch_boot_diagnostics_response(state.baseband.as_ref()).await;
     version.running_system = diagnostics.running_system;
     version.boot_reason = diagnostics.boot_reason;
-    let actions_supported = state.baseband.is_some();
     let message = if actions_supported {
         "Maintenance information loaded".to_string()
     } else {
@@ -967,6 +1039,15 @@ async fn get_maintenance_info(
 async fn get_boot_diagnostics(
     State(state): State<Arc<AppState>>,
 ) -> Json<BootDiagnosticsResponse> {
+    if state.expected_reboot_window_active().await {
+        return Json(BootDiagnosticsResponse {
+            success: false,
+            running_system: "Rebooting".to_string(),
+            boot_reason: "Rebooting".to_string(),
+            message: "Device reboot in progress. Boot diagnostics will refresh after reconnect.".to_string(),
+        });
+    }
+
     Json(fetch_boot_diagnostics_response(state.baseband.as_ref()).await)
 }
 
@@ -1125,6 +1206,127 @@ async fn get_upgrade_progress(
     Json(baseband.get_upgrade_progress().unwrap_or(default_progress))
 }
 
+async fn request_system_reboot(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<RebootActionRequest>,
+) -> Json<RebootActionResponse> {
+    let requested_delay_seconds = request.delay_seconds.unwrap_or(0);
+    let reboot_quiet_window = Duration::from_secs(REBOOT_REFRESH_QUIET_WINDOW_SECS);
+
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(RebootActionResponse {
+            success: false,
+            message: "Baseband SDK not available; reboot is disabled in simulator mode".to_string(),
+            delay_seconds: requested_delay_seconds,
+            reboot_expected: false,
+        });
+    };
+
+    if requested_delay_seconds > MAX_REBOOT_DELAY_SECONDS {
+        return Json(RebootActionResponse {
+            success: false,
+            message: format!(
+                "Scheduled reboot delay '{}' exceeds the supported limit {} seconds",
+                requested_delay_seconds,
+                MAX_REBOOT_DELAY_SECONDS
+            ),
+            delay_seconds: requested_delay_seconds,
+            reboot_expected: false,
+        });
+    }
+
+    if requested_delay_seconds == 0 {
+        state.begin_expected_reboot_window(reboot_quiet_window).await;
+
+        return match baseband.reboot_device(IMMEDIATE_REBOOT_DELAY_MS) {
+            Ok(()) => Json(RebootActionResponse {
+                success: true,
+                message: "Immediate reboot request accepted. Device is restarting now.".to_string(),
+                delay_seconds: 0,
+                reboot_expected: true,
+            }),
+            Err(err) => {
+                state.clear_expected_reboot_window().await;
+                Json(RebootActionResponse {
+                    success: false,
+                    message: format!("Failed to submit reboot request: {}", err),
+                    delay_seconds: 0,
+                    reboot_expected: false,
+                })
+            }
+        };
+    }
+
+    let scheduled_target_mac = match baseband.get_wireless_runtime_details() {
+        Ok(details) => {
+            let target_mac = details.status.mac_hex.trim().to_string();
+            if target_mac.is_empty() || target_mac == "--" {
+                return Json(RebootActionResponse {
+                    success: false,
+                    message: "Failed to resolve the currently selected Active Device for scheduled reboot.".to_string(),
+                    delay_seconds: requested_delay_seconds,
+                    reboot_expected: false,
+                });
+            }
+            target_mac
+        }
+        Err(err) => {
+            return Json(RebootActionResponse {
+                success: false,
+                message: format!(
+                    "Failed to resolve the currently selected Active Device for scheduled reboot: {}",
+                    err
+                ),
+                delay_seconds: requested_delay_seconds,
+                reboot_expected: false,
+            });
+        }
+    };
+
+    let scheduled_baseband = Arc::clone(baseband);
+    let scheduled_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(requested_delay_seconds as u64)).await;
+        scheduled_state.begin_expected_reboot_window(reboot_quiet_window).await;
+
+        if let Err(err) = scheduled_baseband.switch_active_device(&scheduled_target_mac) {
+            warn!(
+                "Scheduled reboot failed to reselect target device {} before execution: {}",
+                scheduled_target_mac,
+                err
+            );
+            scheduled_state.clear_expected_reboot_window().await;
+            return;
+        }
+
+        if let Err(err) = scheduled_baseband.reboot_device(SCHEDULED_REBOOT_TRIGGER_DELAY_MS) {
+            warn!(
+                "Scheduled reboot failed for target device {}: {}",
+                scheduled_target_mac,
+                err
+            );
+            scheduled_state.clear_expected_reboot_window().await;
+            return;
+        }
+
+        info!(
+            "Scheduled reboot executed for target device {} after {} seconds",
+            scheduled_target_mac,
+            requested_delay_seconds
+        );
+    });
+
+    Json(RebootActionResponse {
+        success: true,
+        message: format!(
+            "Scheduled reboot request accepted. Server will reboot the selected device in {} seconds.",
+            requested_delay_seconds
+        ),
+        delay_seconds: requested_delay_seconds,
+        reboot_expected: true,
+    })
+}
+
 fn build_system_info() -> SystemInfo {
     SystemInfo {
         host_name: "UserDevice".to_string(),
@@ -1170,14 +1372,17 @@ fn build_maintenance_version_info(
                 .find(|device| device.selected)
                 .map(|device| device.label.clone())
         })
-        .unwrap_or_else(|| current
-            .map(|runtime| runtime.local_mac_address.clone())
-            .unwrap_or_else(|| system_info.mac_address.clone()));
+        .or_else(|| {
+            current
+                .map(|runtime| runtime.local_mac_address.trim().to_string())
+                .filter(|value| !value.is_empty() && value != "--")
+        })
+        .unwrap_or_else(|| "--".to_string());
 
     let compile_time = current
         .map(|runtime| runtime.compile_time.trim().to_string())
         .filter(|value| !value.is_empty() && value != "Unavailable")
-        .unwrap_or_else(|| format!("{} {}", system_info.build_date, system_info.build_time));
+        .unwrap_or_else(|| "Unavailable".to_string());
     let running_system = current
         .map(|runtime| runtime.running_system.clone())
         .filter(|value| !value.is_empty() && value != "Unavailable")
@@ -1199,15 +1404,15 @@ fn build_maintenance_version_info(
         local_mac_address: current
             .map(|runtime| runtime.local_mac_address.clone())
             .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| system_info.mac_address.clone()),
+            .unwrap_or_else(|| "--".to_string()),
         system_uptime: current
             .map(|runtime| runtime.system_uptime.clone())
             .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| system_info.system_uptime.clone()),
+            .unwrap_or_else(|| "--".to_string()),
         hardware_version: current
             .map(|runtime| runtime.hardware_version.clone())
             .filter(|value| !value.is_empty() && value != "Unavailable")
-            .unwrap_or_else(|| system_info.hardware_version.clone()),
+            .unwrap_or_else(|| "Unavailable".to_string()),
         firmware_version: current
             .map(|runtime| runtime.firmware_version.clone())
             .filter(|value| !value.is_empty() && value != "Unavailable")
@@ -1477,6 +1682,18 @@ fn spawn_data_feeder(state: Arc<AppState>) {
             tracing::debug!(tick, "spawn_data_feeder tick started");
 
             let previous = state.snapshot.read().await.clone();
+            if state.expected_reboot_window_active().await {
+                let snapshot = carry_forward_snapshot(previous, tick);
+
+                {
+                    let mut guard = state.snapshot.write().await;
+                    *guard = snapshot.clone();
+                }
+                let _ = state.tx.send(snapshot);
+                tick = tick.wrapping_add(1);
+                continue;
+            }
+
             let sample_count = *state.plot_sample_count.read().await;
             let snapshot = match state.baseband.as_ref() {
                 Some(baseband) => match baseband.get_status_snapshot() {
@@ -2262,6 +2479,10 @@ fn runtime_unavailable_response(message: String) -> WirelessRuntimeResponse {
 }
 
 async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<BasebandManager>) {
+    if state.expected_reboot_window_active().await {
+        return;
+    }
+
     if let Ok(status) = baseband.get_status_snapshot() {
         let previous = state.snapshot.read().await.clone();
         let next_sequence = previous.sequence.wrapping_add(1);
@@ -2283,6 +2504,10 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
 }
 
 async fn refresh_runtime_from_baseband(state: &Arc<AppState>, baseband: &Arc<BasebandManager>) {
+    if state.expected_reboot_window_active().await {
+        return;
+    }
+
     let response = match baseband.get_wireless_runtime_details() {
         Ok(details) => runtime_response_from_details(&details),
         Err(err) => runtime_unavailable_response(format_runtime_fetch_error_message(&err)),

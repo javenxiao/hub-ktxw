@@ -355,6 +355,18 @@ impl BasebandApi {
         self.system_info_cache.clear();
     }
 
+    fn invalidate_remote_session_state(&mut self) {
+        self.plot_subscription_active = false;
+        self.plot_user = None;
+        self.initialized = false;
+        self.started = false;
+        self.device_handle = 0;
+        self.host_handle = 0;
+        self.host_devices_cache.borrow_mut().clear();
+        self.remote_device_handles.clear();
+        self.system_info_cache.clear();
+    }
+
     fn remember_current_device(&mut self, status: &ffi::BbGetStatusSummary) {
         let active_mac = Self::normalize_mac(&status.mac_hex);
 
@@ -514,6 +526,17 @@ impl BasebandApi {
         !matches!(label, "set_bandwidth")
     }
 
+    fn should_invalidate_remote_operation_without_cleanup(label: &str) -> bool {
+        matches!(label, "get_status_summary")
+    }
+
+    fn should_invalidate_remote_operation_before_retry(err: &str) -> bool {
+        let normalized = err.to_ascii_lowercase();
+        normalized.contains("bb_get_status")
+            || normalized.contains("remote exit")
+            || normalized.contains("bb_host_connect")
+    }
+
     fn execute_remote_operation<T>(
         &mut self,
         label: &str,
@@ -524,6 +547,16 @@ impl BasebandApi {
         match operation(self) {
             Ok(value) => Ok(value),
             Err(first_err) => {
+                if Self::should_invalidate_remote_operation_without_cleanup(label) {
+                    tracing::warn!(
+                        "Remote operation '{}' failed: {}. Marking the remote session stale without handle cleanup; a later request will reconnect with fresh handles.",
+                        label,
+                        first_err
+                    );
+                    self.invalidate_remote_session_state();
+                    return Err(first_err);
+                }
+
                 if !Self::should_retry_remote_operation(label) {
                     tracing::warn!(
                         "Remote operation '{}' failed: {}. Returning the error without reconnect because this SDK call is not retry-safe.",
@@ -538,7 +571,17 @@ impl BasebandApi {
                     label,
                     first_err
                 );
-                self.clear_remote_session_state();
+
+                if Self::should_invalidate_remote_operation_before_retry(&first_err) {
+                    tracing::warn!(
+                        "Remote operation '{}' hit a stale remote session. Retrying without handle cleanup to avoid touching invalid remote handles.",
+                        label
+                    );
+                    self.invalidate_remote_session_state();
+                } else {
+                    self.clear_remote_session_state();
+                }
+
                 self.ensure_remote_session()?;
                 operation(self).map_err(|retry_err| {
                     format!(
@@ -1547,6 +1590,10 @@ impl BasebandApi {
         })
     }
 
+    pub fn reboot_device(&mut self, delay_ms: u32) -> Result<(), String> {
+        self.with_device_operation("reboot_device", |handle| ffi::reboot_device(handle, delay_ms))
+    }
+
     /// 将一段分区/段数据写入指定 flash 地址，分块传输后校验 CRC32（对标 PC Tool ar8030_upgrade_partition）
     fn upgrade_partition(&mut self, flash_addr: u64, len: u32, data: &[u8]) -> Result<(), String> {
         if data.is_empty() {
@@ -2377,6 +2424,11 @@ impl BasebandManager {
     pub fn set_baseband_role(&self, role: u8) -> Result<(), String> {
         let mut api = self.api.lock().unwrap();
         api.set_baseband_role(role)
+    }
+
+    pub fn reboot_device(&self, delay_ms: u32) -> Result<(), String> {
+        let mut api = self.api.lock().unwrap();
+        api.reboot_device(delay_ms)
     }
 
     /// 在后台线程中执行固件升级，立即返回（通过 progress 轮询进度）

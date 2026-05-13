@@ -307,7 +307,55 @@
                             </div>
                         </div>
                     </div>
-                    <div class="sys-tab-content" id="sys-tab-reboot" style="display:none"><div class="sys-section"><h2>Reboot</h2><p>Reboot 配置内容占位</p></div></div>
+                    <div class="sys-tab-content" id="sys-tab-reboot" style="display:none">
+                        <div class="maintenance-panel-group">
+                            <div class="maintenance-action-row">
+                                <div class="sys-section maintenance-action-section">
+                                    <div class="maintenance-section-header">
+                                        <div class="maintenance-section-heading">
+                                            <h3 class="sys-section-title">Reboot</h3>
+                                        </div>
+                                    </div>
+                                    <div class="maintenance-upgrade-body">
+                                        <div class="reboot-mode-panel">
+                                            <div class="reboot-mode-toggle-row">
+                                                <span class="maintenance-file-picker-label">Scheduled Reboot</span>
+                                                <label class="reboot-toggle-switch" for="reboot-scheduled-toggle">
+                                                    <input id="reboot-scheduled-toggle" class="reboot-toggle-input" type="checkbox">
+                                                    <span class="reboot-toggle-slider" aria-hidden="true"></span>
+                                                    <span class="reboot-toggle-state" id="reboot-toggle-state">Off</span>
+                                                </label>
+                                            </div>
+                                            <div class="reboot-delay-grid" id="reboot-delay-panel" hidden>
+                                                <div class="reboot-delay-controls" role="group">
+                                                    <label class="reboot-delay-field" for="reboot-delay-days">
+                                                            <select id="reboot-delay-days" class="sys-input-inline-input reboot-delay-input"></select>
+                                                        <span class="reboot-delay-field-label">Day</span>
+                                                    </label>
+                                                    <label class="reboot-delay-field" for="reboot-delay-hours">
+                                                            <select id="reboot-delay-hours" class="sys-input-inline-input reboot-delay-input"></select>
+                                                        <span class="reboot-delay-field-label">Hour</span>
+                                                    </label>
+                                                    <label class="reboot-delay-field" for="reboot-delay-minutes">
+                                                            <select id="reboot-delay-minutes" class="sys-input-inline-input reboot-delay-input"></select>
+                                                        <span class="reboot-delay-field-label">Minute</span>
+                                                    </label>
+                                                    <label class="reboot-delay-field" for="reboot-delay-seconds">
+                                                            <select id="reboot-delay-seconds" class="sys-input-inline-input reboot-delay-input"></select>
+                                                        <span class="reboot-delay-field-label">Second</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="maintenance-card-actions">
+                                            <button id="reboot-submit-btn" class="sys-button-danger" type="button" disabled>Reboot Now</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="maintenance-action-status" id="reboot-action-status" data-state="idle" role="status" aria-live="polite" hidden></p>
+                        </div>
+                    </div>
                 </div>
             </section>
     <script>
@@ -786,6 +834,9 @@
         let socket = null;
         let latestWirelessSnapshot = null;
         let wirelessRuntimeCurrent = null;
+        let lastKnownRfDevices = [];
+        let lastKnownRfDeviceMac = '';
+        let runtimeUnavailableFallbackDeviceMac = '';
         let controlDefaultsInitialized = false;
         let pendingDeviceSelectionMac = null;
         let deviceSelectionInFlight = false;
@@ -793,6 +844,9 @@
         let roleApplyInFlight = false;
         let maintenanceInfoCache = null;
         let maintenanceBusy = false;
+        let rebootBusy = false;
+        let rebootRecoveryStartTimer = null;
+        let rebootRecoveryWatchToken = 0;
         let maintenanceUpgradeDisplayedPercent = 0;
         let maintenanceUpgradeCompletionAnimationFrame = null;
         let maintenanceUpgradePendingAnimationFrame = null;
@@ -835,11 +889,26 @@
         const defaultMaintenanceUpgradeMessage = 'Ready to upgrade.';
         const defaultMaintenanceUpgradePhase = 'Standby';
         const defaultMaintenanceUpgradeDetail = 'Select a firmware package to start validation and flashing.';
+        const defaultRebootStatusPhase = 'Standby';
+        const defaultRebootStatusDetail = 'Restart the active device immediately, or turn on Scheduled Reboot to delay the restart.';
+        const defaultScheduledRebootDelaySeconds = 300;
         const maintenanceStatusId = 'maintenance-action-status';
         const maintenanceValueFallback = '--';
         const maintenanceUpgradeWaitingMessage = 'Waiting for first board write acknowledgement...';
         const maintenanceUpgradeWaitingDetail = 'Waiting for the first board write acknowledgement from the device.';
         const maintenanceUpgradeProgressPollIntervalMs = 250;
+        const rebootRecoveryPollIntervalMs = 2000;
+        const rebootRecoveryMaxAttempts = 18;
+        const rebootDelayFieldDefinitions = [
+            { key: 'days', unitSeconds: 24 * 60 * 60, maxValue: 30, elementKey: 'delayDayInput' },
+            { key: 'hours', unitSeconds: 60 * 60, maxValue: 24, elementKey: 'delayHourInput' },
+            { key: 'minutes', unitSeconds: 60, maxValue: 60, elementKey: 'delayMinuteInput' },
+            { key: 'seconds', unitSeconds: 1, maxValue: 60, elementKey: 'delaySecondInput' },
+        ];
+        const rebootDelayLimitSeconds = rebootDelayFieldDefinitions.reduce(
+            (total, field) => total + (field.maxValue * field.unitSeconds),
+            0,
+        );
         const maintenanceStatusStore = {
             [maintenanceStatusId]: {
                 message: defaultMaintenanceUpgradeMessage,
@@ -928,6 +997,20 @@
             fileMeta: document.getElementById('maintenance-file-meta'),
             upgradeButton: document.getElementById('maintenance-upgrade-btn'),
         };
+        const rebootElements = {
+            status: document.getElementById('reboot-action-status'),
+            scheduledToggle: document.getElementById('reboot-scheduled-toggle'),
+            toggleState: document.getElementById('reboot-toggle-state'),
+            delayPanel: document.getElementById('reboot-delay-panel'),
+            delayDayInput: document.getElementById('reboot-delay-days'),
+            delayHourInput: document.getElementById('reboot-delay-hours'),
+            delayMinuteInput: document.getElementById('reboot-delay-minutes'),
+            delaySecondInput: document.getElementById('reboot-delay-seconds'),
+            submitButton: document.getElementById('reboot-submit-btn'),
+        };
+
+        populateRebootDelayOptions();
+        setRebootDelayFromSeconds(defaultScheduledRebootDelaySeconds);
 
         function switchWirelessSubTab(tabName) {
             wirelessSubTabs.forEach((tab) => {
@@ -1438,6 +1521,527 @@
             }
         }
 
+        function formatRebootDelay(seconds) {
+            const totalSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+            if (totalSeconds === 0) {
+                return 'now';
+            }
+
+            const days = Math.floor(totalSeconds / (24 * 60 * 60));
+            const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const remainingSeconds = totalSeconds % 60;
+            const parts = [];
+
+            if (days > 0) {
+                parts.push(`${days}d`);
+            }
+            if (hours > 0) {
+                parts.push(`${hours}h`);
+            }
+            if (minutes > 0) {
+                parts.push(`${minutes}m`);
+            }
+            if (remainingSeconds > 0 || parts.length === 0) {
+                parts.push(`${remainingSeconds}s`);
+            }
+
+            return parts.join(' ');
+        }
+
+        function getRebootDelayInputs() {
+            return [
+                rebootElements.delayDayInput,
+                rebootElements.delayHourInput,
+                rebootElements.delayMinuteInput,
+                rebootElements.delaySecondInput,
+            ].filter(Boolean);
+        }
+
+        function populateRebootDelayOptions() {
+            rebootDelayFieldDefinitions.forEach((field) => {
+                const input = rebootElements[field.elementKey];
+                if (!input) {
+                    return;
+                }
+
+                input.innerHTML = Array.from({ length: field.maxValue + 1 }, (_, value) => {
+                    const displayValue = String(value).padStart(2, '0');
+                    return `<option value="${value}">${displayValue}</option>`;
+                }).join('');
+            });
+        }
+
+        function parseRebootDelayUnit(value) {
+            const numeric = Math.trunc(Number(value));
+
+            if (!Number.isFinite(numeric) || numeric < 0) {
+                return 0;
+            }
+
+            return numeric;
+        }
+
+        function getRebootDelaySeconds() {
+            return rebootDelayFieldDefinitions.reduce((total, field) => {
+                const input = rebootElements[field.elementKey];
+                return total + (parseRebootDelayUnit(input?.value) * field.unitSeconds);
+            }, 0);
+        }
+
+        function setRebootDelayFromSeconds(totalSeconds) {
+            let remainingSeconds = Math.max(0, Math.min(rebootDelayLimitSeconds, Math.round(Number(totalSeconds) || 0)));
+
+            rebootDelayFieldDefinitions.forEach((field) => {
+                const input = rebootElements[field.elementKey];
+
+                if (!input) {
+                    return;
+                }
+
+                const unitValue = Math.floor(remainingSeconds / field.unitSeconds);
+                input.value = String(unitValue);
+                remainingSeconds -= unitValue * field.unitSeconds;
+            });
+        }
+
+        function normalizeRebootDelayInputs() {
+            return getRebootDelaySeconds();
+        }
+
+        function setRebootDelayValidity(message = '') {
+            getRebootDelayInputs().forEach((input) => {
+                input.setCustomValidity(message);
+            });
+        }
+
+        function isRebootSupported() {
+            return Boolean(maintenanceInfoCache?.upgrade_supported);
+        }
+
+        function isScheduledRebootEnabled() {
+            return Boolean(rebootElements.scheduledToggle?.checked);
+        }
+
+        function getSelectedRebootTargetLabel() {
+            const selectedOption = document.getElementById('rf-operation-mode')?.selectedOptions?.[0];
+            const label = String(selectedOption?.textContent || '').trim();
+
+            return label
+                || maintenanceInfoCache?.version?.active_device
+                || wirelessRuntimeCurrent?.local_mac_address
+                || 'the selected Active Device';
+        }
+
+        function getSelectedRebootTargetMac() {
+            return normalizeRfDeviceMac(
+                document.getElementById('rf-operation-mode')?.value
+                || wirelessRuntimeCurrent?.local_mac_address
+            );
+        }
+
+        async function waitForDeviceSelectionIdle(timeoutMs = 10000) {
+            const startTime = Date.now();
+
+            while (deviceSelectionInFlight) {
+                if (Date.now() - startTime >= timeoutMs) {
+                    throw new Error('Timed out while waiting for Active Device switch to finish.');
+                }
+
+                await new Promise((resolve) => window.setTimeout(resolve, 120));
+            }
+        }
+
+        async function ensureSelectedRebootTargetReady() {
+            const targetMac = getSelectedRebootTargetMac();
+            const targetLabel = getSelectedRebootTargetLabel();
+
+            if (!targetMac) {
+                return targetLabel;
+            }
+
+            if (deviceSelectionInFlight) {
+                setRebootStatus({
+                    phase: 'Synchronizing Active Device',
+                    detail: `Waiting for Active Device ${targetLabel} to finish switching before reboot...`,
+                    state: 'pending',
+                });
+                await waitForDeviceSelectionIdle();
+            }
+
+            if (pendingDeviceSelectionMac) {
+                setRebootStatus({
+                    phase: 'Synchronizing Active Device',
+                    detail: `Applying Active Device ${targetLabel} before reboot...`,
+                    state: 'pending',
+                });
+                await flushQueuedDeviceSelection();
+            }
+
+            const currentMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
+            if (targetMac && targetMac !== currentMac) {
+                setRebootStatus({
+                    phase: 'Synchronizing Active Device',
+                    detail: `Switching Active Device to ${targetLabel} before reboot...`,
+                    state: 'pending',
+                });
+                await applyWirelessSetting('select_device', { device_mac: targetMac }, {
+                    pendingMessage: `Active Device 切换中，目标 ${targetLabel} ...`,
+                    successMessage: `Active Device 已切换到 ${targetLabel}。`,
+                });
+                await refreshMaintenanceInfoForActiveDeviceChange();
+            }
+
+            return targetLabel;
+        }
+
+        function setRebootStatus({
+            phase = defaultRebootStatusPhase,
+            detail = defaultRebootStatusDetail,
+            state = 'idle',
+            reason = '',
+        } = {}) {
+            if (rebootElements.status) {
+                const message = String(detail || phase || '').trim();
+                rebootElements.status.textContent = message;
+                rebootElements.status.dataset.state = state;
+                rebootElements.status.dataset.reason = reason;
+                rebootElements.status.hidden = message.length === 0 || state === 'idle';
+            }
+        }
+
+        function syncRebootModeUi() {
+            const scheduledEnabled = isScheduledRebootEnabled();
+
+            if (rebootElements.delayPanel) {
+                rebootElements.delayPanel.hidden = false;
+            }
+            if (rebootElements.toggleState) {
+                rebootElements.toggleState.textContent = scheduledEnabled ? 'On' : 'Off';
+            }
+            if (rebootElements.submitButton) {
+                rebootElements.submitButton.textContent = scheduledEnabled ? 'Schedule Reboot' : 'Reboot Now';
+                rebootElements.submitButton.classList.toggle('sys-button-primary', scheduledEnabled);
+                rebootElements.submitButton.classList.toggle('sys-button-danger', !scheduledEnabled);
+            }
+        }
+
+        function setScheduledRebootEnabled(enabled) {
+            if (rebootElements.scheduledToggle) {
+                rebootElements.scheduledToggle.checked = Boolean(enabled);
+            }
+
+            if (enabled && getRebootDelaySeconds() === 0) {
+                setRebootDelayFromSeconds(defaultScheduledRebootDelaySeconds);
+            }
+
+            updateRebootControlsState();
+        }
+
+        function updateRebootControlsState() {
+            const supportResolved = maintenanceInfoCache !== null;
+            const rebootSupported = isRebootSupported();
+            const selectionPending = deviceSelectionInFlight || Boolean(pendingDeviceSelectionMac);
+            const scheduledEnabled = isScheduledRebootEnabled();
+            const delayValue = getRebootDelaySeconds();
+            const hasValidDelay = Number.isFinite(delayValue)
+                && delayValue >= 1
+                && delayValue <= rebootDelayLimitSeconds;
+            const delayValidityMessage = !scheduledEnabled || hasValidDelay
+                ? ''
+                : `Enter a combined delay from 1 second to ${formatRebootDelay(rebootDelayLimitSeconds)}.`;
+
+            syncRebootModeUi();
+
+            if (rebootElements.scheduledToggle) {
+                rebootElements.scheduledToggle.disabled = rebootBusy || selectionPending || !supportResolved || !rebootSupported;
+            }
+
+            const delayInputsDisabled = rebootBusy || !scheduledEnabled || !supportResolved || !rebootSupported;
+            if (rebootElements.delayPanel) {
+                rebootElements.delayPanel.dataset.disabled = delayInputsDisabled ? 'true' : 'false';
+            }
+
+            getRebootDelayInputs().forEach((input) => {
+                input.disabled = delayInputsDisabled;
+            });
+            setRebootDelayValidity(delayValidityMessage);
+
+            if (rebootElements.submitButton) {
+                rebootElements.submitButton.disabled = rebootBusy || selectionPending || !supportResolved || !rebootSupported || (scheduledEnabled && !hasValidDelay);
+            }
+        }
+
+        function renderRebootInfo() {
+            updateRebootControlsState();
+
+            if (!rebootBusy && maintenanceInfoCache && !maintenanceInfoCache.upgrade_supported) {
+                setRebootStatus({
+                    phase: 'Unavailable',
+                    detail: maintenanceInfoCache.message || 'Reboot is currently unavailable.',
+                    state: 'error',
+                    reason: 'unsupported',
+                });
+                return;
+            }
+
+            if (
+                !rebootBusy
+                && maintenanceInfoCache?.upgrade_supported
+                && rebootElements.status?.dataset.reason === 'unsupported'
+            ) {
+                setRebootStatus({
+                    state: 'idle',
+                });
+            }
+        }
+
+        function cancelRebootRecoveryWatch() {
+            rebootRecoveryWatchToken += 1;
+            if (rebootRecoveryStartTimer !== null) {
+                window.clearTimeout(rebootRecoveryStartTimer);
+                rebootRecoveryStartTimer = null;
+            }
+        }
+
+        async function pollForRebootRecovery(token, options = {}) {
+            const requireOutageBeforeSuccess = options.requireOutageBeforeSuccess === true;
+            const targetLabel = options.targetLabel || 'The selected device';
+            const targetMac = normalizeRfDeviceMac(options.targetMac);
+            let observedOutage = !requireOutageBeforeSuccess;
+
+            for (let attempt = 1; attempt <= rebootRecoveryMaxAttempts; attempt += 1) {
+                if (token !== rebootRecoveryWatchToken) {
+                    return false;
+                }
+
+                try {
+                    const response = await fetch('/api/wireless/runtime', { cache: 'no-store' });
+                    const payload = await response.json();
+                    if (payload?.available && payload?.current) {
+                        const currentMac = normalizeRfDeviceMac(payload.current.local_mac_address);
+                        const fallbackMac = getAlternateRfDeviceMac(targetMac || currentMac, payload.current.available_devices);
+                        const switchedAwayFromTarget = Boolean(targetMac && currentMac && currentMac !== targetMac);
+                        if (!observedOutage && !switchedAwayFromTarget) {
+                            if (
+                                fallbackMac
+                                && fallbackMac !== currentMac
+                                && !deviceSelectionInFlight
+                                && normalizeRfDeviceMac(pendingDeviceSelectionMac) !== fallbackMac
+                            ) {
+                                setRebootStatus({
+                                    phase: 'Switching Active Device',
+                                    detail: `${targetLabel} is rebooting. Switching to another online device...`,
+                                    state: 'pending',
+                                });
+                                queueDeviceSelection(fallbackMac);
+                            }
+
+                            await new Promise((resolve) => window.setTimeout(resolve, rebootRecoveryPollIntervalMs));
+                            continue;
+                        }
+
+                        if (
+                            targetMac
+                            && currentMac === targetMac
+                            && fallbackMac
+                            && fallbackMac !== currentMac
+                        ) {
+                            if (
+                                !deviceSelectionInFlight
+                                && normalizeRfDeviceMac(pendingDeviceSelectionMac) !== fallbackMac
+                            ) {
+                                setRebootStatus({
+                                    phase: 'Switching Active Device',
+                                    detail: `${targetLabel} rebooted, but another online device is available. Switching Active Device before confirming recovery...`,
+                                    state: 'pending',
+                                });
+                                queueDeviceSelection(fallbackMac);
+                            }
+
+                            await new Promise((resolve) => window.setTimeout(resolve, rebootRecoveryPollIntervalMs));
+                            continue;
+                        }
+
+                        renderWirelessRuntime(payload);
+                        loadMaintenanceInfo().catch(() => {});
+                        setRebootStatus({
+                            phase: 'Reboot complete',
+                            detail: switchedAwayFromTarget
+                                ? `${targetLabel} rebooted. Switched to another online device and refreshed runtime data.`
+                                : `${targetLabel} reconnected and runtime data has been refreshed.`,
+                            state: 'success',
+                        });
+                        rebootBusy = false;
+                        updateRebootControlsState();
+                        return true;
+                    }
+
+                    renderWirelessRuntime(payload);
+                    observedOutage = true;
+                } catch (_) {
+                    // Ignore transient fetch failures while the device is rebooting.
+                    observedOutage = true;
+                }
+
+                await new Promise((resolve) => window.setTimeout(resolve, rebootRecoveryPollIntervalMs));
+            }
+
+            if (token !== rebootRecoveryWatchToken) {
+                return false;
+            }
+
+            setRebootStatus({
+                phase: 'Waiting for reconnect',
+                detail: `${targetLabel} has not reconnected yet. Please wait a little longer or refresh the page.`,
+                state: 'pending',
+            });
+            rebootBusy = false;
+            updateRebootControlsState();
+            return false;
+        }
+
+        function beginRebootRecoveryWatch(delaySeconds, targetLabel, targetMac = '') {
+            cancelRebootRecoveryWatch();
+
+            const token = ++rebootRecoveryWatchToken;
+            const normalizedDelaySeconds = Math.max(0, Math.round(Number(delaySeconds) || 0));
+            const initialDelayMs = normalizedDelaySeconds > 0
+                ? Math.max(1500, (normalizedDelaySeconds * 1000) + 500)
+                : 4000;
+            const requireOutageBeforeSuccess = normalizedDelaySeconds > 0;
+
+            rebootRecoveryStartTimer = window.setTimeout(() => {
+                rebootRecoveryStartTimer = null;
+
+                if (token !== rebootRecoveryWatchToken) {
+                    return;
+                }
+
+                setRebootStatus({
+                    phase: 'Waiting for reconnect',
+                    detail: normalizedDelaySeconds > 0
+                        ? `${targetLabel} reached the scheduled reboot window. Waiting for reboot and reconnect...`
+                        : `${targetLabel} is rebooting now. Waiting for reconnect...`,
+                    state: 'pending',
+                });
+
+                pollForRebootRecovery(token, { requireOutageBeforeSuccess, targetLabel, targetMac }).catch(() => {
+                    if (token !== rebootRecoveryWatchToken) {
+                        return;
+                    }
+
+                    setRebootStatus({
+                        phase: 'Waiting for reconnect',
+                        detail: `Recovery polling for ${targetLabel} failed. Refresh the page to check device status.`,
+                        state: 'pending',
+                    });
+                });
+            }, initialDelayMs);
+        }
+
+        async function submitRebootRequest(delaySeconds) {
+            const response = await fetch('/api/system/reboot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ delay_seconds: delaySeconds }),
+            });
+            const payload = await response.json();
+
+            if (!response.ok || payload.success === false) {
+                throw new Error(payload.message || `HTTP ${response.status}`);
+            }
+
+            return payload;
+        }
+
+        async function triggerRebootAction() {
+            if (!isRebootSupported()) {
+                setRebootStatus({
+                    phase: 'Unavailable',
+                    detail: maintenanceInfoCache?.message || 'Reboot is currently unavailable.',
+                    state: 'error',
+                });
+                return;
+            }
+
+            const scheduledEnabled = isScheduledRebootEnabled();
+            const targetLabel = getSelectedRebootTargetLabel();
+            const requestedDelaySeconds = normalizeRebootDelayInputs();
+
+            if (scheduledEnabled && (!Number.isFinite(requestedDelaySeconds) || requestedDelaySeconds < 1 || requestedDelaySeconds > rebootDelayLimitSeconds)) {
+                setRebootStatus({
+                    phase: 'Invalid schedule',
+                    detail: `Enter a combined delay between 1 second and ${formatRebootDelay(rebootDelayLimitSeconds)}.`,
+                    state: 'error',
+                });
+                rebootElements.delayDayInput?.focus();
+                updateRebootControlsState();
+                return;
+            }
+
+            const confirmed = scheduledEnabled
+                ? window.confirm(`Schedule a reboot for ${targetLabel} in ${formatRebootDelay(requestedDelaySeconds)}?`)
+                : window.confirm(`Reboot ${targetLabel} now? Active wireless sessions will disconnect until the device finishes booting.`);
+            if (!confirmed) {
+                return;
+            }
+
+            cancelRebootRecoveryWatch();
+            rebootBusy = true;
+            updateRebootControlsState();
+
+            try {
+                const readyTargetLabel = await ensureSelectedRebootTargetReady();
+                const readyTargetMac = getSelectedRebootTargetMac();
+                if (scheduledEnabled) {
+                    setRebootStatus({
+                        phase: 'Scheduling reboot',
+                        detail: `Scheduling reboot for ${readyTargetLabel} in ${formatRebootDelay(requestedDelaySeconds)}...`,
+                        state: 'pending',
+                    });
+
+                    const payload = await submitRebootRequest(requestedDelaySeconds);
+                    const acceptedDelaySeconds = Math.max(1, Math.round(Number(payload.delay_seconds) || requestedDelaySeconds));
+                    setScheduledRebootEnabled(false);
+                    rebootBusy = false;
+                    updateRebootControlsState();
+                    setRebootStatus({
+                        phase: 'Reboot scheduled',
+                        detail: `${readyTargetLabel}: ${payload.message} The mode has been reset to immediate reboot. This page will keep watching for reconnect automatically.`,
+                        state: 'pending',
+                    });
+                    beginRebootRecoveryWatch(acceptedDelaySeconds, readyTargetLabel, readyTargetMac);
+                } else {
+                    setRebootStatus({
+                        phase: 'Submitting reboot',
+                        detail: `Sending immediate reboot request to ${readyTargetLabel}...`,
+                        state: 'pending',
+                    });
+
+                    const payload = await submitRebootRequest(0);
+                    rebootBusy = false;
+                    updateRebootControlsState();
+                    setRebootStatus({
+                        phase: 'Rebooting device',
+                        detail: `${readyTargetLabel}: ${payload.message} Waiting for reconnect...`,
+                        state: 'pending',
+                    });
+                    beginRebootRecoveryWatch(payload.delay_seconds || 0, readyTargetLabel, readyTargetMac);
+                }
+            } catch (error) {
+                rebootBusy = false;
+                updateRebootControlsState();
+                setRebootStatus({
+                    phase: scheduledEnabled ? 'Schedule failed' : 'Reboot request failed',
+                    detail: error.message || (scheduledEnabled ? 'Unable to schedule reboot.' : 'Immediate reboot failed.'),
+                    state: 'error',
+                });
+            }
+        }
+
         function renderMaintenanceInfo(payload) {
             maintenanceInfoCache = payload || null;
             const version = payload?.version || {};
@@ -1448,6 +2052,7 @@
 
             updateMaintenanceControlsState();
             syncMaintenanceStatuses();
+            renderRebootInfo();
         }
 
         function showMaintenanceInfoError(error) {
@@ -1489,10 +2094,6 @@
         }
 
         async function refreshMaintenanceInfoForActiveDeviceChange() {
-            if (!isMaintenancePanelVisible()) {
-                return;
-            }
-
             try {
                 await loadMaintenanceInfo();
             } catch (error) {
@@ -3263,13 +3864,65 @@
             return '--';
         }
 
+        function getRuntimeUnavailableFallbackDeviceMac() {
+            const unavailableMac = normalizeRfDeviceMac(
+                lastKnownRfDeviceMac || document.getElementById('rf-operation-mode')?.value
+            );
+
+            return normalizeRfDeviceMac(
+                lastKnownRfDevices.find((device) => {
+                    const candidateMac = normalizeRfDeviceMac(device.mac_address);
+                    return candidateMac && candidateMac !== unavailableMac;
+                })?.mac_address
+            );
+        }
+
+        function getAlternateRfDeviceMac(excludedMac, devices = lastKnownRfDevices) {
+            const normalizedExcludedMac = normalizeRfDeviceMac(excludedMac);
+            const candidates = Array.isArray(devices) ? devices : [];
+
+            return normalizeRfDeviceMac(
+                candidates.find((device) => {
+                    const candidateMac = normalizeRfDeviceMac(device.mac_address);
+                    return candidateMac && candidateMac !== normalizedExcludedMac;
+                })?.mac_address
+            );
+        }
+
+        function maybeQueueRuntimeUnavailableFallback(payload) {
+            if (isDaemonUnavailableMessage(payload?.message) || deviceSelectionInFlight || pendingDeviceSelectionMac) {
+                return;
+            }
+
+            const fallbackMac = getRuntimeUnavailableFallbackDeviceMac();
+            if (!fallbackMac || fallbackMac === runtimeUnavailableFallbackDeviceMac) {
+                return;
+            }
+
+            runtimeUnavailableFallbackDeviceMac = fallbackMac;
+
+            const select = document.getElementById('rf-operation-mode');
+            if (select && Array.from(select.options).some((option) => option.value === fallbackMac)) {
+                select.value = fallbackMac;
+                updateSelectWidth(select);
+            }
+
+            setWirelessControlStatus('当前 Active Device 不可用，正在切换到其他已检测设备...', 'pending');
+            queueDeviceSelection(fallbackMac);
+        }
+
         function renderRfDeviceOptions(current, payload = null) {
             const select = document.getElementById('rf-operation-mode');
             if (!select) {
                 return;
             }
 
-            const devices = Array.isArray(current?.available_devices) ? current.available_devices : [];
+            const runtimeDevices = Array.isArray(current?.available_devices) ? current.available_devices : [];
+            if (runtimeDevices.length > 0) {
+                lastKnownRfDevices = runtimeDevices.map((device) => ({ ...device }));
+            }
+
+            const devices = runtimeDevices.length > 0 ? runtimeDevices : lastKnownRfDevices;
             if (devices.length === 0) {
                 const placeholderLabel = getRuntimeUnavailableDeviceLabel(payload);
                 select.innerHTML = `<option value="">${escapeHtml(placeholderLabel)}</option>`;
@@ -3280,9 +3933,10 @@
                 return;
             }
 
-            const selectedMac = normalizeRfDeviceMac(current?.local_mac_address);
+            const selectedMac = normalizeRfDeviceMac(current?.local_mac_address || lastKnownRfDeviceMac || select.value);
             const queuedMac = normalizeRfDeviceMac(pendingDeviceSelectionMac);
-            const targetMac = queuedMac || selectedMac;
+            const fallbackMac = current ? '' : normalizeRfDeviceMac(runtimeUnavailableFallbackDeviceMac);
+            const targetMac = queuedMac || fallbackMac || selectedMac;
             select.innerHTML = devices.map((device) => {
                 const value = normalizeRfDeviceMac(device.mac_address);
                 const isSelected = Boolean(device.selected) || (targetMac && value === targetMac);
@@ -3293,8 +3947,12 @@
                 select.value = targetMac;
             }
 
-            select.disabled = deviceSelectionInFlight;
-            select.title = '';
+            const runtimeUnavailable = !current && Boolean(payload?.message);
+            const keepSelectorAvailable = runtimeUnavailable && !isDaemonUnavailableMessage(payload?.message);
+            select.disabled = deviceSelectionInFlight || (runtimeUnavailable && !keepSelectorAvailable);
+            select.title = keepSelectorAvailable
+                ? 'Current device is temporarily unavailable. Select another device to continue.'
+                : '';
             updateSelectWidth(select);
         }
 
@@ -3513,9 +4171,11 @@
         }
 
         function renderWirelessRuntime(payload) {
+            const previousDeviceMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
             renderWirelessRuntimeNotices(payload);
 
             if (!payload || !payload.available || !payload.current) {
+                const hadCurrentDevice = Boolean(previousDeviceMac);
                 wirelessRuntimeCurrent = null;
                 resetPairInputState();
                 resetPairCandidatesCache('');
@@ -3544,17 +4204,26 @@
                 updateMcsControlsState();
                 updateBandwidthControlsState();
                 updateGeneralRuntimeStatus(null);
+                if (hadCurrentDevice) {
+                    refreshMaintenanceInfoForActiveDeviceChange().catch((error) => {
+                        console.error('Failed to refresh maintenance info after runtime became unavailable:', error);
+                        showMaintenanceInfoError(error);
+                    });
+                }
+                maybeQueueRuntimeUnavailableFallback(payload);
                 return;
             }
 
-            const previousDeviceMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
             const current = payload.current;
             const currentDeviceMac = normalizeRfDeviceMac(current.local_mac_address);
-            if (currentDeviceMac !== previousDeviceMac) {
+            const deviceChanged = currentDeviceMac !== previousDeviceMac;
+            if (deviceChanged) {
                 resetPairInputState();
                 resetPairCandidatesCache(currentDeviceMac);
             }
             wirelessRuntimeCurrent = current;
+            lastKnownRfDeviceMac = currentDeviceMac;
+            runtimeUnavailableFallbackDeviceMac = '';
             renderPairPanel(latestWirelessSnapshot?.connections);
             const wirelessControlStatus = document.getElementById('wireless-control-status');
             if (
@@ -3639,6 +4308,13 @@
             updateBandwidthControlsState();
             updateRfSelectWidths();
             updateGeneralRuntimeStatus(current);
+
+            if (deviceChanged) {
+                refreshMaintenanceInfoForActiveDeviceChange().catch((error) => {
+                    console.error('Failed to refresh maintenance info after runtime device change:', error);
+                    showMaintenanceInfoError(error);
+                });
+            }
         }
 
         async function loadWirelessRuntimeDetails() {
@@ -3776,12 +4452,13 @@
 
             deviceSelectionInFlight = true;
             cancelScheduledMaintenanceRefresh();
+            updateRebootControlsState();
             if (select) {
                 select.disabled = true;
             }
 
             try {
-                let deviceSelectionChanged = false;
+                let maintenanceRefreshRequired = false;
                 while (pendingDeviceSelectionMac) {
                     const targetMac = normalizeRfDeviceMac(pendingDeviceSelectionMac);
                     pendingDeviceSelectionMac = null;
@@ -3792,18 +4469,20 @@
 
                     const currentMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
                     if (targetMac === currentMac) {
+                        maintenanceRefreshRequired = true;
                         continue;
                     }
 
                     await applyWirelessSetting('select_device', { device_mac: targetMac });
-                    deviceSelectionChanged = true;
+                    maintenanceRefreshRequired = true;
                 }
 
-                if (deviceSelectionChanged) {
+                if (maintenanceRefreshRequired) {
                     await refreshMaintenanceInfoForActiveDeviceChange();
                 }
             } finally {
                 deviceSelectionInFlight = false;
+                updateRebootControlsState();
                 if (select) {
                     select.disabled = false;
                     updateSelectWidth(select);
@@ -3818,6 +4497,7 @@
             }
 
             pendingDeviceSelectionMac = normalizedMac;
+            updateRebootControlsState();
             if (deviceSelectionInFlight) {
                 setWirelessControlStatus('Active Device 修改已排队，等待前一次下发完成...', 'pending');
                 return;
@@ -4257,6 +4937,15 @@
             });
         }
 
+        const rebootTabTrigger = document.querySelector('.sys-subnav-item[data-tab="reboot"]');
+        if (rebootTabTrigger) {
+            rebootTabTrigger.addEventListener('click', () => {
+                loadMaintenanceInfo().catch((error) => {
+                    console.error('Failed to load reboot info:', error);
+                });
+            });
+        }
+
         const maintenanceFileInput = maintenanceElements.fileInput;
         if (maintenanceFileInput) {
             maintenanceFileInput.addEventListener('change', () => {
@@ -4279,6 +4968,26 @@
         if (maintenanceUpgradeButton) {
             maintenanceUpgradeButton.addEventListener('click', () => {
                 submitMaintenanceUpgrade().catch(() => {});
+            });
+        }
+
+        const rebootScheduledToggle = rebootElements.scheduledToggle;
+        if (rebootScheduledToggle) {
+            rebootScheduledToggle.addEventListener('change', () => {
+                updateRebootControlsState();
+            });
+        }
+
+        getRebootDelayInputs().forEach((input) => {
+            input.addEventListener('change', () => {
+                updateRebootControlsState();
+            });
+        });
+
+        const rebootSubmitButton = rebootElements.submitButton;
+        if (rebootSubmitButton) {
+            rebootSubmitButton.addEventListener('click', () => {
+                triggerRebootAction().catch(() => {});
             });
         }
 
@@ -4459,6 +5168,7 @@
 
         renderMaintenanceFileMeta(null);
         updateMaintenanceControlsState();
+        updateRebootControlsState();
         loadMaintenanceInfo().catch((error) => {
             console.error('Failed to load maintenance info:', error);
             showMaintenanceInfoError(error);
