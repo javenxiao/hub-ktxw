@@ -615,7 +615,7 @@
                                         <table class="sys-table rf-summary-table">
                                             <tbody>
                                                 <tr>
-                                                    <td>Auto Mode (cached)</td>
+                                                    <td>Auto Mode</td>
                                                     <td>
                                                         <div class="rf-boolean-group" role="radiogroup" aria-label="Bandwidth automatic selection">
                                                             <label class="rf-boolean-option" for="control-bandwidth-auto-on">
@@ -1156,7 +1156,7 @@
             set_band: 'Frequency Band',
             set_channel_mode: 'Channel Auto Mode',
             set_channel: 'Channel',
-            set_bandwidth_mode: 'Bandwidth Auto Mode (cached)',
+            set_bandwidth_mode: 'Bandwidth Auto Mode',
             set_power_mode: 'Power Mode',
             set_power_auto: 'Adaptive Power',
             set_power: 'Power',
@@ -1192,7 +1192,7 @@
                 xMax: '200',
                 yMin: '0',
                 yMax: '100',
-                updateIntervalMs: '1000',
+                updateIntervalMs: '100',
                 chartTitle: '',
                 xAxisTitle: 'Sample',
                 yAxisTitle: 'Value',
@@ -3478,12 +3478,12 @@
         function parsePlotUpdateIntervalMs(value) {
             const trimmed = String(value ?? '').trim();
             if (!trimmed) {
-                return 1000;
+                return 100;
             }
 
             const parsed = Math.round(Number(trimmed));
             if (!Number.isFinite(parsed)) {
-                return 1000;
+                return 100;
             }
 
             return Math.min(10_000, Math.max(100, parsed));
@@ -4003,7 +4003,7 @@
                     plotState.controls.xMax = '200';
                     plotState.controls.yMin = '0';
                     plotState.controls.yMax = '100';
-                    plotState.controls.updateIntervalMs = '1000';
+                    plotState.controls.updateIntervalMs = '100';
                     renderChart(chart || plotState.lastIncomingChart);
                     syncPlotRefreshSettings(plotState.controls.updateIntervalMs, chart || plotState.lastIncomingChart);
                 };
@@ -4418,12 +4418,20 @@
             });
         }
 
+        function isAsyncWirelessRuntime(current = wirelessRuntimeCurrent) {
+            return String(current?.operation_mode || '').toUpperCase().includes('ASYNC');
+        }
+
         function getMcsControlNotice(current = wirelessRuntimeCurrent) {
             return '';
         }
 
         function getBandwidthControlNotice(current = wirelessRuntimeCurrent) {
-            return '';
+            if (!isAsyncWirelessRuntime(current)) {
+                return '';
+            }
+
+            return `Bandwidth control is not supported on ${current?.operation_mode || 'the current runtime'}. The current Async runtime keeps bandwidth fixed, so manual bandwidth changes are disabled.`;
         }
 
         function syncMcsValueSelection(current = wirelessRuntimeCurrent) {
@@ -4511,9 +4519,19 @@
                 || text.includes('failed to connect bb_host');
         }
 
+        function isRebootInProgressMessage(message) {
+            const text = String(message || '').toLowerCase();
+            return text.includes('device reboot in progress')
+                || text.includes('waiting for reconnect');
+        }
+
         function getRuntimeUnavailableDeviceLabel(payload) {
             if (isDaemonUnavailableMessage(payload?.message)) {
                 return 'bb_host daemon unavailable';
+            }
+
+            if (isRebootInProgressMessage(payload?.message)) {
+                return 'Current device rebooting';
             }
 
             if (payload?.message) {
@@ -4549,7 +4567,10 @@
         }
 
         function maybeQueueRuntimeUnavailableFallback(payload) {
-            if (isDaemonUnavailableMessage(payload?.message) || deviceSelectionInFlight || pendingDeviceSelectionMac) {
+            if (isDaemonUnavailableMessage(payload?.message)
+                || isRebootInProgressMessage(payload?.message)
+                || deviceSelectionInFlight
+                || pendingDeviceSelectionMac) {
                 return;
             }
 
@@ -4577,11 +4598,13 @@
             }
 
             const runtimeDevices = Array.isArray(current?.available_devices) ? current.available_devices : [];
-            if (runtimeDevices.length > 0) {
-                lastKnownRfDevices = runtimeDevices.map((device) => ({ ...device }));
+            const payloadDevices = Array.isArray(payload?.available_devices) ? payload.available_devices : [];
+            const discoveredDevices = runtimeDevices.length > 0 ? runtimeDevices : payloadDevices;
+            if (discoveredDevices.length > 0) {
+                lastKnownRfDevices = discoveredDevices.map((device) => ({ ...device }));
             }
 
-            const devices = runtimeDevices.length > 0 ? runtimeDevices : lastKnownRfDevices;
+            const devices = discoveredDevices.length > 0 ? discoveredDevices : lastKnownRfDevices;
             if (devices.length === 0) {
                 const placeholderLabel = getRuntimeUnavailableDeviceLabel(payload);
                 select.innerHTML = `<option value="">${escapeHtml(placeholderLabel)}</option>`;
@@ -4705,7 +4728,7 @@
 
         async function waitForRuntimeRecovery() {
             for (let attempt = 1; attempt <= 15; attempt += 1) {
-                await new Promise((resolve) => window.setTimeout(resolve, 2000));
+                await new Promise((resolve) => window.setTimeout(resolve, 1000));
 
                 try {
                     const response = await fetch('/api/wireless/runtime', { cache: 'no-store' });
@@ -5358,11 +5381,14 @@
         function updateBandwidthControlsState(current = wirelessRuntimeCurrent) {
             const isAuto = getSelectedBandwidthAuto();
             const bandwidthControlNotice = getBandwidthControlNotice(current);
+            const bandwidthControlBlocked = Boolean(bandwidthControlNotice);
             bandwidthAutoMode = isAuto;
             setRfControlsDisabled([
                 'control-bandwidth-direction',
                 'control-bandwidth-value',
-            ], isAuto);
+            ], isAuto || bandwidthControlBlocked);
+
+            setRfRadioGroupDisabled('control-bandwidth-auto', bandwidthControlBlocked, bandwidthControlNotice);
 
             document.querySelectorAll('input[name="control-bandwidth-auto"]').forEach((radio) => {
                 radio.title = bandwidthControlNotice;

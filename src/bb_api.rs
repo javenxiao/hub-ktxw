@@ -324,6 +324,7 @@ pub struct BasebandApi {
     plot_user: Option<u8>,
     active_device_mac: Option<String>,
     preferred_signal_users: HashMap<String, u8>,
+    device_role_cache: HashMap<String, u8>,
     bandwidth_mode_cache: HashMap<(String, u8), bool>,
     system_info_cache: HashMap<String, ffi::BbSystemInfoSummary>,
     last_remote_device_switch_at: Option<Instant>,
@@ -395,6 +396,30 @@ impl BasebandApi {
 
         self.active_device_mac = Some(active_mac.clone());
         self.remember_remote_handle(active_mac, self.device_handle);
+        self.cache_role_for_active_device(status.role);
+    }
+
+    fn cache_role_for_mac(&mut self, mac: &str, role: u8) {
+        if !matches!(role, ffi::BB_ROLE_AP | ffi::BB_ROLE_DEV) {
+            return;
+        }
+
+        let normalized_mac = Self::normalize_mac(mac);
+        if normalized_mac.is_empty() {
+            return;
+        }
+
+        self.device_role_cache.insert(normalized_mac, role);
+    }
+
+    fn cache_role_for_active_device(&mut self, role: u8) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.cache_role_for_mac(&active_mac, role);
+        }
+    }
+
+    fn cached_role_for_mac(&self, normalized_mac: &str) -> Option<u8> {
+        self.device_role_cache.get(normalized_mac).copied()
     }
 
     fn cache_bandwidth_mode_for_active_device(&mut self, slot: u8, auto_mode: bool) {
@@ -437,6 +462,25 @@ impl BasebandApi {
         self.active_device_mac
             .as_deref()
             .and_then(|normalized_mac| self.preferred_signal_user_for_mac(normalized_mac))
+    }
+
+    fn ensure_remote_host_connection(&mut self) -> Result<(), String> {
+        if !self.is_remote_mode() {
+            return Ok(());
+        }
+
+        if self.host_handle != 0 {
+            return Ok(());
+        }
+
+        let remote_host = self
+            .remote_host
+            .clone()
+            .ok_or_else(|| "Remote bb_host mode not configured".to_string())?;
+
+        let host = run_remote_sdk_call(true, || ffi::connect_host(&remote_host.address, remote_host.port))?;
+        self.host_handle = host as usize;
+        Ok(())
     }
 
     fn establish_remote_session(&mut self) -> Result<RemoteSessionConnectOutcome, String> {
@@ -832,6 +876,24 @@ impl BasebandApi {
         Ok(system_info)
     }
 
+    fn remote_role_for_mac(&mut self, target_mac: &str) -> Result<Option<u8>, String> {
+        let normalized_target = Self::normalize_mac(target_mac);
+        if normalized_target.is_empty() {
+            return Ok(None);
+        }
+
+        if let Some(role) = self.cached_role_for_mac(&normalized_target) {
+            return Ok(Some(role));
+        }
+
+        let handle = self.get_or_open_remote_handle_by_mac(target_mac)? as *mut ffi::bb_dev_handle_t;
+        let role = run_remote_sdk_call(true, || ffi::get_minidb_role(handle))?;
+        if let Some(role_code) = role {
+            self.cache_role_for_mac(&normalized_target, role_code);
+        }
+        Ok(role)
+    }
+
     fn resolve_pair_version_peer(
         &self,
         status: &ffi::BbGetStatusSummary,
@@ -1098,6 +1160,7 @@ impl BasebandApi {
             plot_user: None,
             active_device_mac: None,
             preferred_signal_users: HashMap::new(),
+            device_role_cache: HashMap::new(),
             bandwidth_mode_cache: HashMap::new(),
             system_info_cache: HashMap::new(),
             last_remote_device_switch_at: None,
@@ -1273,7 +1336,7 @@ impl BasebandApi {
         };
         let slot = status.links.first().map(|link| link.slot as u8).unwrap_or(0);
         let user = resolve_plot_user(&status);
-        let available_devices = if self.host_handle != 0 {
+        let mut available_devices = if self.host_handle != 0 {
             if let Err(err) = self.refresh_host_devices_cache() {
                 warnings.push(format!(
                     "Failed to refresh remote device list; using cached devices: {}",
@@ -1281,10 +1344,48 @@ impl BasebandApi {
                 ));
             }
 
-            self.host_devices_cache.borrow().clone()
+            self.host_devices_cache
+                .borrow()
+                .iter()
+                .cloned()
+                .map(|mut device| {
+                    let normalized_mac = Self::normalize_mac(&device.mac_address);
+                    if let Some(role) = self.cached_role_for_mac(&normalized_mac) {
+                        device.role = Some(role);
+                        device.role_label = match role {
+                            ffi::BB_ROLE_AP => "AP".to_string(),
+                            ffi::BB_ROLE_DEV => "DEV".to_string(),
+                            _ => device.role_label,
+                        };
+                    }
+                    device
+                })
+                .collect()
         } else {
             Vec::new()
         };
+
+        if self.host_handle != 0 {
+            for device in &mut available_devices {
+                if device.role.is_some() {
+                    continue;
+                }
+
+                let resolved_role = match self.remote_role_for_mac(&device.mac_address) {
+                    Ok(value) => value,
+                    Err(_) => None,
+                };
+
+                if let Some(role) = resolved_role {
+                    device.role = Some(role);
+                    device.role_label = match role {
+                        ffi::BB_ROLE_AP => "AP".to_string(),
+                        ffi::BB_ROLE_DEV => "DEV".to_string(),
+                        _ => device.role_label.clone(),
+                    };
+                }
+            }
+        }
 
         let system_info = match run_remote_sdk_call(is_remote, || ffi::get_system_info(self.handle_ptr())) {
             Ok(value) => Some(value),
@@ -1388,6 +1489,34 @@ impl BasebandApi {
 
             self.load_wireless_runtime_details()
         }
+    }
+
+    pub fn get_detected_remote_devices(&mut self) -> Result<Vec<ffi::BbDiscoveredDeviceSummary>, String> {
+        if !self.is_remote_mode() {
+            return Ok(Vec::new());
+        }
+
+        self.ensure_remote_host_connection()?;
+        self.refresh_host_devices_cache()?;
+
+        let mut devices = self.host_devices_cache.borrow().clone();
+        for device in &mut devices {
+            let normalized_mac = Self::normalize_mac(&device.mac_address);
+            let resolved_role = self
+                .cached_role_for_mac(&normalized_mac)
+                .or_else(|| self.remote_role_for_mac(&device.mac_address).ok().flatten());
+
+            if let Some(role) = resolved_role {
+                device.role = Some(role);
+                device.role_label = match role {
+                    ffi::BB_ROLE_AP => "AP".to_string(),
+                    ffi::BB_ROLE_DEV => "DEV".to_string(),
+                    _ => device.role_label.clone(),
+                };
+            }
+        }
+
+        Ok(devices)
     }
 
     fn load_wireless_configuration_details(&mut self, mode: u8) -> Result<WirelessConfigurationDetails, String> {
@@ -1731,11 +1860,20 @@ impl BasebandApi {
         self.with_device_operation("set_baseband_role", |handle| {
             ffi::set_baseband_role(handle, role)?;
             ffi::reboot_device(handle, 2000)
-        })
+        })?;
+        self.cache_role_for_active_device(role);
+        if self.is_remote_mode() {
+            self.invalidate_remote_session_state();
+        }
+        Ok(())
     }
 
     pub fn reboot_device(&mut self, delay_ms: u32) -> Result<(), String> {
-        self.with_device_operation("reboot_device", |handle| ffi::reboot_device(handle, delay_ms))
+        self.with_device_operation("reboot_device", |handle| ffi::reboot_device(handle, delay_ms))?;
+        if self.is_remote_mode() {
+            self.invalidate_remote_session_state();
+        }
+        Ok(())
     }
 
     /// 将一段分区/段数据写入指定 flash 地址，分块传输后校验 CRC32（对标 PC Tool ar8030_upgrade_partition）
@@ -2453,6 +2591,11 @@ impl BasebandManager {
     pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
         let mut api = self.api.lock().unwrap();
         api.get_wireless_runtime_details()
+    }
+
+    pub fn get_detected_remote_devices(&self) -> Result<Vec<ffi::BbDiscoveredDeviceSummary>, String> {
+        let mut api = self.api.lock().unwrap();
+        api.get_detected_remote_devices()
     }
 
     pub fn get_wireless_configuration_details(&self, mode: u8) -> Result<WirelessConfigurationDetails, String> {

@@ -44,6 +44,8 @@ const DEFAULT_SERVER_PORT: &str = "8080";
 const IMMEDIATE_REBOOT_DELAY_MS: u32 = 2_000;
 const MAX_REBOOT_DELAY_SECONDS: u32 = (30 * 24 * 60 * 60) + (24 * 60 * 60) + (60 * 60) + 60;
 const SCHEDULED_REBOOT_TRIGGER_DELAY_MS: u32 = 0;
+const CHANNEL_EFFECT_RETRY_ATTEMPTS: usize = 8;
+const CHANNEL_EFFECT_RETRY_INTERVAL_MS: u64 = 500;
 
 fn set_default_env_var(key: &str, value: &str) {
     let should_set = std::env::var(key)
@@ -179,6 +181,7 @@ struct WirelessRuntimeResponse {
     available: bool,
     message: String,
     current: Option<WirelessRuntimeView>,
+    available_devices: Vec<WirelessDeviceOption>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -425,6 +428,7 @@ const DEFAULT_AP_PLOT_SAMPLE_POINTS: usize = 200;
 const RSSI_UNAVAILABLE_DBM: i32 = -127;
 const SNR_UNAVAILABLE_DB: i32 = -1;
 const REBOOT_REFRESH_QUIET_WINDOW_SECS: u64 = 15;
+const REBOOT_RUNTIME_RECOVERY_PROBE_DELAY_SECS: u64 = 3;
 const REBOOT_RUNTIME_UNAVAILABLE_MESSAGE: &str = "Device reboot in progress. Waiting for reconnect.";
 
 struct AppState {
@@ -494,6 +498,27 @@ impl AppState {
             None => false,
         }
     }
+
+    async fn expected_reboot_recovery_probe_due(&self) -> bool {
+        let deadline = {
+            let guard = self.expected_reboot_until.read().await;
+            *guard
+        };
+
+        match deadline {
+            Some(until) if until > Instant::now() => {
+                let quiet_window = Duration::from_secs(REBOOT_REFRESH_QUIET_WINDOW_SECS);
+                let probe_delay = Duration::from_secs(REBOOT_RUNTIME_RECOVERY_PROBE_DELAY_SECS);
+                until.saturating_duration_since(Instant::now())
+                    <= quiet_window.saturating_sub(probe_delay)
+            }
+            Some(_) => {
+                self.clear_expected_reboot_window().await;
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 fn clamp_plot_refresh_interval_ms(value: u64) -> u64 {
@@ -505,11 +530,8 @@ fn clamp_plot_sample_count(value: usize) -> usize {
 }
 
 fn default_plot_refresh_interval_ms(baseband_health: &BasebandHealthStatus) -> u64 {
-    if baseband_health.effective_mode == "hardware-remote-bb-host" {
-        3_000
-    } else {
-        1_000
-    }
+    let _ = baseband_health;
+    100
 }
 
 #[tokio::main]
@@ -517,6 +539,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     apply_default_runtime_env();
 
     tracing_subscriber::fmt()
+        .with_ansi(false)
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
@@ -529,7 +552,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if health.effective_mode == "hardware-remote-bb-host" {
                 if health.host.connected {
-                    info!("✓ Remote bb_host session initialized successfully");
+                    info!("[ok] Remote bb_host session initialized successfully");
                 } else {
                     warn!(
                         "Remote bb_host manager initialized without an active daemon session: {}",
@@ -537,17 +560,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                     info!("Remote bb_host auto-reconnect remains enabled; waiting for daemon availability");
                 }
+
+                info!("[ok] Baseband API initialized successfully");
                 health.socket_init.message = "Skipped in remote bb_host mode".to_string();
             } else {
-                info!("✓ Baseband API initialized successfully");
-                // 初始化通信 socket
+                info!("[ok] Baseband API initialized successfully");
                 let socket_result = bb.initialize_socket(0);
                 health.record_socket_init(socket_result.clone(), 0);
 
                 if let Err(e) = socket_result {
                     warn!("Failed to initialize socket: {}", e);
                 } else {
-                    info!("✓ Socket 0 initialized for data communication");
+                    info!("[ok] Socket 0 initialized for data communication");
                 }
             }
 
@@ -643,11 +667,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .and_then(|value| value.trim().parse::<u16>().ok())
         .unwrap_or(8080);
-    let addr = SocketAddr::from(([0, 0, 0, 0], server_port));
-    info!("wireless status server listening on http://{}", addr);
+    let bind_addr = SocketAddr::from(([0, 0, 0, 0], server_port));
+    let local_browser_addr = SocketAddr::from(([127, 0, 0, 1], server_port));
+    info!("wireless status server listening on {}", bind_addr);
+    info!("browser access on this PC: http://{}", local_browser_addr);
+    info!("for remote access, use this PC's LAN IP with port {}", server_port);
     info!("========== Server Ready ==========\n");
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -658,6 +685,57 @@ async fn get_wireless_status(State(state): State<Arc<AppState>>) -> Json<Wireles
 }
 
 async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<WirelessRuntimeResponse> {
+    let cached = state.wireless_runtime.read().await.clone();
+
+    if !cached.available
+        && cached.current.is_none()
+        && cached.message == REBOOT_RUNTIME_UNAVAILABLE_MESSAGE
+    {
+        if let Some(baseband) = state.baseband.as_ref() {
+            let reboot_window_active = state.expected_reboot_window_active().await;
+            let should_probe = if reboot_window_active {
+                state.expected_reboot_recovery_probe_due().await
+            } else {
+                true
+            };
+
+            if should_probe {
+                match baseband.get_wireless_runtime_details() {
+                    Ok(details) => {
+                        let response = runtime_response_from_details(&details);
+                        {
+                            let mut guard = state.wireless_runtime.write().await;
+                            *guard = response;
+                        }
+                        state.clear_expected_reboot_window().await;
+                        refresh_snapshot_from_baseband(&state, baseband).await;
+                    }
+                    Err(err) if !reboot_window_active => {
+                        let response = runtime_unavailable_response(
+                            format_runtime_fetch_error_message(&err),
+                        );
+                        let mut guard = state.wireless_runtime.write().await;
+                        *guard = response;
+                    }
+                    Err(_) => {
+                        if reboot_window_active {
+                            if let Ok(devices) = baseband.get_detected_remote_devices() {
+                                if !devices.is_empty() {
+                                    let response = runtime_unavailable_response_with_devices(
+                                        REBOOT_RUNTIME_UNAVAILABLE_MESSAGE.to_string(),
+                                        build_wireless_device_options(None, None, None, &devices),
+                                    );
+                                    let mut guard = state.wireless_runtime.write().await;
+                                    *guard = response;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Json(state.wireless_runtime.read().await.clone())
 }
 
@@ -827,6 +905,24 @@ fn resolve_runtime_role(current: &WirelessRuntimeView) -> Option<u8> {
     }
 }
 
+fn async_runtime_control_unsupported_message(
+    current: Option<&WirelessRuntimeView>,
+    action: &str,
+) -> Option<String> {
+    let current = current?;
+    if !current.operation_mode.to_ascii_uppercase().contains("ASYNC") {
+        return None;
+    }
+
+    match action {
+        "set_bandwidth" | "set_bandwidth_mode" => Some(format!(
+            "Bandwidth control is not supported on {}. The current Async runtime keeps bandwidth fixed, so manual bandwidth changes are disabled.",
+            current.operation_mode
+        )),
+        _ => None,
+    }
+}
+
 async fn apply_wireless_setting(
     State(state): State<Arc<AppState>>,
     Json(request): Json<WirelessSettingRequest>,
@@ -868,6 +964,20 @@ async fn apply_wireless_setting(
         .or_else(|| current.as_ref().and_then(|details| details.status.active_user))
         .or_else(|| cached_current.as_ref().and_then(|runtime| runtime.current_power_user))
         .unwrap_or(0);
+    let runtime_view_for_constraints = cached_current
+        .clone()
+        .or_else(|| current.as_ref().map(build_wireless_runtime_view));
+
+    if let Some(message) = async_runtime_control_unsupported_message(
+        runtime_view_for_constraints.as_ref(),
+        &request.action,
+    ) {
+        return Json(WirelessSettingResponse {
+            success: false,
+            message,
+            current: runtime_view_for_constraints,
+        });
+    }
 
     let result = match request.action.as_str() {
         "set_signal_user" => request
@@ -1027,20 +1137,29 @@ async fn apply_wireless_setting(
 
     match result {
         Ok(()) => {
+            let is_role_switch = request.action == "set_role";
+
             if request.action == "select_device" {
                 state.clear_expected_reboot_window().await;
             }
 
-            refresh_runtime_from_baseband(&state, &baseband).await;
-            refresh_snapshot_from_baseband(&state, &baseband).await;
-            let current = state.wireless_runtime.read().await.current.clone();
+            let current = if is_role_switch {
+                state
+                    .begin_expected_reboot_window(Duration::from_secs(REBOOT_REFRESH_QUIET_WINDOW_SECS))
+                    .await;
+                None
+            } else {
+                refresh_runtime_until_effect_or_timeout(&state, &baseband, &request).await
+            };
 
-            if let Err(err) = verify_wireless_setting_effect(&request, current.as_ref()) {
-                return Json(WirelessSettingResponse {
-                    success: false,
-                    message: err,
-                    current,
-                });
+            if !is_role_switch {
+                if let Err(err) = verify_wireless_setting_effect(&request, current.as_ref()) {
+                    return Json(WirelessSettingResponse {
+                        success: false,
+                        message: err,
+                        current,
+                    });
+                }
             }
 
             let message = if request.action == "set_role" {
@@ -2550,58 +2669,15 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             power_dbm: entry.power_dbm,
         })
         .collect::<Vec<_>>();
-    let current_role = format_role(details.status.role).to_string();
-    let current_mac_normalized = normalize_device_mac(&details.status.mac_hex);
-    let peer_mac_normalized = details
-        .status
-        .peer_mac_hex
-        .as_deref()
-        .map(normalize_device_mac)
+    let connected_peer_mac_normalized = resolve_connected_peer_mac(&details.status)
+        .map(|value| normalize_device_mac(&value))
         .unwrap_or_default();
-    let available_devices = if details.available_devices.is_empty() {
-        vec![WirelessDeviceOption {
-            role: current_role.clone(),
-            mac_address: details.status.mac_hex.clone(),
-            label: format_device_selector_label(&current_role, &details.status.mac_hex),
-            selected: true,
-        }]
-    } else {
-        details
-            .available_devices
-            .iter()
-            .map(|device| {
-                let normalized_mac = normalize_device_mac(&device.mac_address);
-                let selected = !current_mac_normalized.is_empty() && normalized_mac == current_mac_normalized;
-                let role = if selected {
-                    current_role.clone()
-                } else if !peer_mac_normalized.is_empty() && normalized_mac == peer_mac_normalized {
-                    match details.status.role {
-                        0 => "DEV".to_string(),
-                        1 => "AP".to_string(),
-                        _ => "Unknown".to_string(),
-                    }
-                } else if device.role_label == "Unknown" {
-                    // role_label is always "Unknown" from list_host_devices (SDK only exposes MAC).
-                    // When the RF link is not yet established (peer_mac_hex absent), infer the
-                    // opposite role from the current device: AP peer is DEV and vice-versa.
-                    match details.status.role {
-                        0 => "DEV".to_string(),
-                        1 => "AP".to_string(),
-                        _ => "Unknown".to_string(),
-                    }
-                } else {
-                    device.role_label.clone()
-                };
-
-                WirelessDeviceOption {
-                    role: role.clone(),
-                    mac_address: device.mac_address.clone(),
-                    label: format_device_selector_label(&role, &device.mac_address),
-                    selected,
-                }
-            })
-            .collect::<Vec<_>>()
-    };
+    let available_devices = build_wireless_device_options(
+        Some(details.status.role),
+        Some(&details.status.mac_hex),
+        Some(&connected_peer_mac_normalized),
+        &details.available_devices,
+    );
 
     let configured_band = build_configured_band_view(details.band_info.as_ref());
     let live_rf = build_live_rf_view(details.band_info.as_ref(), details.channel_info.as_ref());
@@ -2725,11 +2801,69 @@ fn build_wireless_configuration_view(details: &WirelessConfigurationDetails) -> 
     }
 }
 
+fn build_wireless_device_options(
+    active_role: Option<u8>,
+    active_mac: Option<&str>,
+    connected_peer_mac_normalized: Option<&str>,
+    available_devices: &[ffi::BbDiscoveredDeviceSummary],
+) -> Vec<WirelessDeviceOption> {
+    let current_role = active_role.map(format_role).unwrap_or("Unknown").to_string();
+    let current_mac_normalized = active_mac.map(normalize_device_mac).unwrap_or_default();
+    let connected_peer_mac_normalized = connected_peer_mac_normalized
+        .map(normalize_device_mac)
+        .unwrap_or_default();
+
+    if available_devices.is_empty() {
+        return active_mac
+            .filter(|value| !normalize_device_mac(value).is_empty())
+            .map(|mac_address| WirelessDeviceOption {
+                role: current_role.clone(),
+                mac_address: mac_address.to_string(),
+                label: format_device_selector_label(&current_role, mac_address),
+                selected: true,
+            })
+            .into_iter()
+            .collect();
+    }
+
+    available_devices
+        .iter()
+        .map(|device| {
+            let normalized_mac = normalize_device_mac(&device.mac_address);
+            let selected = !current_mac_normalized.is_empty() && normalized_mac == current_mac_normalized;
+            let role = if selected {
+                current_role.clone()
+            } else if let Some(role_code) = device.role {
+                format_role(role_code).to_string()
+            } else if !device.role_label.eq_ignore_ascii_case("Unknown") {
+                device.role_label.clone()
+            } else if !connected_peer_mac_normalized.is_empty() && normalized_mac == connected_peer_mac_normalized {
+                match active_role {
+                    Some(ffi::BB_ROLE_AP) => "DEV".to_string(),
+                    Some(ffi::BB_ROLE_DEV) => "AP".to_string(),
+                    _ => "Unknown".to_string(),
+                }
+            } else {
+                "Unknown".to_string()
+            };
+
+            WirelessDeviceOption {
+                role: role.clone(),
+                mac_address: device.mac_address.clone(),
+                label: format_device_selector_label(&role, &device.mac_address),
+                selected,
+            }
+        })
+        .collect()
+}
+
 fn runtime_response_from_details(details: &WirelessRuntimeDetails) -> WirelessRuntimeResponse {
+    let current = build_wireless_runtime_view(details);
     WirelessRuntimeResponse {
         available: true,
         message: "Wireless runtime details fetched successfully".to_string(),
-        current: Some(build_wireless_runtime_view(details)),
+        available_devices: current.available_devices.clone(),
+        current: Some(current),
     }
 }
 
@@ -2779,10 +2913,18 @@ fn format_runtime_fetch_error_message(error: &str) -> String {
 }
 
 fn runtime_unavailable_response(message: String) -> WirelessRuntimeResponse {
+    runtime_unavailable_response_with_devices(message, Vec::new())
+}
+
+fn runtime_unavailable_response_with_devices(
+    message: String,
+    available_devices: Vec<WirelessDeviceOption>,
+) -> WirelessRuntimeResponse {
     WirelessRuntimeResponse {
         available: false,
         message,
         current: None,
+        available_devices,
     }
 }
 
@@ -2827,6 +2969,47 @@ async fn refresh_runtime_from_baseband(state: &Arc<AppState>, baseband: &Arc<Bas
     *guard = response;
 }
 
+fn wireless_setting_retry_budget(action: &str) -> Option<(usize, Duration)> {
+    match action {
+        "set_channel" => Some((
+            CHANNEL_EFFECT_RETRY_ATTEMPTS,
+            Duration::from_millis(CHANNEL_EFFECT_RETRY_INTERVAL_MS),
+        )),
+        _ => None,
+    }
+}
+
+async fn refresh_runtime_until_effect_or_timeout(
+    state: &Arc<AppState>,
+    baseband: &Arc<BasebandManager>,
+    request: &WirelessSettingRequest,
+) -> Option<WirelessRuntimeView> {
+    refresh_runtime_from_baseband(state, baseband).await;
+    refresh_snapshot_from_baseband(state, baseband).await;
+
+    let mut current = state.wireless_runtime.read().await.current.clone();
+    let Some((attempts, retry_interval)) = wireless_setting_retry_budget(&request.action) else {
+        return current;
+    };
+
+    if verify_wireless_setting_effect(request, current.as_ref()).is_ok() {
+        return current;
+    }
+
+    for _ in 0..attempts {
+        tokio::time::sleep(retry_interval).await;
+        refresh_runtime_from_baseband(state, baseband).await;
+        refresh_snapshot_from_baseband(state, baseband).await;
+        current = state.wireless_runtime.read().await.current.clone();
+
+        if verify_wireless_setting_effect(request, current.as_ref()).is_ok() {
+            break;
+        }
+    }
+
+    current
+}
+
 fn verify_wireless_setting_effect(
     request: &WirelessSettingRequest,
     current: Option<&WirelessRuntimeView>,
@@ -2848,6 +3031,19 @@ fn verify_wireless_setting_effect(
             }
             Ok(())
         }
+        "set_channel" => {
+            if let Some(requested) = request.channel_index {
+                if current.work_channel_index != Some(requested) {
+                    return Err(format!(
+                        "Manual channel did not take effect on {}. Requested channel index {}, but runtime still reports {}.",
+                        current.operation_mode,
+                        requested,
+                        format_optional_u8(current.work_channel_index)
+                    ));
+                }
+            }
+            Ok(())
+        }
         "set_power_auto" => {
             if let Some(requested) = request.auto_mode {
                 verify_bool_effect(
@@ -2857,6 +3053,19 @@ fn verify_wireless_setting_effect(
                     &current.operation_mode,
                     None,
                 )?;
+            }
+            Ok(())
+        }
+        "set_power" => {
+            if let Some(requested) = request.power_dbm {
+                if current.current_power_dbm != Some(requested) {
+                    return Err(format!(
+                        "Manual power did not take effect on {}. Requested {} dB, but runtime still reports {} dB.",
+                        current.operation_mode,
+                        requested,
+                        format_optional_u8(current.current_power_dbm)
+                    ));
+                }
             }
             Ok(())
         }
@@ -2887,6 +3096,19 @@ fn verify_wireless_setting_effect(
                     }
 
                     return Err(message);
+                }
+            }
+            Ok(())
+        }
+        "set_bandwidth" => {
+            if let Some(requested) = request.bandwidth {
+                if current.bandwidth_code != Some(requested) {
+                    return Err(format!(
+                        "Manual bandwidth did not take effect on {}. Requested {}, but runtime still reports {}.",
+                        current.operation_mode,
+                        requested,
+                        format_optional_u8(current.bandwidth_code)
+                    ));
                 }
             }
             Ok(())
@@ -3233,6 +3455,8 @@ fn format_device_selector_label(role: &str, mac_address: &str) -> String {
     let normalized_mac = normalize_device_mac(mac_address);
     if normalized_mac.is_empty() {
         role.to_string()
+    } else if role.eq_ignore_ascii_case("Unknown") {
+        normalized_mac
     } else {
         format!("{}:{}", role, normalized_mac)
     }
@@ -3277,7 +3501,7 @@ fn format_direction(dir: u8) -> &'static str {
 fn format_power_mode(mode: u8) -> &'static str {
     match mode {
         0 => "Open Loop",
-        1 => "Close Loop",
+        1 => "Closed Loop",
         _ => "Unknown",
     }
 }
@@ -3289,8 +3513,7 @@ fn format_bandwidth(bandwidth: u8) -> String {
         2 => "5 MHz".to_string(),
         3 => "10 MHz".to_string(),
         4 => "20 MHz".to_string(),
-        5 => "40 MHz".to_string(),
-        value => format!("Unknown ({})", value),
+        value => format!("Unknown Bandwidth ({})", value),
     }
 }
 

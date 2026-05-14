@@ -4,5 +4,6 @@ desktop.ini
 ar_dbg_client
 target
 target_verify
+dist/
 stress-result.json
 daemon_log/
