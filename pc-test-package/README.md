@@ -1,5 +1,4 @@
 # Wireless Status Server PC Test Package
-
 ## 1. Package purpose
 
 This package is for Windows PC validation and test execution.
