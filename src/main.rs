@@ -282,6 +282,9 @@ struct WirelessRuntimeView {
     current_power_mode: String,
     current_power_auto: Option<bool>,
     current_power_dbm: Option<u8>,
+    br_power_dbm: Option<u8>,
+    ap_power_dbm: Option<u8>,
+    dev_power_dbm: Option<u8>,
     warnings: Vec<String>,
 }
 
@@ -603,6 +606,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None,
                 DEFAULT_AP_PLOT_SAMPLE_POINTS,
                 initial_runtime.current.as_ref(),
+                None,
             )
         }
         _ => build_simulated_snapshot(0, DEFAULT_AP_PLOT_SAMPLE_POINTS),
@@ -2062,6 +2066,17 @@ fn spawn_data_feeder(state: Arc<AppState>) {
 
             let sample_count = *state.plot_sample_count.read().await;
             let runtime_current = state.wireless_runtime.read().await.current.clone();
+            let power_fallback = runtime_current.as_ref().and_then(|r| {
+                if r.br_power_dbm.is_some() || r.ap_power_dbm.is_some() || r.dev_power_dbm.is_some() {
+                    Some(ffi::BbPowerFallback {
+                        br_power_dbm: r.br_power_dbm,
+                        ap_power_dbm: r.ap_power_dbm,
+                        dev_power_dbm: r.dev_power_dbm,
+                    })
+                } else {
+                    None
+                }
+            });
             let snapshot = match state.baseband.as_ref() {
                 Some(baseband) => match baseband.get_status_snapshot() {
                     Ok(status) => {
@@ -2071,6 +2086,7 @@ fn spawn_data_feeder(state: Arc<AppState>) {
                             Some(&previous),
                             sample_count,
                             runtime_current.as_ref(),
+                            power_fallback.as_ref(),
                         )
                     }
                     Err(err) => {
@@ -2266,9 +2282,36 @@ fn build_hardware_snapshot(
     previous: Option<&WirelessSnapshot>,
     plot_sample_count: usize,
     runtime_current: Option<&WirelessRuntimeView>,
+    power_fallback: Option<&ffi::BbPowerFallback>,
 ) -> WirelessSnapshot {
+    let built_power_fallback;
+    let power_fallback = match power_fallback {
+        Some(pf) => Some(pf),
+        None => {
+            built_power_fallback = runtime_current.and_then(|r| {
+                if r.br_power_dbm.is_some() || r.ap_power_dbm.is_some() || r.dev_power_dbm.is_some() {
+                    Some(ffi::BbPowerFallback {
+                        br_power_dbm: r.br_power_dbm,
+                        ap_power_dbm: r.ap_power_dbm,
+                        dev_power_dbm: r.dev_power_dbm,
+                    })
+                } else {
+                    None
+                }
+            });
+            built_power_fallback.as_ref()
+        }
+    };
+    if power_fallback.is_none() {
+        tracing::warn!(
+            "build_hardware_snapshot: power_fallback is None. runtime_current.br={:?} ap={:?} dev={:?}",
+            runtime_current.and_then(|r| r.br_power_dbm),
+            runtime_current.and_then(|r| r.ap_power_dbm),
+            runtime_current.and_then(|r| r.dev_power_dbm),
+        );
+    }
     let plot_prefix = plot_series_prefix_for_role(status.role);
-    let peer_plot_prefix = plot_series_prefix_for_role(1);
+    let _peer_plot_prefix = plot_series_prefix_for_role(1);
     let fch_lock_value = fch_lock_value_from_status(status);
     let chart_history_context = chart_history_context_key(status);
     let has_selected_user_signal = status.snr_db.is_some()
@@ -2318,7 +2361,7 @@ fn build_hardware_snapshot(
         })
         .collect::<Vec<_>>();
     let chart_target = status.mac_hex.clone();
-    let mut chart_series = if render_chart_series {
+    let chart_series = if render_chart_series {
         vec![
             build_chart_series_from_source(
                 "ap_snr",
@@ -2390,47 +2433,40 @@ fn build_hardware_snapshot(
                 plot_sample_count,
                 &chart_history_context,
             ),
+            build_chart_series_from_source(
+                "br_power",
+                "br_power",
+                "",
+                None,
+                previous,
+                power_fallback.and_then(|p| p.br_power_dbm.map(i32::from)),
+                plot_sample_count,
+                &chart_history_context,
+            ),
+            build_chart_series_from_source(
+                "ap_power",
+                "ap_power",
+                "",
+                None,
+                previous,
+                power_fallback.and_then(|p| p.ap_power_dbm.map(i32::from)),
+                plot_sample_count,
+                &chart_history_context,
+            ),
+            build_chart_series_from_source(
+                "dev_power",
+                "dev_power",
+                "",
+                None,
+                previous,
+                power_fallback.and_then(|p| p.dev_power_dbm.map(i32::from)),
+                plot_sample_count,
+                &chart_history_context,
+            ),
         ]
     } else {
         Vec::new()
     };
-
-    if render_chart_series && status.role == 0 {
-        let active_link = status.links.first();
-        chart_series.extend(
-            [
-                build_optional_chart_series_from_source(
-                    "dev_snr",
-                    &plot_series_label(peer_plot_prefix, "snr"),
-                    "",
-                    previous,
-                    active_link.and_then(|link| link.snr_db),
-                    plot_sample_count,
-                    &chart_history_context,
-                ),
-                build_optional_chart_series_from_source(
-                    "dev_gain_a",
-                    &plot_series_label(peer_plot_prefix, "gain_a"),
-                    "",
-                    previous,
-                    active_link.and_then(|link| link.signal_main),
-                    plot_sample_count,
-                    &chart_history_context,
-                ),
-                build_optional_chart_series_from_source(
-                    "dev_gain_b",
-                    &plot_series_label(peer_plot_prefix, "gain_b"),
-                    "",
-                    previous,
-                    active_link.and_then(|link| link.signal_aux),
-                    plot_sample_count,
-                    &chart_history_context,
-                ),
-            ]
-            .into_iter()
-            .flatten(),
-        );
-    }
 
     WirelessSnapshot {
         sequence,
@@ -2532,6 +2568,7 @@ fn build_chart_series_from_source(
     build_chart_series(key, label, unit, current_value, points)
 }
 
+#[allow(dead_code)]
 fn build_optional_chart_series_from_source(
     key: &str,
     label: &str,
@@ -2775,6 +2812,9 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             .unwrap_or_else(|| "Unavailable".to_string()),
         current_power_auto: details.power_auto.as_ref().map(|info| info.enabled),
         current_power_dbm: details.current_power.as_ref().map(|info| info.power_dbm),
+        br_power_dbm: details.power_fallback.as_ref().and_then(|p| p.br_power_dbm),
+        ap_power_dbm: details.power_fallback.as_ref().and_then(|p| p.ap_power_dbm),
+        dev_power_dbm: details.power_fallback.as_ref().and_then(|p| p.dev_power_dbm),
         warnings: details.warnings.clone(),
     }
 }
@@ -2938,12 +2978,24 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
         let next_sequence = previous.sequence.wrapping_add(1);
         let sample_count = *state.plot_sample_count.read().await;
         let runtime_current = state.wireless_runtime.read().await.current.clone();
+        let power_fallback = runtime_current.as_ref().and_then(|r| {
+            if r.br_power_dbm.is_some() || r.ap_power_dbm.is_some() || r.dev_power_dbm.is_some() {
+                Some(ffi::BbPowerFallback {
+                    br_power_dbm: r.br_power_dbm,
+                    ap_power_dbm: r.ap_power_dbm,
+                    dev_power_dbm: r.dev_power_dbm,
+                })
+            } else {
+                None
+            }
+        });
         let snapshot = build_hardware_snapshot(
             next_sequence,
             &status,
             Some(&previous),
             sample_count,
             runtime_current.as_ref(),
+            power_fallback.as_ref(),
         );
 
         {

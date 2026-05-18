@@ -3425,12 +3425,34 @@
         }
 
         function getPlotSeriesColor(series, index) {
-            const normalizedKey = getPlotSeriesKey(series, index).toUpperCase();
-            const normalizedLabel = getPlotSeriesLabel(series, index).toUpperCase();
-            if (normalizedKey === 'AP_GAIN_A' || normalizedLabel === 'AP_GAIN_A') {
-                return '#c026d3';
+            const label = getPlotSeriesLabel(series, index).toUpperCase();
+            // 精确匹配：先尝试完整 label（含前缀），可区分 AP/DEV
+            const fullMatches = {
+                'AP_SNR': '#2563eb',
+                'DEV_SNR': '#0891b2',
+                'AP_GAIN_A': '#16a34a',
+                'AP_GAIN_B': '#0d9488',
+                'DEV_GAIN_A': '#65a30d',
+                'DEV_GAIN_B': '#14b8a6',
+                'BR_POWER': '#78350f',
+                'AP_POWER': '#6366f1',
+                'DEV_POWER': '#eab308',
+            };
+            if (fullMatches[label] !== undefined) {
+                return fullMatches[label];
             }
-            if (normalizedKey === 'DEV_GAIN_B' || normalizedLabel === 'DEV_GAIN_B') {
+            // 通用匹配：去掉前缀后按指标名
+            const metric = label.includes('_') ? label.split('_').slice(1).join('_') : label;
+            if (metric === 'LDPC_ERR') {
+                return '#dc2626';
+            }
+            if (metric === 'LDPC_NUM') {
+                return '#d97706';
+            }
+            if (metric === 'MCS_RX') {
+                return '#7c3aed';
+            }
+            if (metric === 'FCH_LOCK') {
                 return '#0f766e';
             }
             return plotPalette[index % plotPalette.length];
@@ -3622,16 +3644,12 @@
             const color = getPlotSeriesColor(series, index);
             const unit = series.unit || '';
             const currentValue = formatChartValue(series.current_value, unit);
-            const rangeText = Number.isFinite(series.min_value) && Number.isFinite(series.max_value)
-                ? `${formatChartValue(series.min_value, unit)} ~ ${formatChartValue(series.max_value, unit)}`
-                : '--';
 
             return `
                 <button class="plot-legend-item ${isVisible ? '' : 'is-muted'}" type="button" data-plot-key="${escapeHtml(key)}">
                     <span class="plot-legend-swatch" style="background:${color}"></span>
                     <span class="plot-legend-copy">
-                        <span class="plot-legend-label">${escapeHtml(label)}<span class="plot-legend-range-inline"> ${escapeHtml(rangeText)}</span></span>
-                        <span class="plot-legend-range">${escapeHtml(rangeText)}</span>
+                        <span class="plot-legend-label">${escapeHtml(label)}</span>
                     </span>
                     <span class="plot-legend-value">${escapeHtml(currentValue)}</span>
                 </button>

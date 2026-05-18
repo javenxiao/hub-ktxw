@@ -167,6 +167,7 @@ pub struct WirelessRuntimeDetails {
     pub power_mode: Option<ffi::BbPowerModeSummary>,
     pub current_power: Option<ffi::BbCurrentPowerSummary>,
     pub power_auto: Option<ffi::BbPowerAutoSummary>,
+    pub power_fallback: Option<ffi::BbPowerFallback>,
     pub warnings: Vec<String>,
 }
 
@@ -1444,6 +1445,11 @@ impl BasebandApi {
                 None
             }
         };
+        let (power_fallback, mut power_warnings) =
+            run_remote_sdk_call(is_remote, || {
+                Ok(ffi::read_power_fallback(self.handle_ptr(), status.role))
+            }).unwrap_or((None, vec!["Power fallback read failed".to_string()]));
+        warnings.append(&mut power_warnings);
 
         if let Some(current_info) = system_info.as_ref() {
             self.cache_system_info_for_active_device(current_info);
@@ -1473,6 +1479,7 @@ impl BasebandApi {
             power_mode,
             current_power,
             power_auto,
+            power_fallback,
             warnings,
         })
     }

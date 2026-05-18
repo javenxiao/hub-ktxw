@@ -215,6 +215,9 @@ pub struct BbPlotPointSummary {
     pub gain_b: i32,
     pub mcs_rx: i32,
     pub fch_lock: i32,
+    pub br_power: i32,
+    pub ap_power: i32,
+    pub dev_power: i32,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -228,6 +231,9 @@ pub struct BbPlotSnapshotSummary {
     pub gain_b: Vec<i32>,
     pub mcs_rx: Vec<i32>,
     pub fch_lock: Vec<i32>,
+    pub br_power: Vec<i32>,
+    pub ap_power: Vec<i32>,
+    pub dev_power: Vec<i32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -507,6 +513,103 @@ pub struct bb_get_cur_pwr_out_t {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct bb_get_pwr_auto_out_t {
     pub pwr_auto: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_get_1v1_info_in_t {
+    pub frame_num: u8,
+    pub rsv: [u8; 3],
+}
+
+impl Default for bb_get_1v1_info_in_t {
+    fn default() -> Self {
+        Self {
+            frame_num: 0,
+            rsv: [0; 3],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_lfs_quality_t {
+    pub chan_snr: u16,
+    pub gain_a: u8,
+    pub gain_b: u8,
+}
+
+impl Default for bb_lfs_quality_t {
+    fn default() -> Self {
+        Self {
+            chan_snr: 0,
+            gain_a: 0,
+            gain_b: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_info_t {
+    pub snr: u16,
+    pub ldpc_tlv_err_ratio: u16,
+    pub ldpc_num_err_ratio: u16,
+    pub gain_a: u8,
+    pub gain_b: u8,
+    pub tx_mcs: u8,
+    pub tx_chan: u8,
+    pub tx_power: u8,
+    pub lna_bypass: u8,
+    pub tx_freq_khz: u32,
+    pub lfs_low_band: bb_lfs_quality_t,
+    pub lfs_high_band: bb_lfs_quality_t,
+    pub rev: [u8; 48],
+}
+
+impl Default for bb_info_t {
+    fn default() -> Self {
+        Self {
+            snr: 0,
+            ldpc_tlv_err_ratio: 0,
+            ldpc_num_err_ratio: 0,
+            gain_a: 0,
+            gain_b: 0,
+            tx_mcs: 0,
+            tx_chan: 0,
+            tx_power: 0,
+            lna_bypass: 0,
+            tx_freq_khz: 0,
+            lfs_low_band: bb_lfs_quality_t::default(),
+            lfs_high_band: bb_lfs_quality_t::default(),
+            rev: [0; 48],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_get_1v1_info_out_t {
+    pub self_info: bb_info_t,
+    pub peer_info: bb_info_t,
+    pub rev: [u8; 64],
+}
+
+impl Default for bb_get_1v1_info_out_t {
+    fn default() -> Self {
+        Self {
+            self_info: bb_info_t::default(),
+            peer_info: bb_info_t::default(),
+            rev: [0; 64],
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BbPowerFallback {
+    pub br_power_dbm: Option<u8>,
+    pub ap_power_dbm: Option<u8>,
+    pub dev_power_dbm: Option<u8>,
 }
 
 #[repr(C)]
@@ -1038,6 +1141,9 @@ struct PlotHistoryCache {
     gain_b: VecDeque<i32>,
     mcs_rx: VecDeque<i32>,
     fch_lock: VecDeque<i32>,
+    br_power: VecDeque<i32>,
+    ap_power: VecDeque<i32>,
+    dev_power: VecDeque<i32>,
 }
 
 impl PlotHistoryCache {
@@ -1051,6 +1157,9 @@ impl PlotHistoryCache {
         self.gain_b.clear();
         self.mcs_rx.clear();
         self.fch_lock.clear();
+        self.br_power.clear();
+        self.ap_power.clear();
+        self.dev_power.clear();
     }
 
     fn append_event(&mut self, event: &bb_event_plot_data_t) {
@@ -1072,6 +1181,9 @@ impl PlotHistoryCache {
                 gain_b: i32::from(plot.gain_b),
                 mcs_rx: i32::from(decode_plot_mcs_rx(plot.mcs_rx_fch_lock)),
                 fch_lock: i32::from(decode_plot_fch_lock(plot.mcs_rx_fch_lock)),
+                br_power: i32::from(plot.br_power),
+                ap_power: i32::from(plot.power),
+                dev_power: i32::from(plot.peer_power),
             });
         }
     }
@@ -1084,6 +1196,9 @@ impl PlotHistoryCache {
         append_plot_value(&mut self.gain_b, point.gain_b);
         append_plot_value(&mut self.mcs_rx, point.mcs_rx);
         append_plot_value(&mut self.fch_lock, point.fch_lock);
+        append_plot_value(&mut self.br_power, point.br_power);
+        append_plot_value(&mut self.ap_power, point.ap_power);
+        append_plot_value(&mut self.dev_power, point.dev_power);
         self.sample_count = self.sample_count.saturating_add(1);
     }
 
@@ -1095,6 +1210,9 @@ impl PlotHistoryCache {
         trim_plot_buffer(&mut self.gain_b, limit);
         trim_plot_buffer(&mut self.mcs_rx, limit);
         trim_plot_buffer(&mut self.fch_lock, limit);
+        trim_plot_buffer(&mut self.br_power, limit);
+        trim_plot_buffer(&mut self.ap_power, limit);
+        trim_plot_buffer(&mut self.dev_power, limit);
     }
 
     fn snapshot(&self) -> Option<BbPlotSnapshotSummary> {
@@ -1112,6 +1230,9 @@ impl PlotHistoryCache {
             gain_b: self.gain_b.iter().copied().collect(),
             mcs_rx: self.mcs_rx.iter().copied().collect(),
             fch_lock: self.fch_lock.iter().copied().collect(),
+            br_power: self.br_power.iter().copied().collect(),
+            ap_power: self.ap_power.iter().copied().collect(),
+            dev_power: self.dev_power.iter().copied().collect(),
         })
     }
 }
@@ -1209,6 +1330,7 @@ pub const BB_GET_BOOT_REASON: u32 = bb_request(BB_REQ_GET, 115);
 pub const BB_GET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_GET, 200);
 pub const BB_GET_SYS_INFO: u32 = bb_request(BB_REQ_GET, 105);
 pub const BB_GET_MCS_MODE: u32 = bb_request(BB_REQ_GET, 117);
+pub const BB_GET_1V1_INFO: u32 = bb_request(BB_REQ_GET, 107);
 
 // 设置命令字
 pub const BB_SET_EVENT_SUBSCRIBE: u32 = bb_request(BB_REQ_SET, 0);
@@ -2231,6 +2353,57 @@ pub fn get_power_auto(handle: *mut bb_dev_handle_t) -> Result<BbPowerAutoSummary
             e => Err(format!("bb_ioctl(BB_GET_POWER_AUTO) failed with code: {}", e)),
         }
     })
+}
+
+pub fn get_1v1_info(handle: *mut bb_dev_handle_t) -> Result<bb_get_1v1_info_out_t, String> {
+    let sdk = sdk()?;
+    let input = bb_get_1v1_info_in_t::default();
+    let mut output = bb_get_1v1_info_out_t::default();
+
+    suppress_sdk_console_output(|| unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_GET_1V1_INFO as c_uint,
+            &input as *const bb_get_1v1_info_in_t as *const c_void,
+            &mut output as *mut bb_get_1v1_info_out_t as *mut c_void,
+        ) {
+            0 => Ok(output),
+            e => Err(format!("bb_ioctl(BB_GET_1V1_INFO) failed with code: {}", e)),
+        }
+    })
+}
+
+pub fn read_power_fallback(handle: *mut bb_dev_handle_t, role: u8) -> (Option<BbPowerFallback>, Vec<String>) {
+    let mut warnings = Vec::new();
+
+    let mut br_power_dbm = None;
+    let mut ap_power_dbm = None;
+    let mut dev_power_dbm = None;
+    match get_1v1_info(handle) {
+        Ok(info) => {
+            br_power_dbm = Some(info.self_info.tx_power);
+            let (ap, dev) = match role {
+                BB_ROLE_AP => (Some(info.self_info.tx_power), Some(info.peer_info.tx_power)),
+                BB_ROLE_DEV => (Some(info.peer_info.tx_power), Some(info.self_info.tx_power)),
+                _ => (None, None),
+            };
+            ap_power_dbm = ap;
+            dev_power_dbm = dev;
+        }
+        Err(e) => {
+            warnings.push(format!("Failed to read 1v1 info: {}", e));
+        }
+    }
+
+    if br_power_dbm.is_none() && ap_power_dbm.is_none() && dev_power_dbm.is_none() {
+        (None, warnings)
+    } else {
+        (Some(BbPowerFallback {
+            br_power_dbm,
+            ap_power_dbm,
+            dev_power_dbm,
+        }), warnings)
+    }
 }
 
 pub fn subscribe_plot_stream(handle: *mut bb_dev_handle_t, user: u8, cache_num: u8) -> Result<(), String> {
@@ -3369,12 +3542,17 @@ fn set_plot_enabled(handle: *mut bb_dev_handle_t, user: u8, enable: bool, cache_
     }
 }
 
+fn normalize_rx_mcs_value(packed: u8) -> u8 {
+    // Board-side RX MCS values are offset by 2 compared with PC Tool.
+    (packed & 0x1F).saturating_sub(2)
+}
+
 fn decode_rx_mcs(packed: u8) -> u8 {
-    packed & 0x1F
+    normalize_rx_mcs_value(packed)
 }
 
 fn decode_plot_mcs_rx(packed: u8) -> u8 {
-    packed & 0x1F
+    normalize_rx_mcs_value(packed)
 }
 
 fn decode_plot_fch_lock(packed: u8) -> u8 {
@@ -3705,6 +3883,38 @@ pub unsafe fn bb_socket_read(socket_id: c_int, data: *mut c_void, size: c_uint, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plot_history_cache_tracks_power_series() {
+        let mut cache = PlotHistoryCache::default();
+
+        cache.append_point(BbPlotPointSummary {
+            snr: 0,
+            ldpc_err: 0,
+            ldpc_num: 0,
+            gain_a: 0,
+            gain_b: 0,
+            mcs_rx: 0,
+            fch_lock: 1,
+            br_power: 96,
+            ap_power: 58,
+            dev_power: 27,
+        });
+
+        let snapshot = cache.snapshot().expect("plot snapshot should exist");
+        assert_eq!(snapshot.sample_count, 1);
+        assert_eq!(snapshot.br_power, vec![96]);
+        assert_eq!(snapshot.ap_power, vec![58]);
+        assert_eq!(snapshot.dev_power, vec![27]);
+    }
+
+    #[test]
+    fn normalize_rx_mcs_value_offsets_to_pc_tool_scale() {
+        assert_eq!(normalize_rx_mcs_value(0), 0);
+        assert_eq!(normalize_rx_mcs_value(2), 0);
+        assert_eq!(normalize_rx_mcs_value(4), 2);
+        assert_eq!(normalize_rx_mcs_value(13), 11);
+    }
 
     #[test]
     fn test_bb_request_macro() {
