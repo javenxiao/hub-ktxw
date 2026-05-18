@@ -40,12 +40,6 @@
                                     <option value="">--</option>
                                 </select>
                             </div>
-                            <div class="console-context-card">
-                                <span class="console-context-label">User</span>
-                                <select id="rf-signal-user" class="sys-input rf-mode-select console-context-select" aria-label="User selection">
-                                    <option value="0">User 0</option>
-                                </select>
-                            </div>
                             <div class="console-context-card console-context-card-role">
                                 <span class="console-context-label">Role</span>
                                 <div class="signal-source-role-controls console-context-role-controls">
@@ -59,12 +53,7 @@
                         </div>
                     </div>
                     <div class="console-topbar-right">
-                        <div class="console-status-chip">
-                            <div class="live-state offline" id="live-state" role="img" aria-label="RF Radio offline" title="RF Radio offline"></div>
-                        </div>
                         <div class="console-user-strip">
-                            <span class="console-product-name">RF Product Console</span>
-                            <span class="console-divider" aria-hidden="true"></span>
                             <span class="console-user-name">Admin</span>
                             <span class="console-user-action">Logout</span>
                         </div>
@@ -251,10 +240,6 @@
                                         <strong class="maintenance-metric-value" id="maintenance-uptime">--</strong>
                                     </article>
                                     <article class="maintenance-metric-card">
-                                        <span class="maintenance-metric-label">Hardware Version</span>
-                                        <strong class="maintenance-metric-value" id="maintenance-hardware-version">--</strong>
-                                    </article>
-                                    <article class="maintenance-metric-card maintenance-metric-card-accent">
                                         <span class="maintenance-metric-label">Firmware Version</span>
                                         <strong class="maintenance-metric-value" id="maintenance-firmware-version">--</strong>
                                     </article>
@@ -442,6 +427,7 @@
                     <div class="wireless-tab-row">
                         <div class="sub-tabs" aria-label="无线二级栏目" role="tablist">
                             <button class="sub-tab active" type="button" data-wireless-tab="status" role="tab" aria-selected="true" aria-controls="wireless-panel-status">Status</button>
+                            <button class="sub-tab" type="button" data-wireless-tab="rssi" role="tab" aria-selected="false" aria-controls="wireless-panel-rssi">RSSI Graph</button>
                             <button class="sub-tab" type="button" data-wireless-tab="rf" role="tab" aria-selected="false" aria-controls="wireless-panel-rf">RF Settings</button>
                             <button class="sub-tab" type="button" data-wireless-tab="configuration" role="tab" aria-selected="false" aria-controls="wireless-panel-configuration">Configuration</button>
                         </div>
@@ -510,9 +496,19 @@
                             </div>
 
                         </section>
+                    </div>
 
+                    <div class="wireless-subpage" id="wireless-panel-rssi" data-wireless-panel="rssi" role="tabpanel" hidden>
                         <section class="chart-panel" id="wireless-chart-panel" hidden>
-                            <h2 class="sys-section-title chart-panel-title" id="chart-title">RSSI Graph (--)</h2>
+                            <div class="chart-panel-header">
+                                <h2 class="sys-section-title chart-panel-title" id="chart-title">RSSI Graph (--)</h2>
+                                <label class="wireless-local-user-field" for="plot-signal-user">
+                                    <span class="wireless-local-user-label">User</span>
+                                    <select id="plot-signal-user" class="sys-input rf-input-medium rf-signal-user-select" data-rf-signal-user-select aria-label="RSSI Graph user selection" disabled>
+                                        <option value="0">User 0</option>
+                                    </select>
+                                </label>
+                            </div>
                             <div class="chart-box">
                                 <div class="plot-toolbar">
                                     <div class="plot-toolbar-main">
@@ -533,7 +529,6 @@
                                 </div>
                             </div>
                         </section>
-
                     </div>
 
                     <div class="wireless-subpage" id="wireless-panel-rf" data-wireless-panel="rf" role="tabpanel" hidden>
@@ -690,6 +685,14 @@
                                                     <td>Power (dB)</td>
                                                     <td>
                                                         <input id="control-power-db" class="sys-input rf-input-mini" type="number" min="0" max="31" value="20">
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>User</td>
+                                                    <td>
+                                                        <select id="rf-settings-signal-user" class="sys-input rf-input-medium rf-signal-user-select" data-rf-signal-user-select aria-label="RF Settings user selection" disabled>
+                                                            <option value="0">User 0</option>
+                                                        </select>
                                                     </td>
                                                 </tr>
                                             </tbody>
@@ -1036,6 +1039,7 @@
         const primaryTabLabels = Array.from(document.querySelectorAll('.top-tabs .tab-label'));
         const connectionTableBody = document.getElementById('connection-table-body');
         const wirelessChartPanel = document.getElementById('wireless-chart-panel');
+        const rfSignalUserSelects = Array.from(document.querySelectorAll('[data-rf-signal-user-select]'));
         const wirelessSubTabs = Array.from(document.querySelectorAll('.sub-tab[data-wireless-tab]'));
         const wirelessSubPages = Array.from(document.querySelectorAll('.wireless-subpage'));
         let socket = null;
@@ -1060,6 +1064,8 @@
         let rebootRecoveryStartTimer = null;
         let rebootRecoveryWatchToken = 0;
         let maintenanceUpgradeDisplayedPercent = 0;
+        let maintenanceUpgradeHttpUploadElapsedMs = 0;
+        let maintenanceUpgradeFlashStartedAt = 0;
         let maintenanceUpgradeCompletionAnimationFrame = null;
         let maintenanceUpgradePendingAnimationFrame = null;
         let maintenanceRefreshTimer = null;
@@ -1137,7 +1143,6 @@
             ['maintenance-operation-mode', 'operation_mode'],
             ['maintenance-access-mode', 'access_mode'],
             ['maintenance-uptime', 'system_uptime'],
-            ['maintenance-hardware-version', 'hardware_version'],
             ['maintenance-firmware-version', 'firmware_version'],
             ['maintenance-software-build', 'software_build'],
             ['maintenance-compile-time', 'compile_time'],
@@ -1276,6 +1281,10 @@
                 panel.classList.toggle('active', isActive);
                 panel.hidden = !isActive;
             });
+
+            if (tabName === 'rssi') {
+                setPlotPanelVisibility(true);
+            }
 
             if (tabName === 'rf') {
                 loadWirelessRuntimeDetails().catch(() => {});
@@ -1806,6 +1815,45 @@
             return `${bytes}B`;
         }
 
+        function formatElapsedMs(value) {
+            const normalized = Math.max(0, Number(value) || 0);
+
+            if (normalized >= 10000) {
+                return `${(normalized / 1000).toFixed(1)}s`;
+            }
+            if (normalized >= 1000) {
+                return `${(normalized / 1000).toFixed(2)}s`;
+            }
+
+            return `${Math.round(normalized)}ms`;
+        }
+
+        function resolveMaintenanceBoardWriteElapsedMs(progress = null) {
+            const reportedElapsedMs = Number(progress?.board_write_elapsed_ms) || 0;
+            if (reportedElapsedMs > 0) {
+                return reportedElapsedMs;
+            }
+
+            if (maintenanceUpgradeFlashStartedAt > 0) {
+                return Math.max(0, window.performance.now() - maintenanceUpgradeFlashStartedAt);
+            }
+
+            return 0;
+        }
+
+        function formatMaintenanceUpgradeTiming(httpUploadElapsedMs = maintenanceUpgradeHttpUploadElapsedMs, boardWriteElapsedMs = 0) {
+            const parts = [];
+
+            if (httpUploadElapsedMs > 0) {
+                parts.push(`HTTP upload ${formatElapsedMs(httpUploadElapsedMs)}`);
+            }
+            if (boardWriteElapsedMs > 0) {
+                parts.push(`Board write ${formatElapsedMs(boardWriteElapsedMs)}`);
+            }
+
+            return parts.join(' · ');
+        }
+
         function isMaintenancePanelVisible() {
             const systemTab = document.getElementById('tab-system');
             const maintenanceTab = document.querySelector('.sys-subnav-item[data-tab="maintenance"]');
@@ -1882,10 +1930,18 @@
         }
 
         function showMaintenanceUpgradeWaitingState() {
-            setMaintenanceStatus(maintenanceStatusId, maintenanceUpgradeWaitingMessage, 'pending', { sticky: false });
+            const timing = formatMaintenanceUpgradeTiming();
+            const detail = timing
+                ? `${timing}. ${maintenanceUpgradeWaitingDetail}`
+                : maintenanceUpgradeWaitingDetail;
+            const message = timing
+                ? `${timing}. ${maintenanceUpgradeWaitingMessage}`
+                : maintenanceUpgradeWaitingMessage;
+
+            setMaintenanceStatus(maintenanceStatusId, message, 'pending', { sticky: false });
             setMaintenanceUpgradeStage({
                 phase: 'Starting flash',
-                detail: maintenanceUpgradeWaitingDetail,
+                detail,
                 percent: 0,
                 state: 'pending',
             });
@@ -1904,16 +1960,22 @@
 
         function renderMaintenanceUpgradeFlashingState(prog, file) {
             const pct = formatMaintenanceUpgradePercent(prog.percent, 'pending');
+            const boardWriteElapsedMs = resolveMaintenanceBoardWriteElapsedMs(prog);
+            const timing = formatMaintenanceUpgradeTiming(
+                Number(prog.http_upload_elapsed_ms) || maintenanceUpgradeHttpUploadElapsedMs,
+                boardWriteElapsedMs,
+            );
+            const detail = `${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)} written.${timing ? ` ${timing}.` : ''}`;
 
             setMaintenanceUpgradeStage({
                 phase: prog.step_label || 'Writing firmware image',
-                detail: `${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)} written.`,
+                detail,
                 percent: prog.percent,
                 state: 'pending',
             });
             setMaintenanceStatus(
                 maintenanceStatusId,
-                `Flashing... ${pct}% (${prog.step_label || 'writing'}) — ${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)}`,
+                `Flashing... ${pct}% (${prog.step_label || 'writing'}) — ${formatBytes(prog.bytes_written || 0)} / ${formatBytes(prog.file_size || file.size)}${timing ? ` · ${timing}` : ''}`,
                 'pending',
                 { sticky: false }
             );
@@ -1924,9 +1986,16 @@
                 maintenanceElements.fileMeta.textContent = prog.file_name || file.name;
             }
 
+            const timing = formatMaintenanceUpgradeTiming(
+                Number(prog.http_upload_elapsed_ms) || maintenanceUpgradeHttpUploadElapsedMs,
+                resolveMaintenanceBoardWriteElapsedMs(prog),
+            );
+
             animateMaintenanceUpgradeCompletion({
                 phase: 'Rebooting device',
-                detail: 'Waiting for the device to reconnect after reboot.',
+                detail: timing
+                    ? `${timing}. Waiting for the device to reconnect after reboot.`
+                    : 'Waiting for the device to reconnect after reboot.',
                 percent: 100,
                 state: 'success',
             });
@@ -2809,10 +2878,13 @@
 
             stopMaintenanceProgressTimer();
             maintenanceBusy = true;
+            maintenanceUpgradeHttpUploadElapsedMs = 0;
+            maintenanceUpgradeFlashStartedAt = 0;
             updateMaintenanceControlsState();
             showMaintenanceUpgradeUploadingState(file);
 
             try {
+                const uploadStartedAt = window.performance.now();
                 const formData = new FormData();
                 formData.append('firmware', file, file.name);
 
@@ -2829,6 +2901,11 @@
                 }
 
                 console.log('Firmware upload accepted, starting progress poll:', payload);
+                maintenanceUpgradeHttpUploadElapsedMs = Math.max(
+                    window.performance.now() - uploadStartedAt,
+                    Number(payload.http_upload_elapsed_ms) || 0,
+                );
+                maintenanceUpgradeFlashStartedAt = window.performance.now();
                 showMaintenanceUpgradeWaitingState();
 
                 // 持续轮询直到完成或出错
@@ -2851,6 +2928,7 @@
                         stopMaintenanceProgressTimer();
                         showMaintenanceUpgradeFailureState(prog.message || 'Firmware upgrade failed.', prog.percent || 0);
                         maintenanceBusy = false;
+                        maintenanceUpgradeFlashStartedAt = 0;
                         updateMaintenanceControlsState();
                     } else if (prog.state === 'flashing') {
                         renderMaintenanceUpgradeFlashingState(prog, file);
@@ -2861,6 +2939,7 @@
                 stopMaintenanceProgressTimer();
                 showMaintenanceUpgradeFailureState(`Firmware upgrade failed: ${error.message}`);
                 maintenanceBusy = false;
+                maintenanceUpgradeFlashStartedAt = 0;
                 updateMaintenanceControlsState();
             }
         }
@@ -4512,11 +4591,12 @@
         }
 
         function updateLiveStateIndicator(isOnline) {
-            const stateLabel = isOnline ? 'RF Radio online' : 'RF Radio offline';
+            if (!liveState) {
+                return;
+            }
+
             liveState.classList.toggle('online', isOnline);
             liveState.classList.toggle('offline', !isOnline);
-            liveState.setAttribute('aria-label', stateLabel);
-            liveState.title = stateLabel;
         }
 
         function renderRfProfile() {
@@ -4656,20 +4736,42 @@
             updateSelectWidth(select);
         }
 
+        function getCurrentSignalUser(current = wirelessRuntimeCurrent) {
+            return Number(current?.selected_signal_user ?? current?.detected_signal_user ?? 0);
+        }
+
+        function syncRfSignalUserSelectValue(value) {
+            const normalizedValue = `${Number.isFinite(Number(value)) ? Number(value) : 0}`;
+
+            rfSignalUserSelects.forEach((select) => {
+                if (!select) {
+                    return;
+                }
+
+                if (Array.from(select.options).some((option) => option.value === normalizedValue)) {
+                    select.value = normalizedValue;
+                }
+
+                updateSelectWidth(select);
+            });
+        }
+
         function renderRfSignalUserOptions(current) {
-            const select = document.getElementById('rf-signal-user');
-            if (!select) {
+            if (rfSignalUserSelects.length === 0) {
                 return;
             }
 
-            select.innerHTML = rfSignalUserOptions.map((option) => (
+            const optionsMarkup = rfSignalUserOptions.map((option) => (
                 `<option value="${option.value}">${escapeHtml(option.label)}</option>`
             )).join('');
+            const selectedUser = getCurrentSignalUser(current);
 
-            const selectedUser = current?.selected_signal_user ?? current?.detected_signal_user ?? 0;
-            select.value = `${selectedUser}`;
-            select.disabled = !current;
-            updateSelectWidth(select);
+            rfSignalUserSelects.forEach((select) => {
+                select.innerHTML = optionsMarkup;
+                select.value = `${selectedUser}`;
+                select.disabled = !current;
+                updateSelectWidth(select);
+            });
         }
 
         function resolveCurrentBasebandRole(current) {
@@ -5556,7 +5658,11 @@
 
         if (connectionTableBody) {
             const toggleRssiChartPanel = () => {
-                setPlotPanelVisibility(!plotState.panelVisible);
+                const nextVisible = !plotState.panelVisible;
+                setPlotPanelVisibility(nextVisible);
+                if (nextVisible) {
+                    switchWirelessSubTab('rssi');
+                }
                 renderConnections(latestWirelessSnapshot?.connections || []);
             };
 
@@ -5604,17 +5710,14 @@
             });
         }
 
-        const rfSignalUserSelect = document.getElementById('rf-signal-user');
-        if (rfSignalUserSelect) {
-            rfSignalUserSelect.addEventListener('change', () => {
-                updateSelectWidth(rfSignalUserSelect);
+        rfSignalUserSelects.forEach((select) => {
+            select.addEventListener('change', () => {
+                updateSelectWidth(select);
 
-                const selectedUser = Number(rfSignalUserSelect.value);
-                const currentUser = Number(
-                    wirelessRuntimeCurrent?.selected_signal_user
-                    ?? wirelessRuntimeCurrent?.detected_signal_user
-                    ?? 0
-                );
+                const selectedUser = Number(select.value);
+                const currentUser = getCurrentSignalUser();
+
+                syncRfSignalUserSelectValue(selectedUser);
 
                 if (selectedUser === currentUser) {
                     return;
@@ -5623,7 +5726,7 @@
                 clearPlotChartForPendingContext();
                 applyWirelessSetting('set_signal_user', { user: selectedUser }).catch(() => {});
             });
-        }
+        });
 
         const rfBasebandRoleSelect = document.getElementById('rf-baseband-role');
         if (rfBasebandRoleSelect) {
@@ -6131,7 +6234,7 @@
         }, 5000);
 
         window.setInterval(() => {
-            if (isMaintenancePanelVisible()) {
+            if (isMaintenancePanelVisible() && !maintenanceBusy) {
                 loadMaintenanceInfo().catch(() => {});
             }
         }, 5000);

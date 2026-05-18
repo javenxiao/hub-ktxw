@@ -1384,19 +1384,54 @@ tbody td {
     padding: 0;
 }
 
-.chart-panel .chart-panel-title {
+.chart-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px 18px;
     margin: 0 0 12px;
     padding: 0 0 10px;
+    border-bottom: 1px solid #edf1f5;
+    flex-wrap: wrap;
+}
+
+.chart-panel .chart-panel-title {
+    margin: 0;
+    padding: 0;
     color: #2d4258;
     font-size: 15px;
     font-weight: 700;
     background: transparent;
     border-left: none;
-    border-bottom: 1px solid #edf1f5;
+    border-bottom: none;
     text-align: left;
     letter-spacing: 0.2px;
     box-shadow: none;
     border-radius: 0;
+}
+
+.wireless-local-user-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 20px;
+    min-width: 0;
+}
+
+.wireless-local-user-label {
+    color: #4b5968;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.wireless-local-user-field .sys-input {
+    min-width: 0;
+}
+
+.wireless-local-user-field .rf-signal-user-select {
+    width: auto;
+    max-width: 100%;
 }
 
 .chart-box {
@@ -3151,6 +3186,14 @@ tbody td {
     .rf-summary-pair {
         grid-template-columns: 1fr;
         gap: 12px;
+    }
+
+    .chart-panel-header {
+        align-items: flex-start;
+    }
+
+    .wireless-local-user-field {
+        margin-left: 0;
     }
 }
 

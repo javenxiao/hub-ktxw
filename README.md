@@ -4,6 +4,19 @@
 
 当前仓库已经接入第三方基带 SDK 的库文件和头文件，在此基础上可以继续完成页面开发、接口开发和硬件数据接入。
 
+## 0. 最近版本更新
+
+### 2026-05-18
+
+- Active Device 下拉已对齐板端状态，支持显示 AP(M)、AP(S)、DEV(M)、DEV(S) 主从标识。
+- Maintenance 页面已精简顶部与版本信息展示，移除了 RF Product Console、RF Radio online 状态显示，并去掉了 Version Details 中的 Hardware Version 卡片；Firmware Version 已恢复为同组统一背景样式。
+- Firmware Upgrade 已补齐性能与可观测性优化：
+	- 远端热升级 write/CRC 路径不再套用通用 20ms SDK 调用间隔。
+	- 升级进度已拆分为 HTTP upload 与 Board write 两段耗时，便于和 PC Tool 对比定位瓶颈。
+	- 后端上传改为流式读取，避免整包二次拷贝。
+	- 板端写入进度更新改为时间节流，减少升级热路径中的加锁和字符串构造开销。
+	- 升级期间暂停 Maintenance 自动刷新，降低与升级线程的资源竞争。
+
 ## 1. 项目定位
 
 项目分成 4 层：

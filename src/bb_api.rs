@@ -6,7 +6,9 @@ use std::{cell::RefCell, collections::HashMap, sync::{Arc, Mutex}, thread, time:
 use crate::ffi;
 
 const REMOTE_SDK_CALL_GAP: Duration = Duration::from_millis(20);
+const REMOTE_HOT_UPGRADE_SDK_CALL_GAP: Duration = Duration::from_millis(0);
 const REMOTE_DEVICE_SWITCH_GAP: Duration = Duration::from_millis(1200);
+const UPGRADE_PROGRESS_UPDATE_INTERVAL: Duration = Duration::from_millis(100);
 const HOT_UPGRADE_WRITE_SEQ: u16 = 5673;
 const HOT_UPGRADE_CRC_SEQ: u16 = 3673;
 const BB_USER_0: u8 = 0;
@@ -16,12 +18,16 @@ pub(crate) fn resolve_plot_user(status: &ffi::BbGetStatusSummary) -> u8 {
     status.active_user.or(status.detected_active_user).unwrap_or(BB_USER_0)
 }
 
-fn run_remote_sdk_call<T>(enabled: bool, operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
-    if enabled {
+fn run_remote_sdk_call_with_gap<T>(
+    enabled: bool,
+    min_gap: Duration,
+    operation: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    if enabled && !min_gap.is_zero() {
         let sleep_duration = {
             let last_call = REMOTE_SDK_LAST_CALL_AT.lock().unwrap();
             last_call
-                .and_then(|instant| REMOTE_SDK_CALL_GAP.checked_sub(instant.elapsed()))
+                .and_then(|instant| min_gap.checked_sub(instant.elapsed()))
         };
 
         if let Some(duration) = sleep_duration {
@@ -37,6 +43,10 @@ fn run_remote_sdk_call<T>(enabled: bool, operation: impl FnOnce() -> Result<T, S
     }
 
     result
+}
+
+fn run_remote_sdk_call<T>(enabled: bool, operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    run_remote_sdk_call_with_gap(enabled, REMOTE_SDK_CALL_GAP, operation)
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +217,8 @@ pub struct FirmwareUpgradeProgress {
     pub file_name: String,
     pub file_size: usize,
     pub bytes_written: usize,
+    pub http_upload_elapsed_ms: u64,
+    pub board_write_elapsed_ms: u64,
     pub total_steps: usize,
     pub current_step: usize,
     pub step_label: String,
@@ -326,12 +338,14 @@ pub struct BasebandApi {
     active_device_mac: Option<String>,
     preferred_signal_users: HashMap<String, u8>,
     device_role_cache: HashMap<String, u8>,
+    device_sync_role_cache: HashMap<String, (u8, u8)>,
     bandwidth_mode_cache: HashMap<(String, u8), bool>,
     system_info_cache: HashMap<String, ffi::BbSystemInfoSummary>,
     last_remote_device_switch_at: Option<Instant>,
     remote_device_handles: Vec<(String, usize)>,
     /// 固件升级进度追踪器（Arc<Mutex<>> 允许跨锁共享）
     upgrade_progress: Option<Arc<Mutex<FirmwareUpgradeProgress>>>,
+    upgrade_board_write_started_at: Option<Instant>,
 }
 
 impl BasebandApi {
@@ -345,6 +359,12 @@ impl BasebandApi {
 
     fn is_remote_mode(&self) -> bool {
         self.remote_host.is_some()
+    }
+
+    fn current_upgrade_board_write_elapsed_ms(&self) -> u64 {
+        self.upgrade_board_write_started_at
+            .map(|started_at| started_at.elapsed().as_millis().min(u64::MAX as u128) as u64)
+            .unwrap_or(0)
     }
 
     fn clear_remote_session_state(&mut self) {
@@ -372,6 +392,7 @@ impl BasebandApi {
         self.started = false;
         self.host_devices_cache.borrow_mut().clear();
         self.remote_device_handles.clear();
+        self.device_sync_role_cache.clear();
         self.system_info_cache.clear();
     }
 
@@ -384,6 +405,7 @@ impl BasebandApi {
         self.host_handle = 0;
         self.host_devices_cache.borrow_mut().clear();
         self.remote_device_handles.clear();
+        self.device_sync_role_cache.clear();
         self.system_info_cache.clear();
     }
 
@@ -398,6 +420,7 @@ impl BasebandApi {
         self.active_device_mac = Some(active_mac.clone());
         self.remember_remote_handle(active_mac, self.device_handle);
         self.cache_role_for_active_device(status.role);
+        self.cache_sync_role_for_active_device(status.sync_mode, status.sync_master);
     }
 
     fn cache_role_for_mac(&mut self, mac: &str, role: u8) {
@@ -419,8 +442,28 @@ impl BasebandApi {
         }
     }
 
+    fn cache_sync_role_for_mac(&mut self, mac: &str, sync_mode: u8, sync_master: u8) {
+        let normalized_mac = Self::normalize_mac(mac);
+        if normalized_mac.is_empty() {
+            return;
+        }
+
+        self.device_sync_role_cache
+            .insert(normalized_mac, (sync_mode, sync_master));
+    }
+
+    fn cache_sync_role_for_active_device(&mut self, sync_mode: u8, sync_master: u8) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.cache_sync_role_for_mac(&active_mac, sync_mode, sync_master);
+        }
+    }
+
     fn cached_role_for_mac(&self, normalized_mac: &str) -> Option<u8> {
         self.device_role_cache.get(normalized_mac).copied()
+    }
+
+    fn cached_sync_role_for_mac(&self, normalized_mac: &str) -> Option<(u8, u8)> {
+        self.device_sync_role_cache.get(normalized_mac).copied()
     }
 
     fn cache_bandwidth_mode_for_active_device(&mut self, slot: u8, auto_mode: bool) {
@@ -877,6 +920,24 @@ impl BasebandApi {
         Ok(system_info)
     }
 
+    fn remote_status_for_mac(&mut self, target_mac: &str) -> Result<ffi::BbGetStatusSummary, String> {
+        let normalized_target = Self::normalize_mac(target_mac);
+        if normalized_target.is_empty() {
+            return Err("device_mac is required".to_string());
+        }
+
+        let handle = self.get_or_open_remote_handle_by_mac(target_mac)? as *mut ffi::bb_dev_handle_t;
+        let preferred_signal_user = self.preferred_signal_user_for_mac(&normalized_target);
+        let status = run_remote_sdk_call(true, || {
+            ffi::get_status(handle, ffi::BB_ALL_DATA_USER_BMP, preferred_signal_user)
+        })?;
+
+        self.cache_role_for_mac(&normalized_target, status.role);
+        self.cache_sync_role_for_mac(&normalized_target, status.sync_mode, status.sync_master);
+
+        Ok(status)
+    }
+
     fn remote_role_for_mac(&mut self, target_mac: &str) -> Result<Option<u8>, String> {
         let normalized_target = Self::normalize_mac(target_mac);
         if normalized_target.is_empty() {
@@ -887,12 +948,29 @@ impl BasebandApi {
             return Ok(Some(role));
         }
 
-        let handle = self.get_or_open_remote_handle_by_mac(target_mac)? as *mut ffi::bb_dev_handle_t;
-        let role = run_remote_sdk_call(true, || ffi::get_minidb_role(handle))?;
+        let status = self.remote_status_for_mac(target_mac)?;
+        let role = match status.role {
+            ffi::BB_ROLE_AP | ffi::BB_ROLE_DEV => Some(status.role),
+            _ => None,
+        };
         if let Some(role_code) = role {
             self.cache_role_for_mac(&normalized_target, role_code);
         }
         Ok(role)
+    }
+
+    fn remote_sync_role_for_mac(&mut self, target_mac: &str) -> Result<Option<(u8, u8)>, String> {
+        let normalized_target = Self::normalize_mac(target_mac);
+        if normalized_target.is_empty() {
+            return Ok(None);
+        }
+
+        if let Some(sync_role) = self.cached_sync_role_for_mac(&normalized_target) {
+            return Ok(Some(sync_role));
+        }
+
+        let status = self.remote_status_for_mac(target_mac)?;
+        Ok(Some((status.sync_mode, status.sync_master)))
     }
 
     fn resolve_pair_version_peer(
@@ -1162,11 +1240,13 @@ impl BasebandApi {
             active_device_mac: None,
             preferred_signal_users: HashMap::new(),
             device_role_cache: HashMap::new(),
+            device_sync_role_cache: HashMap::new(),
             bandwidth_mode_cache: HashMap::new(),
             system_info_cache: HashMap::new(),
             last_remote_device_switch_at: None,
             remote_device_handles: Vec::new(),
             upgrade_progress: None,
+            upgrade_board_write_started_at: None,
         };
 
         if let Some(remote_host) = remote_host {
@@ -1359,6 +1439,10 @@ impl BasebandApi {
                             _ => device.role_label,
                         };
                     }
+                    if let Some((sync_mode, sync_master)) = self.cached_sync_role_for_mac(&normalized_mac) {
+                        device.sync_mode = Some(sync_mode);
+                        device.sync_master = Some(sync_master);
+                    }
                     device
                 })
                 .collect()
@@ -1368,22 +1452,27 @@ impl BasebandApi {
 
         if self.host_handle != 0 {
             for device in &mut available_devices {
-                if device.role.is_some() {
-                    continue;
+                if device.role.is_none() {
+                    let resolved_role = match self.remote_role_for_mac(&device.mac_address) {
+                        Ok(value) => value,
+                        Err(_) => None,
+                    };
+
+                    if let Some(role) = resolved_role {
+                        device.role = Some(role);
+                        device.role_label = match role {
+                            ffi::BB_ROLE_AP => "AP".to_string(),
+                            ffi::BB_ROLE_DEV => "DEV".to_string(),
+                            _ => device.role_label.clone(),
+                        };
+                    }
                 }
 
-                let resolved_role = match self.remote_role_for_mac(&device.mac_address) {
-                    Ok(value) => value,
-                    Err(_) => None,
-                };
-
-                if let Some(role) = resolved_role {
-                    device.role = Some(role);
-                    device.role_label = match role {
-                        ffi::BB_ROLE_AP => "AP".to_string(),
-                        ffi::BB_ROLE_DEV => "DEV".to_string(),
-                        _ => device.role_label.clone(),
-                    };
+                if device.sync_mode.is_none() || device.sync_master.is_none() {
+                    if let Ok(Some((sync_mode, sync_master))) = self.remote_sync_role_for_mac(&device.mac_address) {
+                        device.sync_mode = Some(sync_mode);
+                        device.sync_master = Some(sync_master);
+                    }
                 }
             }
         }
@@ -1520,6 +1609,14 @@ impl BasebandApi {
                     ffi::BB_ROLE_DEV => "DEV".to_string(),
                     _ => device.role_label.clone(),
                 };
+            }
+
+            if let Some((sync_mode, sync_master)) = self
+                .cached_sync_role_for_mac(&normalized_mac)
+                .or_else(|| self.remote_sync_role_for_mac(&device.mac_address).ok().flatten())
+            {
+                device.sync_mode = Some(sync_mode);
+                device.sync_master = Some(sync_master);
             }
         }
 
@@ -1903,6 +2000,7 @@ impl BasebandApi {
 
         // 进度上报辅助
         let progress_arc = self.upgrade_progress.clone();
+        let mut last_progress_update_at = None;
 
         let mut offset = 0u64;
         for (i, chunk) in data.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).enumerate() {
@@ -1913,7 +2011,7 @@ impl BasebandApi {
             let ioctl_addr = chunk_addr as u32;
 
             let handle = self.handle_ptr();
-            run_remote_sdk_call(is_remote, || {
+            run_remote_sdk_call_with_gap(is_remote, REMOTE_HOT_UPGRADE_SDK_CALL_GAP, || {
                 ffi::hot_upgrade_write(handle, HOT_UPGRADE_WRITE_SEQ, ioctl_addr, chunk)
             })
             .map_err(|e| format!("Partition chunk {}/{} write at 0x{:X} failed: {}", i + 1, chunk_count, chunk_addr, e))?;
@@ -1923,10 +2021,22 @@ impl BasebandApi {
                 .ok_or_else(|| "Partition offset overflow".to_string())?;
 
             // 更新进度百分比
-            if let Some(ref prog) = progress_arc {
+            let is_last_chunk = i + 1 == chunk_count;
+            let should_update_progress = is_last_chunk
+                || last_progress_update_at.map_or(true, |last_update_at: Instant| {
+                    last_update_at.elapsed() >= UPGRADE_PROGRESS_UPDATE_INTERVAL
+                });
+
+            if should_update_progress {
+                last_progress_update_at = Some(Instant::now());
+            }
+
+            if should_update_progress {
+                if let Some(ref prog) = progress_arc {
                 if let Ok(mut guard) = prog.lock() {
                     let chunk_done = i + 1;
                     guard.bytes_written = guard.bytes_written.saturating_add(chunk.len());
+                    guard.board_write_elapsed_ms = self.current_upgrade_board_write_elapsed_ms();
                     if guard.file_size > 0 {
                         guard.percent = (guard.bytes_written as f64 / guard.file_size as f64) * 100.0;
                     }
@@ -1943,12 +2053,13 @@ impl BasebandApi {
                     guard.state = "flashing".to_string();
                 }
             }
+            }
         }
 
         // CRC32 校验使用分区的 flash 起始地址和分区数据长度（对标 PC Tool ar8030_upgrade_chk_crc）
         let ioctl_addr = flash_addr as u32;
         let handle = self.handle_ptr();
-        run_remote_sdk_call(is_remote, || {
+        run_remote_sdk_call_with_gap(is_remote, REMOTE_HOT_UPGRADE_SDK_CALL_GAP, || {
             ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, len, ioctl_addr, partition_crc)
         })
         .map_err(|e| format!("Partition CRC32 verify at 0x{:X} failed: {}", flash_addr, e))?;
@@ -1969,10 +2080,11 @@ impl BasebandApi {
         let mut addr = 0_u32;
         let chunk_count = firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).len();
         let progress_arc = self.upgrade_progress.clone();
+        let mut last_progress_update_at = None;
 
         for (i, chunk) in firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).enumerate() {
             let handle = self.handle_ptr();
-            run_remote_sdk_call(is_remote, || {
+            run_remote_sdk_call_with_gap(is_remote, REMOTE_HOT_UPGRADE_SDK_CALL_GAP, || {
                 ffi::hot_upgrade_write(handle, HOT_UPGRADE_WRITE_SEQ, addr, chunk)
             })
             .map_err(|e| format!("Chunk {}/{} write failed: {}", i + 1, chunk_count, e))?;
@@ -1981,28 +2093,38 @@ impl BasebandApi {
                 .ok_or_else(|| "Firmware image address overflow".to_string())?;
 
             // 更新进度
-            if let Some(ref prog) = progress_arc {
-                if let Ok(mut guard) = prog.lock() {
-                    guard.current_step = i + 1;
-                    guard.total_steps = chunk_count;
-                    guard.step_label = "Writing firmware image".to_string();
-                    guard.bytes_written = addr as usize;
-                    if guard.file_size > 0 {
-                        guard.percent = (guard.bytes_written as f64 / guard.file_size as f64) * 100.0;
+            let is_last_chunk = i + 1 == chunk_count;
+            let should_update_progress = is_last_chunk
+                || last_progress_update_at.map_or(true, |last_update_at: Instant| {
+                    last_update_at.elapsed() >= UPGRADE_PROGRESS_UPDATE_INTERVAL
+                });
+
+            if should_update_progress {
+                last_progress_update_at = Some(Instant::now());
+                if let Some(ref prog) = progress_arc {
+                    if let Ok(mut guard) = prog.lock() {
+                        guard.current_step = i + 1;
+                        guard.total_steps = chunk_count;
+                        guard.step_label = "Writing firmware image".to_string();
+                        guard.bytes_written = addr as usize;
+                        guard.board_write_elapsed_ms = self.current_upgrade_board_write_elapsed_ms();
+                        if guard.file_size > 0 {
+                            guard.percent = (guard.bytes_written as f64 / guard.file_size as f64) * 100.0;
+                        }
+                        guard.message = format!(
+                            "Board write acknowledged {} / {} bytes",
+                            guard.bytes_written,
+                            guard.file_size
+                        );
+                        guard.state = "flashing".to_string();
                     }
-                    guard.message = format!(
-                        "Board write acknowledged {} / {} bytes",
-                        guard.bytes_written,
-                        guard.file_size
-                    );
-                    guard.state = "flashing".to_string();
                 }
             }
         }
 
         let crc32 = crc32fast::hash(firmware);
         let handle = self.handle_ptr();
-        run_remote_sdk_call(is_remote, || {
+        run_remote_sdk_call_with_gap(is_remote, REMOTE_HOT_UPGRADE_SDK_CALL_GAP, || {
             ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, firmware.len() as u32, 0, crc32)
         })?;
 
@@ -2766,12 +2888,19 @@ impl BasebandManager {
     }
 
     /// 在后台线程中执行固件升级，立即返回（通过 progress 轮询进度）
-    pub fn start_upgrade_background(self: &Arc<Self>, firmware: Vec<u8>, file_name: String) {
+    pub fn start_upgrade_background(
+        self: &Arc<Self>,
+        firmware: Vec<u8>,
+        file_name: String,
+        http_upload_elapsed_ms: u64,
+    ) {
         let progress = Arc::new(Mutex::new(FirmwareUpgradeProgress {
             state: "idle".to_string(),
             file_name: file_name.clone(),
             file_size: firmware.len(),
             bytes_written: 0,
+            http_upload_elapsed_ms,
+            board_write_elapsed_ms: 0,
             total_steps: 0,
             current_step: 0,
             step_label: String::new(),
@@ -2790,13 +2919,18 @@ impl BasebandManager {
                 api.upgrade_progress = Some(Arc::clone(&progress));
             }
 
-            let result = {
+            let (result, board_write_elapsed_ms) = {
                 let mut api = mgr.api.lock().unwrap();
-                api.upgrade_firmware(&firmware)
+                api.upgrade_board_write_started_at = Some(Instant::now());
+                let result = api.upgrade_firmware(&firmware);
+                let board_write_elapsed_ms = api.current_upgrade_board_write_elapsed_ms();
+                api.upgrade_board_write_started_at = None;
+                (result, board_write_elapsed_ms)
             };
 
             // 更新最终进度
             if let Ok(mut s) = progress.lock() {
+                s.board_write_elapsed_ms = board_write_elapsed_ms;
                 match &result {
                     Ok(r) => {
                         s.state = "done".to_string();

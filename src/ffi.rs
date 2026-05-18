@@ -133,6 +133,8 @@ pub struct BbDiscoveredDeviceSummary {
     pub mac_address: String,
     pub role: Option<u8>,
     pub role_label: String,
+    pub sync_mode: Option<u8>,
+    pub sync_master: Option<u8>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1874,6 +1876,8 @@ pub fn list_host_devices(host: *mut bb_host_t) -> Result<Vec<BbDiscoveredDeviceS
                 mac_address,
                 role: None,
                 role_label: "Unknown".to_string(),
+                sync_mode: None,
+                sync_master: None,
             });
         }
 

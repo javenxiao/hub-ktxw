@@ -148,6 +148,7 @@ struct FirmwareUpgradeActionResponse {
     message: String,
     file_name: String,
     file_size: usize,
+    http_upload_elapsed_ms: u64,
     bytes_written: usize,
     chunk_count: usize,
     crc32: String,
@@ -727,7 +728,7 @@ async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<Wirele
                                 if !devices.is_empty() {
                                     let response = runtime_unavailable_response_with_devices(
                                         REBOOT_RUNTIME_UNAVAILABLE_MESSAGE.to_string(),
-                                        build_wireless_device_options(None, None, None, &devices),
+                                        build_wireless_device_options(None, None, None, None, None, &devices),
                                     );
                                     let mut guard = state.wireless_runtime.write().await;
                                     *guard = response;
@@ -1426,6 +1427,8 @@ async fn apply_firmware_upgrade(
     mut multipart: Multipart,
 ) -> Json<FirmwareUpgradeActionResponse> {
     info!("Firmware upgrade request received");
+    let upload_started_at = Instant::now();
+    let http_upload_elapsed_ms = || upload_started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
 
     let Some(baseband) = state.baseband.as_ref() else {
         warn!("Firmware upgrade rejected: baseband SDK not available");
@@ -1434,6 +1437,7 @@ async fn apply_firmware_upgrade(
             message: "Baseband SDK not available; firmware upgrade is disabled in simulator mode".to_string(),
             file_name: String::new(),
             file_size: 0,
+            http_upload_elapsed_ms: 0,
             bytes_written: 0,
             chunk_count: 0,
             crc32: String::new(),
@@ -1454,6 +1458,7 @@ async fn apply_firmware_upgrade(
                     message: format!("Failed to read firmware upload: {}", err),
                     file_name,
                     file_size: 0,
+                    http_upload_elapsed_ms: http_upload_elapsed_ms(),
                     bytes_written: 0,
                     chunk_count: 0,
                     crc32: String::new(),
@@ -1480,24 +1485,35 @@ async fn apply_firmware_upgrade(
             continue;
         }
 
-        match field.bytes().await {
-            Ok(bytes) => {
+        let mut field = field;
+        let mut buffered_firmware = Vec::new();
+        loop {
+            match field.chunk().await {
+                Ok(Some(chunk)) => buffered_firmware.extend_from_slice(&chunk),
+                Ok(None) => break,
+                Err(err) => {
+                    return Json(FirmwareUpgradeActionResponse {
+                        success: false,
+                        message: format!("Failed to read uploaded firmware file: {}", err),
+                        file_name: detected_file_name,
+                        file_size: 0,
+                        http_upload_elapsed_ms: http_upload_elapsed_ms(),
+                        bytes_written: 0,
+                        chunk_count: 0,
+                        crc32: String::new(),
+                        reboot_expected: false,
+                    });
+                }
+            }
+        }
+
+        match buffered_firmware.is_empty() {
+            false => {
                 file_name = detected_file_name;
-                firmware = Some(bytes.to_vec());
+                firmware = Some(buffered_firmware);
                 break;
             }
-            Err(err) => {
-                return Json(FirmwareUpgradeActionResponse {
-                    success: false,
-                    message: format!("Failed to read uploaded firmware file: {}", err),
-                    file_name: detected_file_name,
-                    file_size: 0,
-                    bytes_written: 0,
-                    chunk_count: 0,
-                    crc32: String::new(),
-                    reboot_expected: false,
-                });
-            }
+            true => {}
         }
     }
 
@@ -1509,6 +1525,7 @@ async fn apply_firmware_upgrade(
                 message: "The selected firmware file is empty".to_string(),
                 file_name,
                 file_size: 0,
+                http_upload_elapsed_ms: http_upload_elapsed_ms(),
                 bytes_written: 0,
                 chunk_count: 0,
                 crc32: String::new(),
@@ -1521,6 +1538,7 @@ async fn apply_firmware_upgrade(
                 message: "No firmware file was uploaded".to_string(),
                 file_name,
                 file_size: 0,
+                http_upload_elapsed_ms: http_upload_elapsed_ms(),
                 bytes_written: 0,
                 chunk_count: 0,
                 crc32: String::new(),
@@ -1530,20 +1548,23 @@ async fn apply_firmware_upgrade(
     };
 
     let file_size = firmware.len();
+    let upload_elapsed_ms = http_upload_elapsed_ms();
     info!(
-        "Firmware file '{}' received: {} bytes, dispatching to background upgrade",
+        "Firmware file '{}' received: {} bytes in {} ms, dispatching to background upgrade",
         file_name,
-        file_size
+        file_size,
+        upload_elapsed_ms
     );
 
     // 后台异步升级
-    baseband.start_upgrade_background(firmware, file_name.clone());
+    baseband.start_upgrade_background(firmware, file_name.clone(), upload_elapsed_ms);
 
     Json(FirmwareUpgradeActionResponse {
         success: true,
         message: format!("Firmware '{}' upload accepted. Flashing in background...", file_name),
         file_name,
         file_size,
+        http_upload_elapsed_ms: upload_elapsed_ms,
         bytes_written: 0,
         chunk_count: 0,
         crc32: String::new(),
@@ -1560,6 +1581,8 @@ async fn get_upgrade_progress(
         file_name: String::new(),
         file_size: 0,
         bytes_written: 0,
+        http_upload_elapsed_ms: 0,
+        board_write_elapsed_ms: 0,
         total_steps: 0,
         current_step: 0,
         step_label: String::new(),
@@ -2712,6 +2735,8 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
     let available_devices = build_wireless_device_options(
         Some(details.status.role),
         Some(&details.status.mac_hex),
+        Some(details.status.sync_mode),
+        Some(details.status.sync_master),
         Some(&connected_peer_mac_normalized),
         &details.available_devices,
     );
@@ -2844,6 +2869,8 @@ fn build_wireless_configuration_view(details: &WirelessConfigurationDetails) -> 
 fn build_wireless_device_options(
     active_role: Option<u8>,
     active_mac: Option<&str>,
+    active_sync_mode: Option<u8>,
+    active_sync_master: Option<u8>,
     connected_peer_mac_normalized: Option<&str>,
     available_devices: &[ffi::BbDiscoveredDeviceSummary],
 ) -> Vec<WirelessDeviceOption> {
@@ -2859,7 +2886,12 @@ fn build_wireless_device_options(
             .map(|mac_address| WirelessDeviceOption {
                 role: current_role.clone(),
                 mac_address: mac_address.to_string(),
-                label: format_device_selector_label(&current_role, mac_address),
+                label: format_device_selector_label_with_sync(
+                    &current_role,
+                    mac_address,
+                    active_sync_mode,
+                    active_sync_master,
+                ),
                 selected: true,
             })
             .into_iter()
@@ -2886,11 +2918,26 @@ fn build_wireless_device_options(
             } else {
                 "Unknown".to_string()
             };
+            let sync_mode = if selected {
+                active_sync_mode.or(device.sync_mode)
+            } else {
+                device.sync_mode
+            };
+            let sync_master = if selected {
+                active_sync_master.or(device.sync_master)
+            } else {
+                device.sync_master
+            };
 
             WirelessDeviceOption {
                 role: role.clone(),
                 mac_address: device.mac_address.clone(),
-                label: format_device_selector_label(&role, &device.mac_address),
+                label: format_device_selector_label_with_sync(
+                    &role,
+                    &device.mac_address,
+                    sync_mode,
+                    sync_master,
+                ),
                 selected,
             }
         })
@@ -3503,14 +3550,35 @@ fn resolve_dev_pair_target_mac(
     None
 }
 
-fn format_device_selector_label(role: &str, mac_address: &str) -> String {
+fn format_device_selector_sync_suffix(sync_mode: Option<u8>, sync_master: Option<u8>) -> &'static str {
+    let _ = sync_mode;
+
+    match sync_master {
+        Some(1) => "(M)",
+        Some(0) => "(S)",
+        _ => "",
+    }
+}
+
+fn format_device_selector_label_with_sync(
+    role: &str,
+    mac_address: &str,
+    sync_mode: Option<u8>,
+    sync_master: Option<u8>,
+) -> String {
     let normalized_mac = normalize_device_mac(mac_address);
-    if normalized_mac.is_empty() {
+    let role_with_sync = if role.eq_ignore_ascii_case("Unknown") {
         role.to_string()
+    } else {
+        format!("{}{}", role, format_device_selector_sync_suffix(sync_mode, sync_master))
+    };
+
+    if normalized_mac.is_empty() {
+        role_with_sync
     } else if role.eq_ignore_ascii_case("Unknown") {
         normalized_mac
     } else {
-        format!("{}:{}", role, normalized_mac)
+        format!("{}:{}", role_with_sync, normalized_mac)
     }
 }
 
