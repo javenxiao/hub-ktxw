@@ -246,6 +246,7 @@ struct WirelessRuntimeView {
     local_mac_address: String,
     operation_mode: String,
     dev_pair_target_mac: Option<String>,
+    ap_pair_target_macs: Vec<Option<String>>,
     available_devices: Vec<WirelessDeviceOption>,
     selected_signal_user: Option<u8>,
     detected_signal_user: Option<u8>,
@@ -434,11 +435,20 @@ const SNR_UNAVAILABLE_DB: i32 = -1;
 const REBOOT_REFRESH_QUIET_WINDOW_SECS: u64 = 15;
 const REBOOT_RUNTIME_RECOVERY_PROBE_DELAY_SECS: u64 = 3;
 const REBOOT_RUNTIME_UNAVAILABLE_MESSAGE: &str = "Device reboot in progress. Waiting for reconnect.";
+const REBOOT_PAIR_RESUME_WINDOW_SECS: u64 = 120;
+const REBOOT_PAIR_RESUME_RETRY_INTERVAL_SECS: u64 = 5;
+
+struct PendingRebootPairResume {
+    target_mac: String,
+    expires_at: Instant,
+    last_attempt_at: Option<Instant>,
+}
 
 struct AppState {
     snapshot: RwLock<WirelessSnapshot>,
     wireless_runtime: RwLock<WirelessRuntimeResponse>,
     expected_reboot_until: RwLock<Option<Instant>>,
+    pending_reboot_pair_resume: RwLock<Option<PendingRebootPairResume>>,
     plot_refresh_interval_ms: RwLock<u64>,
     plot_sample_count: RwLock<usize>,
     plot_refresh_interval_notify: Notify,
@@ -461,6 +471,7 @@ impl AppState {
             snapshot: RwLock::new(initial),
             wireless_runtime: RwLock::new(initial_runtime),
             expected_reboot_until: RwLock::new(None),
+            pending_reboot_pair_resume: RwLock::new(None),
             plot_refresh_interval_ms: RwLock::new(clamp_plot_refresh_interval_ms(initial_plot_refresh_interval_ms)),
             plot_sample_count: RwLock::new(clamp_plot_sample_count(initial_plot_sample_count)),
             plot_refresh_interval_notify: Notify::new(),
@@ -485,6 +496,89 @@ impl AppState {
     async fn clear_expected_reboot_window(&self) {
         let mut guard = self.expected_reboot_until.write().await;
         *guard = None;
+    }
+
+    async fn stage_reboot_pair_resume(&self, target_mac: &str) {
+        let normalized_target = normalize_device_mac(target_mac);
+        let mut guard = self.pending_reboot_pair_resume.write().await;
+
+        if normalized_target.is_empty() {
+            *guard = None;
+            return;
+        }
+
+        *guard = Some(PendingRebootPairResume {
+            target_mac: normalized_target,
+            expires_at: Instant::now() + Duration::from_secs(REBOOT_PAIR_RESUME_WINDOW_SECS),
+            last_attempt_at: None,
+        });
+    }
+
+    async fn clear_reboot_pair_resume(&self) {
+        let mut guard = self.pending_reboot_pair_resume.write().await;
+        *guard = None;
+    }
+
+    async fn clear_reboot_pair_resume_if_matches(&self, current_mac: &str) {
+        let normalized_current = normalize_device_mac(current_mac);
+        let mut guard = self.pending_reboot_pair_resume.write().await;
+        if guard
+            .as_ref()
+            .map(|pending| pending.target_mac.as_str())
+            == Some(normalized_current.as_str())
+        {
+            *guard = None;
+        }
+    }
+
+    async fn reboot_pair_resume_pending_for(&self, current_mac: &str) -> bool {
+        let normalized_current = normalize_device_mac(current_mac);
+        let now = Instant::now();
+        let mut guard = self.pending_reboot_pair_resume.write().await;
+
+        if guard
+            .as_ref()
+            .map(|pending| pending.expires_at <= now)
+            .unwrap_or(false)
+        {
+            *guard = None;
+            return false;
+        }
+
+        guard
+            .as_ref()
+            .map(|pending| pending.target_mac == normalized_current)
+            .unwrap_or(false)
+    }
+
+    async fn mark_reboot_pair_resume_attempt(&self, current_mac: &str) -> bool {
+        let normalized_current = normalize_device_mac(current_mac);
+        let now = Instant::now();
+        let mut guard = self.pending_reboot_pair_resume.write().await;
+
+        let Some(pending) = guard.as_mut() else {
+            return false;
+        };
+
+        if pending.expires_at <= now {
+            *guard = None;
+            return false;
+        }
+
+        if pending.target_mac != normalized_current {
+            return false;
+        }
+
+        if pending
+            .last_attempt_at
+            .map(|last| now.saturating_duration_since(last) < Duration::from_secs(REBOOT_PAIR_RESUME_RETRY_INTERVAL_SECS))
+            .unwrap_or(false)
+        {
+            return false;
+        }
+
+        pending.last_attempt_at = Some(now);
+        true
     }
 
     async fn expected_reboot_window_active(&self) -> bool {
@@ -1629,6 +1723,18 @@ async fn request_system_reboot(
     }
 
     if requested_delay_seconds == 0 {
+        let reboot_target_mac = baseband
+            .get_wireless_runtime_details()
+            .ok()
+            .map(|details| normalize_device_mac(&details.status.mac_hex))
+            .filter(|mac| !mac.is_empty());
+
+        if let Some(target_mac) = reboot_target_mac.as_deref() {
+            state.stage_reboot_pair_resume(target_mac).await;
+        } else {
+            state.clear_reboot_pair_resume().await;
+        }
+
         state.begin_expected_reboot_window(reboot_quiet_window).await;
 
         return match baseband.reboot_device(IMMEDIATE_REBOOT_DELAY_MS) {
@@ -1640,6 +1746,7 @@ async fn request_system_reboot(
             }),
             Err(err) => {
                 state.clear_expected_reboot_window().await;
+                state.clear_reboot_pair_resume().await;
                 Json(RebootActionResponse {
                     success: false,
                     message: format!("Failed to submit reboot request: {}", err),
@@ -1689,8 +1796,11 @@ async fn request_system_reboot(
                 err
             );
             scheduled_state.clear_expected_reboot_window().await;
+            scheduled_state.clear_reboot_pair_resume().await;
             return;
         }
+
+        scheduled_state.stage_reboot_pair_resume(&scheduled_target_mac).await;
 
         if let Err(err) = scheduled_baseband.reboot_device(SCHEDULED_REBOOT_TRIGGER_DELAY_MS) {
             warn!(
@@ -1699,6 +1809,7 @@ async fn request_system_reboot(
                 err
             );
             scheduled_state.clear_expected_reboot_window().await;
+            scheduled_state.clear_reboot_pair_resume().await;
             return;
         }
 
@@ -2698,6 +2809,10 @@ fn resolve_connection_mac_address(
     link: &ffi::BbLinkStatusSummary,
     runtime_current: Option<&WirelessRuntimeView>,
 ) -> String {
+    if let Some(peer_mac) = link.peer_mac_hex.clone().filter(|value| !normalize_device_mac(value).is_empty()) {
+        return peer_mac;
+    }
+
     if status.role == ffi::BB_ROLE_DEV {
         if let Some(current) = runtime_current.filter(|current| runtime_view_matches_status(current, status)) {
             if let Some(target_mac) = resolve_dev_pair_target_mac(
@@ -2708,12 +2823,20 @@ fn resolve_connection_mac_address(
                 return target_mac;
             }
         }
+    } else if status.role == ffi::BB_ROLE_AP {
+        if let Some(current) = runtime_current.filter(|current| runtime_view_matches_status(current, status)) {
+            if let Some(target_mac) = current
+                .ap_pair_target_macs
+                .get(link.slot as usize)
+                .and_then(|value| value.clone())
+                .filter(|value| !normalize_device_mac(value).is_empty())
+            {
+                return target_mac;
+            }
+        }
     }
 
-    link
-        .peer_mac_hex
-        .clone()
-        .unwrap_or_else(|| format!("SLOT {} Peer Unknown", link.slot))
+    format!("SLOT {} Peer Unknown", link.slot)
 }
 
 fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRuntimeView {
@@ -2752,6 +2875,7 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
             &details.status,
             &available_devices,
         ),
+        ap_pair_target_macs: details.ap_pair_target_macs.clone(),
         available_devices,
         selected_signal_user: details.status.active_user,
         detected_signal_user: details.status.detected_active_user,
@@ -2973,6 +3097,123 @@ fn pair_blocking_notice_from_runtime(details: &WirelessRuntimeDetails) -> Option
     })
 }
 
+fn has_persisted_pair_mac(value: Option<&str>) -> bool {
+    value
+        .map(normalize_device_mac)
+        .filter(|mac| !mac.is_empty() && mac != "00000000")
+        .is_some()
+}
+
+fn persisted_ap_slot_bitmap(config: &WirelessConfigurationDetails) -> u8 {
+    config
+        .minidb
+        .slot_macs
+        .iter()
+        .enumerate()
+        .fold(0u8, |bitmap, (slot, mac)| {
+            if has_persisted_pair_mac(mac.as_deref()) {
+                bitmap | 1_u8.checked_shl(slot as u32).unwrap_or(0)
+            } else {
+                bitmap
+            }
+        })
+}
+
+fn pair_connected(details: &WirelessRuntimeDetails) -> bool {
+    details.status.links.iter().any(|link| link.state != 0)
+        || details.status.link_state.map(|state| state != 0).unwrap_or(false)
+}
+
+fn pairing_in_progress(details: &WirelessRuntimeDetails) -> bool {
+    details.status.links.iter().any(|link| link.pair_state)
+}
+
+fn reboot_pair_resume_slot_bitmap(
+    details: &WirelessRuntimeDetails,
+    config: &WirelessConfigurationDetails,
+) -> Option<u8> {
+    if pair_connected(details) || pairing_in_progress(details) {
+        return None;
+    }
+
+    match details.status.role {
+        ffi::BB_ROLE_DEV => has_persisted_pair_mac(config.minidb.ap_mac.as_deref()).then_some(0),
+        ffi::BB_ROLE_AP => {
+            let slot_bitmap = persisted_ap_slot_bitmap(config);
+            (slot_bitmap != 0).then_some(slot_bitmap)
+        }
+        _ => None,
+    }
+}
+
+async fn maybe_resume_pair_after_reboot(
+    state: &Arc<AppState>,
+    baseband: &Arc<BasebandManager>,
+    details: &WirelessRuntimeDetails,
+) {
+    let current_mac = details.status.mac_hex.trim();
+    if current_mac.is_empty() || current_mac == "--" {
+        return;
+    }
+
+    if !state.reboot_pair_resume_pending_for(current_mac).await {
+        return;
+    }
+
+    if pair_connected(details) {
+        state.clear_reboot_pair_resume_if_matches(current_mac).await;
+        return;
+    }
+
+    if pairing_in_progress(details) {
+        return;
+    }
+
+    if let Some(blocking_notice) = pair_blocking_notice_from_runtime(details) {
+        warn!(
+            "Skip reboot pair resume for {} because Pair is blocked: {}",
+            current_mac,
+            blocking_notice
+        );
+        return;
+    }
+
+    let config = match baseband.get_wireless_configuration_details(0) {
+        Ok(config) => config,
+        Err(err) => {
+            warn!(
+                "Failed to read configuration before reboot pair resume for {}: {}",
+                current_mac,
+                err
+            );
+            return;
+        }
+    };
+
+    let Some(slot_bmp) = reboot_pair_resume_slot_bitmap(details, &config) else {
+        state.clear_reboot_pair_resume_if_matches(current_mac).await;
+        return;
+    };
+
+    if !state.mark_reboot_pair_resume_attempt(current_mac).await {
+        return;
+    }
+
+    match baseband.set_pair_mode(true, slot_bmp) {
+        Ok(()) => info!(
+            "Auto-resumed Pair after reboot for {} (role={}, slot_bmp=0x{:02X})",
+            current_mac,
+            format_role(details.status.role),
+            slot_bmp
+        ),
+        Err(err) => warn!(
+            "Failed to auto-resume Pair after reboot for {}: {}",
+            current_mac,
+            err
+        ),
+    }
+}
+
 fn format_runtime_fetch_error_message(error: &str) -> String {
     let normalized_error = error.trim();
     let lower_error = normalized_error.to_ascii_lowercase();
@@ -3060,7 +3301,15 @@ async fn refresh_runtime_from_baseband(state: &Arc<AppState>, baseband: &Arc<Bas
     }
 
     let response = match baseband.get_wireless_runtime_details() {
-        Ok(details) => runtime_response_from_details(&details),
+        Ok(details) => {
+            maybe_resume_pair_after_reboot(state, baseband, &details).await;
+            if pair_connected(&details) {
+                state
+                    .clear_reboot_pair_resume_if_matches(&details.status.mac_hex)
+                    .await;
+            }
+            runtime_response_from_details(&details)
+        }
         Err(err) => runtime_unavailable_response(format_runtime_fetch_error_message(&err)),
     };
 
@@ -3748,6 +3997,7 @@ mod tests {
             local_mac_address: local_mac_address.to_string(),
             operation_mode: "DEV (Async)".to_string(),
             dev_pair_target_mac: dev_pair_target_mac.map(str::to_string),
+            ap_pair_target_macs: Vec::new(),
             available_devices: sample_available_devices(),
             selected_signal_user: None,
             detected_signal_user: None,
@@ -3796,6 +4046,9 @@ mod tests {
             current_power_mode: "Unavailable".to_string(),
             current_power_auto: None,
             current_power_dbm: None,
+            br_power_dbm: None,
+            ap_power_dbm: None,
+            dev_power_dbm: None,
             warnings: Vec::new(),
         }
     }
@@ -3849,6 +4102,21 @@ mod tests {
     }
 
     #[test]
+    fn resolve_connection_mac_address_uses_saved_ap_slot_target_when_peer_is_offline() {
+        let mut status = sample_dev_status(None);
+        status.role = ffi::BB_ROLE_AP;
+        status.mac_hex = "A5:68:B0:33".to_string();
+        let link = sample_link_status(0, false, None);
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.ap_pair_target_macs = vec![Some("A5:54:F6:2C".to_string())];
+
+        let resolved = resolve_connection_mac_address(&status, &link, Some(&runtime));
+
+        assert_eq!(resolved, "A5:54:F6:2C");
+    }
+
+    #[test]
     fn should_render_chart_series_hides_dev_user_zero() {
         let mut status = sample_dev_status(None);
         status.active_user = Some(0);
@@ -3889,6 +4157,82 @@ mod tests {
     fn resolve_pair_slot_bitmap_uses_slot_mask_for_ap_role() {
         assert_eq!(resolve_pair_slot_bitmap(0, Some(ffi::BB_ROLE_AP)).unwrap(), 0x01);
         assert_eq!(resolve_pair_slot_bitmap(3, Some(ffi::BB_ROLE_AP)).unwrap(), 0x08);
+    }
+
+    fn sample_runtime_details(role: u8, link_state: u8, pairing_active: bool) -> WirelessRuntimeDetails {
+        let mut status = sample_dev_status(None);
+        status.role = role;
+        status.mac_hex = if role == ffi::BB_ROLE_AP {
+            "A5:68:B0:33".to_string()
+        } else {
+            "A5:54:F6:2C".to_string()
+        };
+        status.link_state = Some(link_state);
+        status.pair_state = Some(pairing_active);
+        status.links = vec![sample_link_status(link_state, pairing_active, None)];
+
+        WirelessRuntimeDetails {
+            status,
+            dev_pair_target_mac: None,
+            ap_pair_target_macs: Vec::new(),
+            available_devices: Vec::new(),
+            system_info: None,
+            band_info: None,
+            channel_info: None,
+            bandwidth_mode: None,
+            mcs_mode: None,
+            mcs_value: None,
+            power_mode: None,
+            current_power: None,
+            power_auto: None,
+            power_fallback: None,
+            warnings: Vec::new(),
+        }
+    }
+
+    fn sample_configuration_details(ap_mac: Option<&str>, slot_macs: &[Option<&str>]) -> WirelessConfigurationDetails {
+        WirelessConfigurationDetails {
+            config_mode: 0,
+            config_text: String::new(),
+            minidb: bb_api::WirelessConfigurationMinidbDetails {
+                role: None,
+                band_bitmap: None,
+                local_mac: None,
+                ap_mac: ap_mac.map(str::to_string),
+                slot_macs: slot_macs
+                    .iter()
+                    .map(|value| value.map(str::to_string))
+                    .collect(),
+                power: None,
+            },
+            warnings: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn reboot_pair_resume_slot_bitmap_uses_saved_ap_mac_for_dev() {
+        let details = sample_runtime_details(ffi::BB_ROLE_DEV, 0, false);
+        let config = sample_configuration_details(Some("A568B033"), &[]);
+
+        assert_eq!(reboot_pair_resume_slot_bitmap(&details, &config), Some(0));
+    }
+
+    #[test]
+    fn reboot_pair_resume_slot_bitmap_collects_saved_slots_for_ap() {
+        let details = sample_runtime_details(ffi::BB_ROLE_AP, 0, false);
+        let config = sample_configuration_details(None, &[Some("A554F62C"), None, Some("A5660001")]);
+
+        assert_eq!(reboot_pair_resume_slot_bitmap(&details, &config), Some(0x05));
+    }
+
+    #[test]
+    fn reboot_pair_resume_slot_bitmap_skips_connected_or_pairing_links() {
+        let connected = sample_runtime_details(ffi::BB_ROLE_AP, 1, false);
+        let pairing = sample_runtime_details(ffi::BB_ROLE_DEV, 0, true);
+        let config = sample_configuration_details(Some("A568B033"), &[Some("A554F62C")]);
+
+        assert_eq!(reboot_pair_resume_slot_bitmap(&connected, &config), None);
+        assert_eq!(reboot_pair_resume_slot_bitmap(&pairing, &config), None);
     }
 
     #[test]

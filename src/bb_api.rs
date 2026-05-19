@@ -126,6 +126,68 @@ fn role_name_for_warning(role: Option<u8>) -> &'static str {
     }
 }
 
+fn normalized_pair_peer_mac(value: &str) -> Option<String> {
+    let normalized = value
+        .chars()
+        .filter(|character| character.is_ascii_hexdigit())
+        .flat_map(|character| character.to_lowercase())
+        .collect::<String>();
+
+    if normalized.len() == ffi::BB_MAC_LEN * 2 {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
+fn paired_peer_target_for_dev(status: &ffi::BbGetStatusSummary) -> Option<String> {
+    let local_mac = normalized_pair_peer_mac(&status.mac_hex);
+    let connected_peer = status
+        .links
+        .iter()
+        .find(|link| link.state != 0)
+        .and_then(|link| link.peer_mac_hex.as_deref())
+        .and_then(normalized_pair_peer_mac)
+        .or_else(|| {
+            if status.link_state.unwrap_or(0) != 0 {
+                status
+                    .peer_mac_hex
+                    .as_deref()
+                    .and_then(normalized_pair_peer_mac)
+            } else {
+                None
+            }
+        });
+
+    connected_peer.filter(|peer_mac| local_mac.as_deref() != Some(peer_mac.as_str()))
+}
+
+fn paired_peer_targets_for_ap(status: &ffi::BbGetStatusSummary) -> Vec<(u8, String)> {
+    let local_mac = normalized_pair_peer_mac(&status.mac_hex);
+
+    status
+        .links
+        .iter()
+        .filter_map(|link| {
+            if link.state == 0 {
+                return None;
+            }
+
+            let slot = u8::try_from(link.slot).ok()?;
+            let peer_mac = link
+                .peer_mac_hex
+                .as_deref()
+                .and_then(normalized_pair_peer_mac)?;
+
+            if local_mac.as_deref() == Some(peer_mac.as_str()) {
+                return None;
+            }
+
+            Some((slot, peer_mac))
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BasebandOperationStatus {
     pub attempted: bool,
@@ -167,6 +229,7 @@ pub struct BasebandHealthStatus {
 pub struct WirelessRuntimeDetails {
     pub status: ffi::BbGetStatusSummary,
     pub dev_pair_target_mac: Option<String>,
+    pub ap_pair_target_macs: Vec<Option<String>>,
     pub available_devices: Vec<ffi::BbDiscoveredDeviceSummary>,
     pub system_info: Option<ffi::BbSystemInfoSummary>,
     pub band_info: Option<ffi::BbBandInfoSummary>,
@@ -365,6 +428,66 @@ impl BasebandApi {
         self.upgrade_board_write_started_at
             .map(|started_at| started_at.elapsed().as_millis().min(u64::MAX as u128) as u64)
             .unwrap_or(0)
+    }
+
+    fn persist_paired_peer_targets_to_minidb(
+        &mut self,
+        status: &ffi::BbGetStatusSummary,
+    ) -> Result<(), String> {
+        let is_remote = self.is_remote_mode();
+        let handle = self.handle_ptr();
+
+        match status.role {
+            ffi::BB_ROLE_DEV => {
+                let Some(peer_mac) = paired_peer_target_for_dev(status) else {
+                    return Ok(());
+                };
+
+                let current_ap_mac = run_remote_sdk_call(is_remote, || ffi::get_minidb_ap_mac(handle))?;
+                if current_ap_mac
+                    .as_deref()
+                    .and_then(normalized_pair_peer_mac)
+                    .as_deref()
+                    == Some(peer_mac.as_str())
+                {
+                    return Ok(());
+                }
+
+                run_remote_sdk_call(is_remote, || ffi::set_minidb_ap_mac(handle, &peer_mac))
+                    .map_err(|err| format!("Failed to persist paired AP MAC {} to MiniDB: {}", peer_mac, err))
+            }
+            ffi::BB_ROLE_AP => {
+                for (slot, peer_mac) in paired_peer_targets_for_ap(status) {
+                    let current_slot_mac = run_remote_sdk_call(is_remote, || {
+                        ffi::get_minidb_slot_mac(handle, slot)
+                    })?;
+
+                    if current_slot_mac
+                        .as_deref()
+                        .and_then(normalized_pair_peer_mac)
+                        .as_deref()
+                        == Some(peer_mac.as_str())
+                    {
+                        continue;
+                    }
+
+                    run_remote_sdk_call(is_remote, || {
+                        ffi::set_minidb_slot_mac(handle, slot, &peer_mac)
+                    })
+                    .map_err(|err| {
+                        format!(
+                            "Failed to persist paired DEV MAC {} for slot {} to MiniDB: {}",
+                            peer_mac,
+                            slot,
+                            err
+                        )
+                    })?;
+                }
+
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 
     fn clear_remote_session_state(&mut self) {
@@ -1404,6 +1527,11 @@ impl BasebandApi {
         })?;
         self.remember_current_device(&status);
         let mut warnings = Vec::new();
+
+        if let Err(err) = self.persist_paired_peer_targets_to_minidb(&status) {
+            warnings.push(err);
+        }
+
         let dev_pair_target_mac = if status.role == 1 {
             match run_remote_sdk_call(is_remote, || ffi::get_ap_mac(self.handle_ptr())) {
                 Ok(value) => value,
@@ -1414,6 +1542,19 @@ impl BasebandApi {
             }
         } else {
             None
+        };
+        let ap_pair_target_macs = if status.role == ffi::BB_ROLE_AP {
+            (0..8)
+                .map(|slot| match run_remote_sdk_call(is_remote, || ffi::get_minidb_slot_mac(self.handle_ptr(), slot)) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        warnings.push(err);
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
         };
         let slot = status.links.first().map(|link| link.slot as u8).unwrap_or(0);
         let user = resolve_plot_user(&status);
@@ -1558,6 +1699,7 @@ impl BasebandApi {
         Ok(WirelessRuntimeDetails {
             status,
             dev_pair_target_mac,
+            ap_pair_target_macs,
             available_devices,
             system_info,
             band_info,
@@ -3006,10 +3148,103 @@ impl Clone for BasebandManager {
 mod tests {
     use super::*;
 
+    fn sample_status(role: u8, local_mac: &str, links: Vec<ffi::BbLinkStatusSummary>) -> ffi::BbGetStatusSummary {
+        ffi::BbGetStatusSummary {
+            role,
+            mode: 0,
+            sync_mode: 0,
+            sync_master: 0,
+            cfg_sbmp: 0,
+            rt_sbmp: 0,
+            active_user: None,
+            detected_active_user: None,
+            mac_bytes: [0; ffi::BB_MAC_LEN],
+            mac_hex: local_mac.to_string(),
+            frequency_khz: None,
+            bandwidth: None,
+            tx_mcs: None,
+            rx_mcs: None,
+            link_state: links.first().map(|link| link.state),
+            pair_state: None,
+            snr_db: None,
+            ldpc_err: None,
+            ldpc_num: None,
+            signal_main: None,
+            signal_aux: None,
+            peer_mac_bytes: None,
+            peer_mac_hex: links.first().and_then(|link| link.peer_mac_hex.clone()),
+            links,
+        }
+    }
+
     #[test]
     #[ignore = "requires hardware or remote bb_host"]
     fn test_baseband_manager_initialization() {
         let _ = BasebandManager::new();
+    }
+
+    #[test]
+    fn paired_peer_target_for_dev_uses_connected_peer_mac() {
+        let status = sample_status(
+            ffi::BB_ROLE_DEV,
+            "A5:54:F6:2C",
+            vec![ffi::BbLinkStatusSummary {
+                slot: 0,
+                state: 2,
+                rx_mcs: None,
+                pair_state: true,
+                candidate_macs: Vec::new(),
+                snr_db: None,
+                ldpc_err: None,
+                ldpc_num: None,
+                signal_main: None,
+                signal_aux: None,
+                peer_mac_bytes: None,
+                peer_mac_hex: Some("A5:68:B0:33".to_string()),
+            }],
+        );
+
+        assert_eq!(paired_peer_target_for_dev(&status).as_deref(), Some("a568b033"));
+    }
+
+    #[test]
+    fn paired_peer_targets_for_ap_only_keeps_connected_slots() {
+        let status = sample_status(
+            ffi::BB_ROLE_AP,
+            "A5:68:B0:33",
+            vec![
+                ffi::BbLinkStatusSummary {
+                    slot: 0,
+                    state: 0,
+                    rx_mcs: None,
+                    pair_state: false,
+                    candidate_macs: Vec::new(),
+                    snr_db: None,
+                    ldpc_err: None,
+                    ldpc_num: None,
+                    signal_main: None,
+                    signal_aux: None,
+                    peer_mac_bytes: None,
+                    peer_mac_hex: Some("A5:54:F6:2C".to_string()),
+                },
+                ffi::BbLinkStatusSummary {
+                    slot: 1,
+                    state: 3,
+                    rx_mcs: None,
+                    pair_state: true,
+                    candidate_macs: Vec::new(),
+                    snr_db: None,
+                    ldpc_err: None,
+                    ldpc_num: None,
+                    signal_main: None,
+                    signal_aux: None,
+                    peer_mac_bytes: None,
+                    peer_mac_hex: Some("A5:54:F6:2C".to_string()),
+                },
+            ],
+        );
+
+        assert_eq!(paired_peer_targets_for_ap(&status), vec![(1, "a554f62c".to_string())]);
     }
 
 }

@@ -3052,19 +3052,37 @@
             return resolvePairPanelRole() === 1;
         }
 
-        function getDevPairMacDisplayValue(slotConnection) {
-            const panelDeviceMac = normalizeRfDeviceMac(
-                latestWirelessSnapshot?.general?.mac_address
-                || document.getElementById('rf-operation-mode')?.value
-            );
+        function pairPanelSnapshotMatchesRuntime() {
             const runtimeDeviceMac = normalizeRfDeviceMac(wirelessRuntimeCurrent?.local_mac_address);
-            const runtimeDisplayValue = formatPairMacDisplay(wirelessRuntimeCurrent?.dev_pair_target_mac);
+            const snapshotDeviceMac = normalizeRfDeviceMac(latestWirelessSnapshot?.general?.mac_address);
 
-            if (runtimeDisplayValue && (!panelDeviceMac || runtimeDeviceMac === panelDeviceMac)) {
-                return runtimeDisplayValue;
+            return !runtimeDeviceMac || !snapshotDeviceMac || runtimeDeviceMac === snapshotDeviceMac;
+        }
+
+        function getPairPanelConnections(connections = latestWirelessSnapshot?.connections) {
+            if (!pairPanelSnapshotMatchesRuntime()) {
+                return [];
             }
 
-            return formatPairMacDisplay(slotConnection?.mac_address);
+            return Array.isArray(connections) ? connections : [];
+        }
+
+        function getDevPairMacDisplayValue(slotConnection) {
+            const liveDisplayValue = pairPanelSnapshotMatchesRuntime()
+                ? formatPairMacDisplay(slotConnection?.mac_address)
+                : '';
+            const runtimeDisplayValue = formatPairMacDisplay(wirelessRuntimeCurrent?.dev_pair_target_mac);
+
+            return liveDisplayValue || runtimeDisplayValue;
+        }
+
+        function getApPairMacDisplayValue(slotIndex, slotConnection) {
+            const liveDisplayValue = pairPanelSnapshotMatchesRuntime()
+                ? formatPairMacDisplay(slotConnection?.mac_address)
+                : '';
+            const runtimeDisplayValue = formatPairMacDisplay(wirelessRuntimeCurrent?.ap_pair_target_macs?.[slotIndex]);
+
+            return liveDisplayValue || runtimeDisplayValue;
         }
 
         function resetPairInputState() {
@@ -3180,8 +3198,10 @@
         }
 
         function findPairConnection(slotIndex, connections = latestWirelessSnapshot?.connections) {
-            return Array.isArray(connections)
-                ? connections.find((connection) => parseConnectionSlot(connection.link_slot) === slotIndex) || null
+            const currentConnections = getPairPanelConnections(connections);
+
+            return Array.isArray(currentConnections)
+                ? currentConnections.find((connection) => parseConnectionSlot(connection.link_slot) === slotIndex) || null
                 : null;
         }
 
@@ -3262,7 +3282,7 @@
             const devPairMode = isDevPairMode();
             const displayMacValue = devPairMode
                 ? getDevPairMacDisplayValue(slotConnection)
-                : formatPairMacDisplay(slotConnection?.mac_address);
+                : getApPairMacDisplayValue(slotIndex, slotConnection);
             const macValue = normalizePairMac(displayMacValue);
             const hasDraft = pairMacDraftBySlot.has(slotIndex);
             const draftValue = hasDraft ? pairMacDraftBySlot.get(slotIndex) : null;
@@ -3322,6 +3342,8 @@
                 return;
             }
 
+            const currentConnections = getPairPanelConnections(connections);
+
             const blocker = document.getElementById('rf-pair-blocker');
             const pairBlockNotice = getWirelessPairBlockNotice();
             if (blocker) {
@@ -3335,13 +3357,13 @@
             }
 
             const bySlot = new Map(
-                (Array.isArray(connections) ? connections : [])
+                currentConnections
                     .map((connection) => [parseConnectionSlot(connection.link_slot), connection])
                     .filter(([slot]) => slot !== null)
             );
 
             const markup = isDevPairMode()
-                ? buildPairRow(0, bySlot.get(0) || (Array.isArray(connections) ? connections[0] : null), pairBlockNotice)
+                ? buildPairRow(0, bySlot.get(0) || currentConnections[0] || null, pairBlockNotice)
                 : Array.from({ length: 8 }, (_, slotIndex) => buildPairRow(slotIndex, bySlot.get(slotIndex), pairBlockNotice)).join('');
             if (container.dataset.renderedMarkup !== markup) {
                 container.innerHTML = markup;
