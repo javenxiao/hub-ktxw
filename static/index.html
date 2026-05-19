@@ -50,6 +50,21 @@
                                     <button class="sys-button-default signal-source-role-apply" id="rf-baseband-role-apply" type="button" disabled>Apply</button>
                                 </div>
                             </div>
+                            <div class="console-context-card console-context-card-reboot">
+                                <span class="console-context-label">Reboot</span>
+                                <button
+                                    id="global-reboot-btn"
+                                    class="console-reboot-button"
+                                    type="button"
+                                    aria-label="Reboot the selected Active Device immediately"
+                                    title="Reboot the selected Active Device immediately"
+                                >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <path d="M12 3.5v7"></path>
+                                        <path d="M7.2 6.7a6.8 6.8 0 1 0 9.6 0"></path>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="console-topbar-right">
@@ -1117,6 +1132,7 @@
         const maintenanceUpgradeWaitingMessage = 'Waiting for first board write acknowledgement...';
         const maintenanceUpgradeWaitingDetail = 'Waiting for the first board write acknowledgement from the device.';
         const maintenanceUpgradeProgressPollIntervalMs = 250;
+        const wirelessRuntimePollIntervalMs = 2000;
         const rebootRecoveryPollIntervalMs = 2000;
         const rebootRecoveryMaxAttempts = 18;
         const rebootDelayFieldDefinitions = [
@@ -1225,6 +1241,7 @@
             delayMinuteInput: document.getElementById('reboot-delay-minutes'),
             delaySecondInput: document.getElementById('reboot-delay-seconds'),
             submitButton: document.getElementById('reboot-submit-btn'),
+            quickButton: document.getElementById('global-reboot-btn'),
         };
         const configurationElements = {
             panel: document.getElementById('wireless-panel-configuration'),
@@ -2488,6 +2505,27 @@
             if (rebootElements.submitButton) {
                 rebootElements.submitButton.disabled = rebootBusy || selectionPending || !supportResolved || !rebootSupported || (scheduledEnabled && !hasValidDelay);
             }
+
+            if (rebootElements.quickButton) {
+                const quickButtonDisabled = rebootBusy || selectionPending || !supportResolved || !rebootSupported;
+                const targetLabel = getSelectedRebootTargetLabel();
+                let quickButtonLabel = `Reboot ${targetLabel} now`;
+
+                if (!supportResolved) {
+                    quickButtonLabel = 'Loading reboot availability...';
+                } else if (!rebootSupported) {
+                    quickButtonLabel = maintenanceInfoCache?.message || 'Reboot is currently unavailable.';
+                } else if (selectionPending) {
+                    quickButtonLabel = `Waiting for Active Device ${targetLabel} to finish switching.`;
+                } else if (rebootBusy) {
+                    quickButtonLabel = `${targetLabel} is rebooting now.`;
+                }
+
+                rebootElements.quickButton.disabled = quickButtonDisabled;
+                rebootElements.quickButton.dataset.busy = rebootBusy ? 'true' : 'false';
+                rebootElements.quickButton.title = quickButtonLabel;
+                rebootElements.quickButton.setAttribute('aria-label', quickButtonLabel);
+            }
         }
 
         function renderRebootInfo() {
@@ -2675,7 +2713,9 @@
             return payload;
         }
 
-        async function triggerRebootAction() {
+        async function triggerRebootAction(options = {}) {
+            const forceImmediate = Boolean(options.forceImmediate);
+
             if (!isRebootSupported()) {
                 setRebootStatus({
                     phase: 'Unavailable',
@@ -2685,7 +2725,7 @@
                 return;
             }
 
-            const scheduledEnabled = isScheduledRebootEnabled();
+            const scheduledEnabled = !forceImmediate && isScheduledRebootEnabled();
             const targetLabel = getSelectedRebootTargetLabel();
             const requestedDelaySeconds = normalizeRebootDelayInputs();
 
@@ -3214,6 +3254,12 @@
                 }
 
                 pairPendingBySlot.delete(slotIndex);
+                pairPendingBySlot.delete(slotIndex);
+                pairStopOverrideBySlot.delete(slotIndex);
+                return 'idle';
+            }
+
+            if (!wirelessRuntimeCurrent) {
                 pairPendingBySlot.delete(slotIndex);
                 pairStopOverrideBySlot.delete(slotIndex);
                 return 'idle';
@@ -4711,20 +4757,66 @@
             queueDeviceSelection(fallbackMac);
         }
 
+        function scoreRfDeviceOption(device) {
+            const role = String(device?.role || '').trim().toLowerCase();
+            return (device?.selected ? 4 : 0)
+                + ((role && role !== 'unknown') ? 2 : 0)
+                + (String(device?.label || '').trim() ? 1 : 0);
+        }
+
+        function dedupeRfDeviceOptions(devices) {
+            const merged = new Map();
+
+            (Array.isArray(devices) ? devices : []).forEach((device) => {
+                const macAddress = normalizeRfDeviceMac(device?.mac_address);
+                if (!macAddress) {
+                    return;
+                }
+
+                const candidate = {
+                    ...device,
+                    mac_address: macAddress,
+                };
+                const existing = merged.get(macAddress);
+                if (!existing) {
+                    merged.set(macAddress, candidate);
+                    return;
+                }
+
+                const selected = Boolean(existing.selected || candidate.selected);
+                if (scoreRfDeviceOption(candidate) > scoreRfDeviceOption(existing)) {
+                    merged.set(macAddress, {
+                        ...candidate,
+                        selected,
+                    });
+                    return;
+                }
+
+                merged.set(macAddress, {
+                    ...existing,
+                    selected,
+                });
+            });
+
+            return Array.from(merged.values());
+        }
+
         function renderRfDeviceOptions(current, payload = null) {
             const select = document.getElementById('rf-operation-mode');
             if (!select) {
                 return;
             }
 
-            const runtimeDevices = Array.isArray(current?.available_devices) ? current.available_devices : [];
-            const payloadDevices = Array.isArray(payload?.available_devices) ? payload.available_devices : [];
+            const runtimeDevices = dedupeRfDeviceOptions(current?.available_devices);
+            const payloadDevices = dedupeRfDeviceOptions(payload?.available_devices);
             const discoveredDevices = runtimeDevices.length > 0 ? runtimeDevices : payloadDevices;
             if (discoveredDevices.length > 0) {
                 lastKnownRfDevices = discoveredDevices.map((device) => ({ ...device }));
             }
 
-            const devices = discoveredDevices.length > 0 ? discoveredDevices : lastKnownRfDevices;
+            const devices = discoveredDevices.length > 0
+                ? discoveredDevices
+                : (current ? lastKnownRfDevices : []);
             if (devices.length === 0) {
                 const placeholderLabel = getRuntimeUnavailableDeviceLabel(payload);
                 select.innerHTML = `<option value="">${escapeHtml(placeholderLabel)}</option>`;
@@ -5005,6 +5097,7 @@
                 wirelessConfigurationLoadedMode = null;
                 resetPairInputState();
                 resetPairCandidatesCache('');
+                renderPairPanel(latestWirelessSnapshot?.connections);
                 renderRfProfile();
                 renderRfDeviceOptions(null, payload);
                 renderRfSignalUserOptions(null);
@@ -5857,6 +5950,13 @@
             });
         }
 
+        const globalRebootButton = rebootElements.quickButton;
+        if (globalRebootButton) {
+            globalRebootButton.addEventListener('click', () => {
+                triggerRebootAction({ forceImmediate: true }).catch(() => {});
+            });
+        }
+
         document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
             radio.addEventListener('change', () => {
                 applyBandSelection().catch(() => {});
@@ -6253,7 +6353,7 @@
 
         window.setInterval(() => {
             loadWirelessRuntimeDetails().catch(() => {});
-        }, 5000);
+        }, wirelessRuntimePollIntervalMs);
 
         window.setInterval(() => {
             if (isMaintenancePanelVisible() && !maintenanceBusy) {

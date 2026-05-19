@@ -500,6 +500,10 @@ body {
     min-width: 0;
 }
 
+.console-context-card-reboot {
+    min-width: 0;
+}
+
 .console-context-label {
     color: #50657b;
     font-size: 12px;
@@ -537,6 +541,57 @@ body {
 
 .console-context-role-controls .signal-source-role-apply {
     flex: none;
+}
+
+.console-reboot-button {
+    width: 46px;
+    height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: start;
+    padding: 0;
+    border: 1px solid #d8a39e;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fff8f6 0%, #ffe1db 100%);
+    color: #b42318;
+    box-shadow: 0 10px 18px rgba(180, 35, 24, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+    cursor: pointer;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.console-reboot-button svg {
+    width: 19px;
+    height: 19px;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.console-reboot-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: #c05d52;
+    background: linear-gradient(180deg, #fff3f0 0%, #ffd4cb 100%);
+    box-shadow: 0 14px 24px rgba(180, 35, 24, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.console-reboot-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(191, 63, 47, 0.22), 0 12px 20px rgba(180, 35, 24, 0.14);
+}
+
+.console-reboot-button[data-busy="true"]:not(:disabled) {
+    border-color: #b42318;
+    background: linear-gradient(180deg, #ffe8e2 0%, #ffcfc4 100%);
+    box-shadow: 0 0 0 3px rgba(191, 63, 47, 0.18), 0 12px 24px rgba(180, 35, 24, 0.18);
+}
+
+.console-reboot-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.52;
+    box-shadow: none;
 }
 
 @media (max-width: 1480px) {

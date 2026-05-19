@@ -42,6 +42,8 @@ const DEFAULT_BB_HOST_ADDR: &str = "127.0.0.1";
 const DEFAULT_BB_HOST_PORT: &str = "50000";
 const DEFAULT_SERVER_PORT: &str = "8080";
 const IMMEDIATE_REBOOT_DELAY_MS: u32 = 2_000;
+const REMOTE_RUNTIME_REFRESH_INTERVAL_SECS: u64 = 2;
+const LOCAL_RUNTIME_REFRESH_INTERVAL_SECS: u64 = 2;
 const MAX_REBOOT_DELAY_SECONDS: u32 = (30 * 24 * 60 * 60) + (24 * 60 * 60) + (60 * 60) + 60;
 const SCHEDULED_REBOOT_TRIGGER_DELAY_MS: u32 = 0;
 const CHANNEL_EFFECT_RETRY_ATTEMPTS: usize = 8;
@@ -2247,9 +2249,9 @@ fn spawn_data_feeder(state: Arc<AppState>) {
 fn spawn_runtime_feeder(state: Arc<AppState>) {
     tokio::spawn(async move {
         let interval_secs = if state.baseband_health.effective_mode == "hardware-remote-bb-host" {
-            5
+            REMOTE_RUNTIME_REFRESH_INTERVAL_SECS
         } else {
-            2
+            LOCAL_RUNTIME_REFRESH_INTERVAL_SECS
         };
         let mut ticker = tokio::time::interval_at(
             tokio::time::Instant::now() + Duration::from_secs(interval_secs),
@@ -2436,14 +2438,6 @@ fn build_hardware_snapshot(
             built_power_fallback.as_ref()
         }
     };
-    if power_fallback.is_none() {
-        tracing::warn!(
-            "build_hardware_snapshot: power_fallback is None. runtime_current.br={:?} ap={:?} dev={:?}",
-            runtime_current.and_then(|r| r.br_power_dbm),
-            runtime_current.and_then(|r| r.ap_power_dbm),
-            runtime_current.and_then(|r| r.dev_power_dbm),
-        );
-    }
     let plot_prefix = plot_series_prefix_for_role(status.role);
     let _peer_plot_prefix = plot_series_prefix_for_role(1);
     let fch_lock_value = fch_lock_value_from_status(status);
@@ -3022,9 +3016,9 @@ fn build_wireless_device_options(
             .collect();
     }
 
-    available_devices
-        .iter()
-        .map(|device| {
+    let mut options: Vec<WirelessDeviceOption> = Vec::with_capacity(available_devices.len());
+
+    for device in available_devices {
             let normalized_mac = normalize_device_mac(&device.mac_address);
             let selected = !current_mac_normalized.is_empty() && normalized_mac == current_mac_normalized;
             let role = if selected {
@@ -3053,7 +3047,7 @@ fn build_wireless_device_options(
                 device.sync_master
             };
 
-            WirelessDeviceOption {
+            let candidate = WirelessDeviceOption {
                 role: role.clone(),
                 mac_address: device.mac_address.clone(),
                 label: format_device_selector_label_with_sync(
@@ -3063,9 +3057,41 @@ fn build_wireless_device_options(
                     sync_master,
                 ),
                 selected,
+            };
+
+            if let Some(existing) = options
+                .iter_mut()
+                .find(|option| normalize_device_mac(&option.mac_address) == normalized_mac)
+            {
+                let replace_existing = should_replace_wireless_device_option(existing, &candidate);
+                existing.selected |= candidate.selected;
+                if replace_existing {
+                    existing.role = candidate.role;
+                    existing.label = candidate.label;
+                }
+            } else {
+                options.push(candidate);
             }
-        })
-        .collect()
+    }
+
+    options
+}
+
+fn should_replace_wireless_device_option(
+    existing: &WirelessDeviceOption,
+    candidate: &WirelessDeviceOption,
+) -> bool {
+    if candidate.selected != existing.selected {
+        return candidate.selected;
+    }
+
+    let existing_role_known = !existing.role.eq_ignore_ascii_case("unknown");
+    let candidate_role_known = !candidate.role.eq_ignore_ascii_case("unknown");
+    if candidate_role_known != existing_role_known {
+        return candidate_role_known;
+    }
+
+    candidate.label.len() > existing.label.len()
 }
 
 fn runtime_response_from_details(details: &WirelessRuntimeDetails) -> WirelessRuntimeResponse {
@@ -3992,6 +4018,22 @@ mod tests {
         ]
     }
 
+    fn sample_discovered_device(
+        mac_address: &str,
+        role: Option<u8>,
+        role_label: &str,
+        sync_mode: Option<u8>,
+        sync_master: Option<u8>,
+    ) -> ffi::BbDiscoveredDeviceSummary {
+        ffi::BbDiscoveredDeviceSummary {
+            mac_address: mac_address.to_string(),
+            role,
+            role_label: role_label.to_string(),
+            sync_mode,
+            sync_master,
+        }
+    }
+
     fn sample_runtime_view(local_mac_address: &str, dev_pair_target_mac: Option<&str>) -> WirelessRuntimeView {
         WirelessRuntimeView {
             local_mac_address: local_mac_address.to_string(),
@@ -4077,6 +4119,49 @@ mod tests {
         );
 
         assert_eq!(resolved.as_deref(), Some("A5:68:B0:33"));
+    }
+
+    #[test]
+    fn build_wireless_device_options_deduplicates_same_mac() {
+        let options = build_wireless_device_options(
+            Some(ffi::BB_ROLE_DEV),
+            Some("A5:54:F6:2C"),
+            Some(0),
+            Some(1),
+            Some("A568B033"),
+            &[
+                sample_discovered_device(
+                    "A5:68:B0:33",
+                    Some(ffi::BB_ROLE_AP),
+                    "AP",
+                    Some(0),
+                    Some(1),
+                ),
+                sample_discovered_device(
+                    "A5:68:B0:33",
+                    Some(ffi::BB_ROLE_AP),
+                    "AP",
+                    Some(0),
+                    Some(1),
+                ),
+                sample_discovered_device(
+                    "A5:54:F6:2C",
+                    Some(ffi::BB_ROLE_DEV),
+                    "DEV",
+                    Some(0),
+                    Some(0),
+                ),
+            ],
+        );
+
+        assert_eq!(options.len(), 2);
+        assert_eq!(
+            options
+                .iter()
+                .filter(|option| normalize_device_mac(&option.mac_address) == "a568b033")
+                .count(),
+            1,
+        );
     }
 
     #[test]

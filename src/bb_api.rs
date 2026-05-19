@@ -61,6 +61,40 @@ struct RemoteSessionConnectOutcome {
     daemon_version: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct CachedSystemInfoEntry {
+    summary: ffi::BbSystemInfoSummary,
+    cached_at: Instant,
+}
+
+impl CachedSystemInfoEntry {
+    fn new(summary: &ffi::BbSystemInfoSummary) -> Self {
+        Self {
+            summary: summary.clone(),
+            cached_at: Instant::now(),
+        }
+    }
+
+    fn materialize(&self) -> ffi::BbSystemInfoSummary {
+        let mut summary = self.summary.clone();
+        summary.uptime = summary.uptime.saturating_add(self.cached_at.elapsed().as_secs());
+        summary
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CachedStatusSummaryEntry {
+    summary: ffi::BbGetStatusSummary,
+}
+
+impl CachedStatusSummaryEntry {
+    fn new(summary: &ffi::BbGetStatusSummary) -> Self {
+        Self {
+            summary: summary.clone(),
+        }
+    }
+}
+
 fn remote_host_config_from_env() -> Option<RemoteHostConfig> {
     let address = std::env::var("BB_HOST_ADDR").ok()?;
     let port = std::env::var("BB_HOST_PORT")
@@ -403,7 +437,12 @@ pub struct BasebandApi {
     device_role_cache: HashMap<String, u8>,
     device_sync_role_cache: HashMap<String, (u8, u8)>,
     bandwidth_mode_cache: HashMap<(String, u8), bool>,
-    system_info_cache: HashMap<String, ffi::BbSystemInfoSummary>,
+    status_summary_cache: HashMap<String, CachedStatusSummaryEntry>,
+    channel_info_cache: HashMap<String, ffi::BbChannelInfoSummary>,
+    band_selection_bitmap_cache: HashMap<String, Option<u8>>,
+    ap_pair_target_cache: HashMap<String, Vec<Option<String>>>,
+    boot_diagnostics_cache: HashMap<String, BootDiagnostics>,
+    system_info_cache: HashMap<String, CachedSystemInfoEntry>,
     last_remote_device_switch_at: Option<Instant>,
     remote_device_handles: Vec<(String, usize)>,
     /// 固件升级进度追踪器（Arc<Mutex<>> 允许跨锁共享）
@@ -428,6 +467,19 @@ impl BasebandApi {
         self.upgrade_board_write_started_at
             .map(|started_at| started_at.elapsed().as_millis().min(u64::MAX as u128) as u64)
             .unwrap_or(0)
+    }
+
+    fn empty_ap_pair_target_macs() -> Vec<Option<String>> {
+        vec![None; ffi::BB_SLOT_MAX]
+    }
+
+    fn band_bitmap_for_target_band(target_band: u8) -> Option<u8> {
+        match target_band {
+            0 => Some(0x01),
+            1 => Some(0x02),
+            2 => Some(0x04),
+            _ => None,
+        }
     }
 
     fn persist_paired_peer_targets_to_minidb(
@@ -457,10 +509,13 @@ impl BasebandApi {
                     .map_err(|err| format!("Failed to persist paired AP MAC {} to MiniDB: {}", peer_mac, err))
             }
             ffi::BB_ROLE_AP => {
+                let mut current_slot_macs = self.read_ap_pair_targets_for_active_device()?;
+
                 for (slot, peer_mac) in paired_peer_targets_for_ap(status) {
-                    let current_slot_mac = run_remote_sdk_call(is_remote, || {
-                        ffi::get_minidb_slot_mac(handle, slot)
-                    })?;
+                    let current_slot_mac = current_slot_macs
+                        .get(slot as usize)
+                        .cloned()
+                        .unwrap_or(None);
 
                     if current_slot_mac
                         .as_deref()
@@ -482,7 +537,13 @@ impl BasebandApi {
                             err
                         )
                     })?;
+
+                    if let Some(entry) = current_slot_macs.get_mut(slot as usize) {
+                        *entry = Some(peer_mac.clone());
+                    }
                 }
+
+                self.cache_ap_pair_targets_for_active_device(&current_slot_macs);
 
                 Ok(())
             }
@@ -516,6 +577,11 @@ impl BasebandApi {
         self.host_devices_cache.borrow_mut().clear();
         self.remote_device_handles.clear();
         self.device_sync_role_cache.clear();
+        self.status_summary_cache.clear();
+        self.channel_info_cache.clear();
+        self.band_selection_bitmap_cache.clear();
+        self.ap_pair_target_cache.clear();
+        self.boot_diagnostics_cache.clear();
         self.system_info_cache.clear();
     }
 
@@ -529,6 +595,11 @@ impl BasebandApi {
         self.host_devices_cache.borrow_mut().clear();
         self.remote_device_handles.clear();
         self.device_sync_role_cache.clear();
+        self.status_summary_cache.clear();
+        self.channel_info_cache.clear();
+        self.band_selection_bitmap_cache.clear();
+        self.ap_pair_target_cache.clear();
+        self.boot_diagnostics_cache.clear();
         self.system_info_cache.clear();
     }
 
@@ -595,23 +666,215 @@ impl BasebandApi {
         }
     }
 
+    fn cache_status_summary_for_active_device(&mut self, status: &ffi::BbGetStatusSummary) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.status_summary_cache
+                .insert(active_mac, CachedStatusSummaryEntry::new(status));
+        }
+    }
+
+    fn cached_status_summary_for_active_device(&self) -> Option<ffi::BbGetStatusSummary> {
+        let active_mac = self.active_device_mac.as_ref()?;
+        let entry = self.status_summary_cache.get(active_mac)?;
+
+        if entry.summary.role != ffi::BB_ROLE_DEV {
+            return None;
+        }
+
+        Some(entry.summary.clone())
+    }
+
+    fn clear_cached_status_summary_for_active_device(&mut self) {
+        if let Some(active_mac) = self.active_device_mac.as_ref() {
+            self.status_summary_cache.remove(active_mac);
+        }
+    }
+
+    fn cache_channel_info_for_active_device(&mut self, channel_info: &ffi::BbChannelInfoSummary) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.channel_info_cache.insert(active_mac, channel_info.clone());
+        }
+    }
+
+    fn cached_channel_info_for_active_device(&self) -> Option<ffi::BbChannelInfoSummary> {
+        self.active_device_mac
+            .as_ref()
+            .and_then(|active_mac| self.channel_info_cache.get(active_mac).cloned())
+    }
+
+    fn clear_cached_channel_info_for_active_device(&mut self) {
+        if let Some(active_mac) = self.active_device_mac.as_ref() {
+            self.channel_info_cache.remove(active_mac);
+        }
+    }
+
+    fn cache_band_selection_bitmap_for_mac(&mut self, mac: &str, band_bitmap: Option<u8>) {
+        let normalized_mac = Self::normalize_mac(mac);
+        if normalized_mac.is_empty() {
+            return;
+        }
+
+        self.band_selection_bitmap_cache.insert(normalized_mac, band_bitmap);
+    }
+
+    fn cache_band_selection_bitmap_for_active_device(&mut self, band_bitmap: Option<u8>) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.cache_band_selection_bitmap_for_mac(&active_mac, band_bitmap);
+        }
+    }
+
+    fn cached_band_selection_bitmap_for_mac(&self, normalized_mac: &str) -> Option<Option<u8>> {
+        self.band_selection_bitmap_cache.get(normalized_mac).copied()
+    }
+
+    fn clear_cached_band_selection_bitmap_for_active_device(&mut self) {
+        if let Some(active_mac) = self.active_device_mac.as_ref() {
+            self.band_selection_bitmap_cache.remove(active_mac);
+        }
+    }
+
+    fn cache_boot_diagnostics_for_active_device(&mut self, diagnostics: &BootDiagnostics) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.boot_diagnostics_cache.insert(active_mac, diagnostics.clone());
+        }
+    }
+
+    fn cached_boot_diagnostics_for_active_device(&self) -> Option<BootDiagnostics> {
+        self.active_device_mac
+            .as_ref()
+            .and_then(|active_mac| self.boot_diagnostics_cache.get(active_mac).cloned())
+    }
+
+    fn cache_ap_pair_targets_for_mac(&mut self, mac: &str, targets: &[Option<String>]) {
+        let normalized_mac = Self::normalize_mac(mac);
+        if normalized_mac.is_empty() {
+            return;
+        }
+
+        let mut normalized_targets = Self::empty_ap_pair_target_macs();
+        for (slot, value) in targets.iter().take(ffi::BB_SLOT_MAX).enumerate() {
+            normalized_targets[slot] = value.clone();
+        }
+
+        self.ap_pair_target_cache.insert(normalized_mac, normalized_targets);
+    }
+
+    fn cache_ap_pair_targets_for_active_device(&mut self, targets: &[Option<String>]) {
+        if let Some(active_mac) = self.active_device_mac.clone() {
+            self.cache_ap_pair_targets_for_mac(&active_mac, targets);
+        }
+    }
+
+    fn cached_ap_pair_targets_for_mac(&self, normalized_mac: &str) -> Option<Vec<Option<String>>> {
+        self.ap_pair_target_cache.get(normalized_mac).cloned()
+    }
+
+    fn clear_cached_ap_pair_targets_for_active_device(&mut self) {
+        if let Some(active_mac) = self.active_device_mac.as_ref() {
+            self.ap_pair_target_cache.remove(active_mac);
+        }
+    }
+
+    fn update_cached_ap_pair_target_for_active_device(&mut self, slot: u8, mac: Option<&str>) {
+        let Some(active_mac) = self.active_device_mac.clone() else {
+            return;
+        };
+
+        let targets = self
+            .ap_pair_target_cache
+            .entry(active_mac)
+            .or_insert_with(Self::empty_ap_pair_target_macs);
+
+        if let Some(entry) = targets.get_mut(slot as usize) {
+            *entry = mac.map(str::to_string);
+        }
+    }
+
     fn cache_system_info_for_mac(&mut self, mac: &str, system_info: &ffi::BbSystemInfoSummary) {
         let normalized_mac = Self::normalize_mac(mac);
         if normalized_mac.is_empty() {
             return;
         }
 
-        self.system_info_cache.insert(normalized_mac, system_info.clone());
+        self.system_info_cache
+            .insert(normalized_mac, CachedSystemInfoEntry::new(system_info));
     }
 
     fn cache_system_info_for_active_device(&mut self, system_info: &ffi::BbSystemInfoSummary) {
         if let Some(active_mac) = self.active_device_mac.clone() {
-            self.system_info_cache.insert(active_mac, system_info.clone());
+            self.system_info_cache
+                .insert(active_mac, CachedSystemInfoEntry::new(system_info));
         }
     }
 
     fn cached_system_info_for_mac(&self, normalized_mac: &str) -> Option<ffi::BbSystemInfoSummary> {
-        self.system_info_cache.get(normalized_mac).cloned()
+        self.system_info_cache
+            .get(normalized_mac)
+            .map(CachedSystemInfoEntry::materialize)
+    }
+
+    fn read_ap_pair_targets_for_active_device(&mut self) -> Result<Vec<Option<String>>, String> {
+        if let Some(active_mac) = self.active_device_mac.as_deref() {
+            if let Some(cached) = self.cached_ap_pair_targets_for_mac(active_mac) {
+                return Ok(cached);
+            }
+        }
+
+        let is_remote = self.is_remote_mode();
+        let mut targets = Self::empty_ap_pair_target_macs();
+        for slot in 0..ffi::BB_SLOT_MAX {
+            targets[slot] = run_remote_sdk_call(is_remote, || {
+                ffi::get_minidb_slot_mac(self.handle_ptr(), slot as u8)
+            })?;
+        }
+
+        self.cache_ap_pair_targets_for_active_device(&targets);
+        Ok(targets)
+    }
+
+    fn read_band_selection_bitmap_for_active_device(&mut self) -> Result<Option<u8>, String> {
+        if let Some(active_mac) = self.active_device_mac.as_deref() {
+            if let Some(cached) = self.cached_band_selection_bitmap_for_mac(active_mac) {
+                return Ok(cached);
+            }
+        }
+
+        let band_bitmap = run_remote_sdk_call(self.is_remote_mode(), || {
+            ffi::get_minidb_band_bitmap_optional(self.handle_ptr())
+        })?;
+        self.cache_band_selection_bitmap_for_active_device(band_bitmap);
+        Ok(band_bitmap)
+    }
+
+    fn read_channel_info_for_active_device(
+        &mut self,
+        role: u8,
+    ) -> Result<ffi::BbChannelInfoSummary, String> {
+        if self.is_remote_mode() && role == ffi::BB_ROLE_DEV {
+            if let Some(cached) = self.cached_channel_info_for_active_device() {
+                return Ok(cached);
+            }
+        }
+
+        let channel_info = run_remote_sdk_call(self.is_remote_mode(), || {
+            ffi::get_channel_info(self.handle_ptr())
+        })?;
+        self.cache_channel_info_for_active_device(&channel_info);
+        Ok(channel_info)
+    }
+
+    fn read_system_info_for_active_device(&mut self) -> Result<ffi::BbSystemInfoSummary, String> {
+        if self.is_remote_mode() {
+            if let Some(active_mac) = self.active_device_mac.as_deref() {
+                if let Some(cached) = self.cached_system_info_for_mac(active_mac) {
+                    return Ok(cached);
+                }
+            }
+        }
+
+        let system_info = run_remote_sdk_call(self.is_remote_mode(), || ffi::get_system_info(self.handle_ptr()))?;
+        self.cache_system_info_for_active_device(&system_info);
+        Ok(system_info)
     }
 
     fn cached_bandwidth_mode_for_current_device(&self, slot: u8) -> Option<ffi::BbBandwidthModeSummary> {
@@ -700,7 +963,8 @@ impl BasebandApi {
 
         self.device_handle = device_handle as usize;
         self.initialized = true;
-    self.remember_current_device(&status);
+        self.remember_current_device(&status);
+        self.cache_status_summary_for_active_device(&status);
 
         if let Err(err) = self.refresh_host_devices_cache() {
             tracing::warn!("Failed to refresh remote host device cache after connect: {}", err);
@@ -828,7 +1092,7 @@ impl BasebandApi {
         label: &str,
         mut operation: impl FnMut(*mut ffi::bb_dev_handle_t) -> Result<T, String>,
     ) -> Result<T, String> {
-        if self.is_remote_mode() {
+        let result = if self.is_remote_mode() {
             self.execute_remote_operation(label, |api| operation(api.handle_ptr()))
         } else {
             if !self.initialized {
@@ -836,7 +1100,45 @@ impl BasebandApi {
             }
 
             operation(self.handle_ptr())
+        };
+
+        if result.is_ok() && Self::operation_invalidates_status_summary_cache(label) {
+            self.clear_cached_status_summary_for_active_device();
         }
+
+        result
+    }
+
+    fn operation_invalidates_status_summary_cache(label: &str) -> bool {
+        matches!(
+            label,
+            "set_pair_mode"
+                | "set_pair_candidates"
+                | "set_ap_mac"
+                | "set_minidb_ap_mac"
+                | "set_minidb_local_mac"
+                | "set_minidb_role"
+                | "set_minidb_power"
+                | "save_configuration_text"
+                | "clear_flash_configuration"
+                | "clear_minidb_configuration"
+                | "restore_factory_configuration"
+                | "set_minidb_slot_mac"
+                | "set_channel_mode"
+                | "set_channel"
+                | "set_mcs_mode"
+                | "set_mcs"
+                | "set_power_mode"
+                | "set_power"
+                | "set_power_auto"
+                | "set_band_mode"
+                | "set_band"
+                | "set_band_selection"
+                | "set_bandwidth"
+                | "set_bandwidth_mode"
+                | "set_baseband_role"
+                | "reboot_device"
+        )
     }
 
     fn current_remote_device_count(&self) -> Option<i32> {
@@ -1365,6 +1667,11 @@ impl BasebandApi {
             device_role_cache: HashMap::new(),
             device_sync_role_cache: HashMap::new(),
             bandwidth_mode_cache: HashMap::new(),
+            status_summary_cache: HashMap::new(),
+            channel_info_cache: HashMap::new(),
+            band_selection_bitmap_cache: HashMap::new(),
+            ap_pair_target_cache: HashMap::new(),
+            boot_diagnostics_cache: HashMap::new(),
             system_info_cache: HashMap::new(),
             last_remote_device_switch_at: None,
             remote_device_handles: Vec::new(),
@@ -1505,6 +1812,12 @@ impl BasebandApi {
     }
 
     pub fn get_status_summary(&mut self) -> Result<ffi::BbGetStatusSummary, String> {
+        if self.is_remote_mode() {
+            if let Some(cached) = self.cached_status_summary_for_active_device() {
+                return Ok(cached);
+            }
+        }
+
         let is_remote = self.is_remote_mode();
         let preferred_signal_user = self.preferred_signal_user_for_active_device();
 
@@ -1515,17 +1828,14 @@ impl BasebandApi {
         })
         .map(|status| {
             self.remember_current_device(&status);
+            self.cache_status_summary_for_active_device(&status);
             status
         })
     }
 
     fn load_wireless_runtime_details(&mut self) -> Result<WirelessRuntimeDetails, String> {
         let is_remote = self.is_remote_mode();
-        let preferred_signal_user = self.preferred_signal_user_for_active_device();
-        let status = run_remote_sdk_call(is_remote, || {
-            ffi::get_status(self.handle_ptr(), ffi::BB_ALL_DATA_USER_BMP, preferred_signal_user)
-        })?;
-        self.remember_current_device(&status);
+        let status = self.get_status_summary()?;
         let mut warnings = Vec::new();
 
         if let Err(err) = self.persist_paired_peer_targets_to_minidb(&status) {
@@ -1544,15 +1854,13 @@ impl BasebandApi {
             None
         };
         let ap_pair_target_macs = if status.role == ffi::BB_ROLE_AP {
-            (0..8)
-                .map(|slot| match run_remote_sdk_call(is_remote, || ffi::get_minidb_slot_mac(self.handle_ptr(), slot)) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        warnings.push(err);
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
+            match self.read_ap_pair_targets_for_active_device() {
+                Ok(value) => value,
+                Err(err) => {
+                    warnings.push(err);
+                    Self::empty_ap_pair_target_macs()
+                }
+            }
         } else {
             Vec::new()
         };
@@ -1618,21 +1926,31 @@ impl BasebandApi {
             }
         }
 
-        let system_info = match run_remote_sdk_call(is_remote, || ffi::get_system_info(self.handle_ptr())) {
+        let system_info = match self.read_system_info_for_active_device() {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let band_info = match run_remote_sdk_call(is_remote, || ffi::get_band_info(self.handle_ptr())) {
-            Ok(value) => Some(value),
+        let band_selection_bitmap = match self.read_band_selection_bitmap_for_active_device() {
+            Ok(value) => value,
             Err(err) => {
                 warnings.push(err);
                 None
             }
         };
-        let channel_info = match run_remote_sdk_call(is_remote, || ffi::get_channel_info(self.handle_ptr())) {
+        let band_info = match run_remote_sdk_call(is_remote, || ffi::get_live_band_info(self.handle_ptr())) {
+            Ok(mut value) => {
+                value.selection_bitmap = band_selection_bitmap;
+                Some(value)
+            }
+            Err(err) => {
+                warnings.push(err);
+                None
+            }
+        };
+        let channel_info = match self.read_channel_info_for_active_device(status.role) {
             Ok(value) => Some(value),
             Err(err) => {
                 warnings.push(err);
@@ -1857,6 +2175,12 @@ impl BasebandApi {
     }
 
     pub fn get_boot_diagnostics(&mut self) -> Result<BootDiagnostics, String> {
+        if self.is_remote_mode() {
+            if let Some(cached) = self.cached_boot_diagnostics_for_active_device() {
+                return Ok(cached);
+            }
+        }
+
         let is_remote = self.is_remote_mode();
 
         let running_system = match run_remote_sdk_call(is_remote, || ffi::get_running_system(self.handle_ptr())) {
@@ -1868,10 +2192,12 @@ impl BasebandApi {
             Err(err) => format!("Error: {}", err),
         };
 
-        Ok(BootDiagnostics {
+        let diagnostics = BootDiagnostics {
             running_system,
             boot_reason,
-        })
+        };
+        self.cache_boot_diagnostics_for_active_device(&diagnostics);
+        Ok(diagnostics)
     }
 
     fn switch_remote_device_once(&mut self, target_mac: &str, normalized_target: &str) -> Result<(), String> {
@@ -1892,13 +2218,16 @@ impl BasebandApi {
             self.initialized = true;
             self.active_device_mac = Some(normalized_target.to_string());
 
-            run_remote_sdk_call(true, || {
+            let status = run_remote_sdk_call(true, || {
                 ffi::get_status(
                     self.handle_ptr(),
                     ffi::BB_ALL_DATA_USER_BMP,
                     self.preferred_signal_user_for_mac(normalized_target),
                 )
             })?;
+
+            self.remember_current_device(&status);
+            self.cache_status_summary_for_active_device(&status);
 
             return Ok(());
         }
@@ -1937,6 +2266,7 @@ impl BasebandApi {
         self.initialized = true;
         self.active_device_mac = Some(normalized_target.to_string());
         self.remember_current_device(&new_status);
+        self.cache_status_summary_for_active_device(&new_status);
         self.remember_remote_handle(Self::normalize_mac(&new_status.mac_hex), self.device_handle);
 
         Ok(())
@@ -2017,28 +2347,42 @@ impl BasebandApi {
     }
 
     pub fn clear_minidb_configuration(&mut self) -> Result<(), String> {
-        self.with_device_operation("clear_minidb_configuration", |handle| ffi::reset_minidb(handle))
+        self.with_device_operation("clear_minidb_configuration", |handle| ffi::reset_minidb(handle))?;
+        self.clear_cached_channel_info_for_active_device();
+        self.clear_cached_band_selection_bitmap_for_active_device();
+        self.clear_cached_ap_pair_targets_for_active_device();
+        Ok(())
     }
 
     pub fn restore_factory_configuration(&mut self) -> Result<(), String> {
         self.with_device_operation("restore_factory_configuration", |handle| {
             ffi::reset_config(handle)?;
             ffi::reset_minidb(handle)
-        })
+        })?;
+        self.clear_cached_channel_info_for_active_device();
+        self.clear_cached_band_selection_bitmap_for_active_device();
+        self.clear_cached_ap_pair_targets_for_active_device();
+        Ok(())
     }
 
     pub fn set_minidb_slot_mac(&mut self, slot: u8, mac: &str) -> Result<(), String> {
         self.with_device_operation("set_minidb_slot_mac", |handle| {
             ffi::set_minidb_slot_mac(handle, slot, mac)
-        })
+        })?;
+        self.update_cached_ap_pair_target_for_active_device(slot, Some(mac));
+        Ok(())
     }
 
     pub fn set_channel_mode(&mut self, auto_mode: bool) -> Result<(), String> {
-        self.with_device_operation("set_channel_mode", |handle| ffi::set_channel_mode(handle, auto_mode))
+        self.with_device_operation("set_channel_mode", |handle| ffi::set_channel_mode(handle, auto_mode))?;
+        self.clear_cached_channel_info_for_active_device();
+        Ok(())
     }
 
     pub fn set_channel(&mut self, dir: u8, chan_index: u8) -> Result<(), String> {
-        self.with_device_operation("set_channel", |handle| ffi::set_channel(handle, dir, chan_index))
+        self.with_device_operation("set_channel", |handle| ffi::set_channel(handle, dir, chan_index))?;
+        self.clear_cached_channel_info_for_active_device();
+        Ok(())
     }
 
     pub fn set_mcs_mode(&mut self, slot: u8, auto_mode: bool) -> Result<(), String> {
@@ -2070,20 +2414,31 @@ impl BasebandApi {
                     Ok(())
                 }
             })
-        })
+        })?;
+        self.clear_cached_channel_info_for_active_device();
+        if auto_mode {
+            self.cache_band_selection_bitmap_for_active_device(Some(0x07));
+        }
+        Ok(())
     }
 
     pub fn set_band(&mut self, target_band: u8) -> Result<(), String> {
         self.with_device_operation("set_band", |handle| {
             ffi::set_band(handle, target_band)
                 .and_then(|_| ffi::set_minidb_band(handle, target_band))
-        })
+        })?;
+        self.clear_cached_channel_info_for_active_device();
+        self.cache_band_selection_bitmap_for_active_device(Self::band_bitmap_for_target_band(target_band));
+        Ok(())
     }
 
     pub fn set_band_selection(&mut self, band_bitmap: u8) -> Result<(), String> {
         self.with_device_operation("set_band_selection", |handle| {
             ffi::set_band_selection_bitmap(handle, band_bitmap)
-        })
+        })?;
+        self.clear_cached_channel_info_for_active_device();
+        self.cache_band_selection_bitmap_for_active_device(Some(band_bitmap));
+        Ok(())
     }
 
     pub fn set_bandwidth(&mut self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
@@ -2733,6 +3088,7 @@ impl BasebandApi {
         };
 
         self.preferred_signal_users.insert(active_device_mac, user);
+        self.clear_cached_status_summary_for_active_device();
         Ok(())
     }
 

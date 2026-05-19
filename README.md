@@ -11,6 +11,8 @@
 - Pair 持久化链路已补齐：自动对频成功后，板端实际锁定到的 peer MAC 会自动回写到 MiniDB，避免只保存用户手工输入的目标地址。
 - Pair 重启恢复已补齐自动续连：AP 或 DEV 重启后，如果设备已保存 Pair 目标且当前链路未恢复，服务端会在设备重新上线后自动补发一次普通 Pair，恢复到 Connect / Paired，无需重新输入 MAC，也无需手工再点 Pair。
 - AP 模式下的 Pair 面板已修正离线显示逻辑：当匹配设备离线、重启或页面处于 runtime/snapshot 切换窗口时，输入框会优先显示之前匹配过的目标 MAC，不再误显示“无匹配设备”或把当前 AP 自己的 MAC 当成匹配方显示。
+- remote bb_host 模式下的 Active Device 轮询已做分层降噪：AP 侧高频 PRJ_DISPATCH 读取已缓存，DEV 侧 channel/status 热路径已改为按设备复用缓存，不再因 Web 后台 runtime、status、plot 刷新而周期性触发同类 SDK 读取。
+- 顶部全局工具栏顺序已调整为 Active Device -> Role -> Reboot，减少 Role 切换与即时重启操作的视觉打断。
 
 ### 2026-05-18
 

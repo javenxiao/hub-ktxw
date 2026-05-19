@@ -2186,11 +2186,10 @@ pub fn get_running_system(handle: *mut bb_dev_handle_t) -> Result<String, String
     Ok(label.to_string())
 }
 
-pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, String> {
+pub fn get_live_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, String> {
     let sdk = sdk()?;
     let input = bb_get_band_info_in_t::default();
     let mut output = bb_get_band_info_out_t::default();
-    let selection_bitmap = get_minidb_band_bitmap(handle).ok();
 
     suppress_sdk_console_output(|| unsafe {
         match (sdk.bb_ioctl)(
@@ -2202,7 +2201,7 @@ pub fn get_band_info(handle: *mut bb_dev_handle_t) -> Result<BbBandInfoSummary, 
             0 => Ok(BbBandInfoSummary {
                 band_auto: output.band_mode != 0,
                 work_band: output.work_band,
-                selection_bitmap,
+                selection_bitmap: None,
             }),
             e => Err(format!("bb_ioctl(BB_GET_BAND_INFO) failed with code: {}", e)),
         }
