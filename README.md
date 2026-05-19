@@ -13,6 +13,7 @@
 - AP 模式下的 Pair 面板已修正离线显示逻辑：当匹配设备离线、重启或页面处于 runtime/snapshot 切换窗口时，输入框会优先显示之前匹配过的目标 MAC，不再误显示“无匹配设备”或把当前 AP 自己的 MAC 当成匹配方显示。
 - remote bb_host 模式下的 Active Device 轮询已做分层降噪：AP 侧高频 PRJ_DISPATCH 读取已缓存，DEV 侧 channel/status 热路径已改为按设备复用缓存，不再因 Web 后台 runtime、status、plot 刷新而周期性触发同类 SDK 读取。
 - 顶部全局工具栏顺序已调整为 Active Device -> Role -> Reboot，减少 Role 切换与即时重启操作的视觉打断。
+- 小屏顶部工具栏已进一步优化：Active Device、Role、Reboot 改为等宽三列单排展示，每项采用“标题在上、控件在下”的布局；Reboot 按钮也同步缩小，避免小屏出现横向滚动条。
 
 ### 2026-05-18
 
