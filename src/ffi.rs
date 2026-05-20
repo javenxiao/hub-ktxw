@@ -83,6 +83,17 @@ pub struct BbLinkStatusSummary {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct BbPhyStatusSummary {
+    pub mcs: u8,
+    pub rf_mode: u8,
+    pub tintlv_enable: u8,
+    pub tintlv_num: u8,
+    pub tintlv_len: u8,
+    pub bandwidth: u8,
+    pub freq_khz: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BbGetStatusSummary {
     pub role: u8,
     pub mode: u8,
@@ -92,6 +103,12 @@ pub struct BbGetStatusSummary {
     pub rt_sbmp: u8,
     pub active_user: Option<u8>,
     pub detected_active_user: Option<u8>,
+    pub tx_status: Option<BbPhyStatusSummary>,
+    pub rx_status: Option<BbPhyStatusSummary>,
+    pub slot_tx_status: Option<BbPhyStatusSummary>,
+    pub slot_rx_status: Option<BbPhyStatusSummary>,
+    pub br_tx_status: Option<BbPhyStatusSummary>,
+    pub br_rx_status: Option<BbPhyStatusSummary>,
     pub mac_bytes: [u8; BB_MAC_LEN],
     pub mac_hex: String,
     pub frequency_khz: Option<u32>,
@@ -101,10 +118,13 @@ pub struct BbGetStatusSummary {
     pub link_state: Option<u8>,
     pub pair_state: Option<bool>,
     pub snr_db: Option<i32>,
+    pub br_snr_db: Option<i32>,
     pub ldpc_err: Option<i32>,
     pub ldpc_num: Option<i32>,
     pub signal_main: Option<i32>,
     pub signal_aux: Option<i32>,
+    pub br_signal_main: Option<i32>,
+    pub br_signal_aux: Option<i32>,
     pub peer_mac_bytes: Option<[u8; BB_MAC_LEN]>,
     pub peer_mac_hex: Option<String>,
     pub links: Vec<BbLinkStatusSummary>,
@@ -1263,6 +1283,8 @@ pub const BB_DIR_TX: u8 = 0;
 pub const BB_DIR_RX: u8 = 1;
 pub const BB_ROLE_AP: u8 = 0;
 pub const BB_ROLE_DEV: u8 = 1;
+pub const BB_USER_0: usize = 0;
+pub const BB_USER_BR_CS: usize = 8;
 
 // Socket 选项标志
 pub const BB_SOCK_FLAG_RX: u32 = 1 << 0;
@@ -2031,10 +2053,31 @@ pub fn get_status(
                 let active_link = links.first();
                 let effective_user_status = effective_user_index
                     .and_then(|user_index| output.user_status.get(user_index).copied());
+                let slot_user_status = output.user_status.get(BB_USER_0).copied();
                 let effective_user_quality = effective_user_index
                     .and_then(|user_index| user_qualities.get(user_index).cloned().flatten());
+                let br_user_status = output.user_status.get(BB_USER_BR_CS).copied();
+                let br_user_quality = user_qualities.get(BB_USER_BR_CS).cloned().flatten();
                 let allow_link_fallback = preferred_user_index.is_none();
 
+                let tx_status = effective_user_status
+                    .as_ref()
+                    .and_then(|user| summarize_phy_status(&user.tx_status));
+                let rx_status = effective_user_status
+                    .as_ref()
+                    .and_then(|user| summarize_phy_status(&user.rx_status));
+                let slot_tx_status = slot_user_status
+                    .as_ref()
+                    .and_then(|user| summarize_phy_status(&user.tx_status));
+                let slot_rx_status = slot_user_status
+                    .as_ref()
+                    .and_then(|user| summarize_phy_status(&user.rx_status));
+                let br_tx_status = br_user_status
+                    .as_ref()
+                    .and_then(|user| summarize_phy_status(&user.tx_status));
+                let br_rx_status = br_user_status
+                    .as_ref()
+                    .and_then(|user| summarize_phy_status(&user.rx_status));
                 let frequency_khz = effective_user_status.as_ref().and_then(preferred_frequency_khz);
                 let bandwidth = effective_user_status.as_ref().and_then(preferred_bandwidth);
                 let tx_mcs = if frequency_khz.is_some() {
@@ -2049,6 +2092,7 @@ pub fn get_status(
                     .as_ref()
                     .and_then(|quality| quality.snr_db)
                     .or_else(|| allow_link_fallback.then(|| active_link.and_then(|link| link.snr_db)).flatten());
+                let br_snr_db = br_user_quality.as_ref().and_then(|quality| quality.snr_db);
                 let ldpc_err = effective_user_quality
                     .as_ref()
                     .map(|quality| i32::from(quality.ldpc_err))
@@ -2065,6 +2109,8 @@ pub fn get_status(
                     .as_ref()
                     .map(|quality| i32::from(quality.gain_b))
                     .or_else(|| allow_link_fallback.then(|| active_link.and_then(|link| link.signal_aux)).flatten());
+                let br_signal_main = br_user_quality.as_ref().map(|quality| i32::from(quality.gain_a));
+                let br_signal_aux = br_user_quality.as_ref().map(|quality| i32::from(quality.gain_b));
                 let peer_mac_bytes = active_link.and_then(|link| link.peer_mac_bytes);
                 let peer_mac_hex = active_link.and_then(|link| link.peer_mac_hex.clone());
 
@@ -2077,6 +2123,12 @@ pub fn get_status(
                     rt_sbmp: output.rt_sbmp,
                     active_user: effective_user_index.map(|index| index as u8),
                     detected_active_user: detected_active_user.map(|index| index as u8),
+                    tx_status,
+                    rx_status,
+                    slot_tx_status,
+                    slot_rx_status,
+                    br_tx_status,
+                    br_rx_status,
                     mac_bytes: output.mac.addr,
                     mac_hex: format_bb_mac(&output.mac),
                     frequency_khz,
@@ -2086,10 +2138,13 @@ pub fn get_status(
                     link_state,
                     pair_state,
                     snr_db,
+                    br_snr_db,
                     ldpc_err,
                     ldpc_num,
                     signal_main,
                     signal_aux,
+                    br_signal_main,
+                    br_signal_aux,
                     peer_mac_bytes,
                     peer_mac_hex,
                     links,
@@ -3476,6 +3531,29 @@ fn preferred_bandwidth(user: &bb_user_status_t) -> Option<u8> {
     } else {
         None
     }
+}
+
+fn summarize_phy_status(status: &bb_phy_status_t) -> Option<BbPhyStatusSummary> {
+    if status.freq_khz == 0
+        && status.bandwidth == 0
+        && status.mcs == 0
+        && status.rf_mode == 0
+        && status.tintlv_enable == 0
+        && status.tintlv_num == 0
+        && status.tintlv_len == 0
+    {
+        return None;
+    }
+
+    Some(BbPhyStatusSummary {
+        mcs: status.mcs,
+        rf_mode: status.rf_mode,
+        tintlv_enable: status.tintlv_enable,
+        tintlv_num: status.tintlv_num,
+        tintlv_len: status.tintlv_len,
+        bandwidth: status.bandwidth,
+        freq_khz: status.freq_khz,
+    })
 }
 
 fn subscribe_plot_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {

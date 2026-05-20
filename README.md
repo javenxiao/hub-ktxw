@@ -6,6 +6,14 @@
 
 ## 0. 最近版本更新
 
+### 2026-05-20
+
+- Wireless -> Status / Connection Info 已重新对齐 frame 语义：AP 与 DEV 统一展示 `BR + slot0` 两条记录；后端不再混用当前 effective user 的 PHY 状态，而是拆分固定 `User 0` 的 `slot_tx_status/slot_rx_status` 与固定 `User BR/CS` 的 `br_tx_status/br_rx_status`，避免 slot0 行的频率、带宽、MCS 被 BR 用户污染。
+- remote bb_host 模式下的 DEV 状态刷新已进一步分层：runtime 路径继续复用按设备缓存以压低串口噪声，但状态快照额外增加了独立的 2 秒节流刷新，恢复 Connection Info 的 RSSI 小图与 RSSI Graph 更新，而不会重新回到 100ms 级别高频打 `BB_GET_STATUS`。
+- RSSI Graph 交互已改为角色感知：AP 只允许从 slot0 行进入，并切到 `User 0`；DEV 只允许从 BR 行进入，并切到 `User BR/CS`。同时，DEV 手动切到 `User 0` 时后端会返回空 `chart.series`，避免出现与产品语义不一致的 DEV User0 曲线。
+- Wireless 页在高频实时刷新下的可操作性已补强：Connection Info 的 RSSI 入口从双击改为 `pointerdown` 立即打开，并为 Wireless 控件增加了短暂的交互保护窗，避免下拉框、按钮或 RSSI 入口在用户操作中被运行态刷新重绘打断。
+- Connection Info 的窄屏行为已修正为与 General Status 一致：中等窄屏优先使用横向滚动，不再把列宽继续压缩到文字重叠；同时信号条等级重新定义为 `SNR >= 20` 即显示满格。
+
 ### 2026-05-19
 
 - Pair 持久化链路已补齐：自动对频成功后，板端实际锁定到的 peer MAC 会自动回写到 MiniDB，避免只保存用户手工输入的目标地址。

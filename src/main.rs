@@ -386,27 +386,30 @@ struct WirelessSnapshot {
 
 #[derive(Debug, Clone, Serialize)]
 struct GeneralStatus {
+    role: String,
     mac_address: String,
-    operation_mode: String,
-    compatibility_mode: String,
-    bandwidth: String,
-    frequency: String,
-    tx_power: String,
+    master_slave_mode: String,
+    networking_mode: String,
+    band_mode: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct ConnectionStatus {
     link_slot: String,
+    slot_type: String,
+    direction: String,
+    duration: String,
+    frequency: String,
+    bandwidth: String,
+    mcs: String,
+    antenna_mode: String,
+    throughput: String,
     link_state: String,
     pair_state: String,
     pairing_active: bool,
-    candidate_macs: Vec<String>,
     mac_address: String,
-    tx_mod: String,
-    rx_mod: String,
     snr_db: i32,
-    signal_level_main: u8,
-    signal_level_aux: u8,
+    signal_level: u8,
     rssi_main_history: Vec<i32>,
     rssi_aux_history: Vec<i32>,
 }
@@ -2294,15 +2297,22 @@ fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> Wireless
     WirelessSnapshot {
         sequence,
         general: GeneralStatus {
+            role: "AP".to_string(),
             mac_address: "00:0F:92:FA:37:CE".to_string(),
-            operation_mode: "Master".to_string(),
-            compatibility_mode: "PDDL".to_string(),
-            bandwidth: "4 MHz".to_string(),
-            frequency: format!("2.{:03} GHz", 438 + ((sequence % 5) as u16)),
-            tx_power: format!("{} dBm", 20 + (sequence % 2)),
+            master_slave_mode: "Master".to_string(),
+            networking_mode: "1V1".to_string(),
+            band_mode: "Auto (2G)".to_string(),
         },
         connections: vec![ConnectionStatus {
             link_slot: "SLOT 0".to_string(),
+            slot_type: "slot0".to_string(),
+            direction: "Recv".to_string(),
+            duration: "Unavailable".to_string(),
+            frequency: "2.422 GHz".to_string(),
+            bandwidth: "10 MHz".to_string(),
+            mcs: "MCS 10".to_string(),
+            antenna_mode: "2T2R_STBC".to_string(),
+            throughput: "15372 kbps".to_string(),
             link_state: if sequence % 3 == 0 {
                 "Connect".to_string()
             } else {
@@ -2314,21 +2324,9 @@ fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> Wireless
                 "Stable".to_string()
             },
             pairing_active: sequence % 5 == 0,
-            candidate_macs: vec!["00:0F:92:FA".to_string(), "00:0F:92:FB".to_string()],
             mac_address: "00:0F:92:FA:37:C5".to_string(),
-            tx_mod: if sequence % 2 == 0 {
-                "QPSK FEC 1/2".to_string()
-            } else {
-                "16-QAM FEC 3/4".to_string()
-            },
-            rx_mod: if sequence % 3 == 0 {
-                "64-QAM FEC 5/6".to_string()
-            } else {
-                "16-QAM FEC 3/4".to_string()
-            },
             snr_db: 34 + oscillate(sequence, 2, 7),
-            signal_level_main: map_signal_level_from_snr(Some(34 + oscillate(sequence, 2, 7))),
-            signal_level_aux: map_signal_level_from_snr(Some(34 + oscillate(sequence, 2, 7))),
+            signal_level: map_signal_level_from_snr(Some(34 + oscillate(sequence, 2, 7))),
             rssi_main_history: peer_main_history,
             rssi_aux_history: peer_aux_history,
         }],
@@ -2448,46 +2446,24 @@ fn build_hardware_snapshot(
         || status.signal_main.is_some()
         || status.signal_aux.is_some();
     let render_chart_series = has_selected_user_signal && should_render_chart_series(status);
-    let connections = status
-        .links
-        .iter()
-        .map(|link| {
-            let current_main = link.signal_main.unwrap_or(RSSI_UNAVAILABLE_DBM);
-            let current_aux = link.signal_aux.unwrap_or(RSSI_UNAVAILABLE_DBM);
-            let current_snr = link.snr_db;
-            let signal_level = map_signal_level_from_snr(current_snr);
+    let mut connections = Vec::new();
 
-            ConnectionStatus {
-                link_slot: format!("SLOT {}", link.slot),
-                link_state: format_link_state(link.state).to_string(),
-                pair_state: format_pair_state(link),
-                pairing_active: link.pair_state,
-                candidate_macs: link.candidate_macs.clone(),
-                mac_address: resolve_connection_mac_address(status, link, runtime_current),
-                tx_mod: status
-                    .tx_mcs
-                    .map(format_mcs)
-                    .unwrap_or_else(|| "Unavailable".to_string()),
-                rx_mod: link
-                    .rx_mcs
-                    .map(format_mcs)
-                    .unwrap_or_else(|| "Unavailable".to_string()),
-                snr_db: current_snr.unwrap_or(SNR_UNAVAILABLE_DB),
-                signal_level_main: signal_level,
-                signal_level_aux: signal_level,
-                rssi_main_history: history_from_previous(
-                    previous_connection_history(previous, link.slot, true),
-                    current_main,
-                    CONNECTION_HISTORY_POINTS,
-                ),
-                rssi_aux_history: history_from_previous(
-                    previous_connection_history(previous, link.slot, false),
-                    current_aux,
-                    CONNECTION_HISTORY_POINTS,
-                ),
-            }
-        })
-        .collect::<Vec<_>>();
+    let (primary_direction, primary_phy) = resolve_primary_connection_status(status);
+
+    if let Some(br_connection) = build_br_connection_status(status, runtime_current, previous) {
+        connections.push(br_connection);
+    }
+
+    for link in &status.links {
+        connections.push(build_link_connection_status(
+            status,
+            link,
+            runtime_current,
+            previous,
+            primary_direction,
+            primary_phy,
+        ));
+    }
     let chart_target = status.mac_hex.clone();
     let chart_series = if render_chart_series {
         vec![
@@ -2599,18 +2575,11 @@ fn build_hardware_snapshot(
     WirelessSnapshot {
         sequence,
         general: GeneralStatus {
+            role: format_role(status.role).to_string(),
             mac_address: status.mac_hex.clone(),
-            operation_mode: format_operation_mode(status),
-            compatibility_mode: format_baseband_mode(status.mode).to_string(),
-            bandwidth: status
-                .bandwidth
-                .map(format_bandwidth)
-                .unwrap_or_else(|| "Unavailable".to_string()),
-            frequency: status
-                .frequency_khz
-                .map(format_frequency_khz)
-                .unwrap_or_else(|| "Unavailable".to_string()),
-            tx_power: "Unavailable".to_string(),
+            master_slave_mode: format_master_slave_mode(status).to_string(),
+            networking_mode: format_networking_mode(status.mode).to_string(),
+            band_mode: format_general_band_mode(runtime_current, status),
         },
         connections,
         chart: RssiChart {
@@ -2622,17 +2591,69 @@ fn build_hardware_snapshot(
     }
 }
 
-fn previous_connection_history(
+fn build_link_connection_status(
+    status: &BbGetStatusSummary,
+    link: &ffi::BbLinkStatusSummary,
+    runtime_current: Option<&WirelessRuntimeView>,
     previous: Option<&WirelessSnapshot>,
-    slot: usize,
+    direction: &str,
+    phy: Option<&ffi::BbPhyStatusSummary>,
+) -> ConnectionStatus {
+    let current_main = link.signal_main.unwrap_or(RSSI_UNAVAILABLE_DBM);
+    let current_aux = link.signal_aux.unwrap_or(RSSI_UNAVAILABLE_DBM);
+    let current_snr = link.snr_db;
+    let signal_level = map_signal_level_from_snr(current_snr);
+    let slot_type = format_connection_slot_type(link.slot);
+
+    ConnectionStatus {
+        link_slot: format!("SLOT {}", link.slot),
+        slot_type: slot_type.clone(),
+        direction: direction.to_string(),
+        duration: format_connection_duration(status, link.slot),
+        frequency: phy
+            .and_then(|value| normalize_connection_frequency(value.freq_khz))
+            .map(format_frequency_khz)
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        bandwidth: phy
+            .map(|value| format_bandwidth(value.bandwidth))
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        mcs: format_connection_mcs(status, link, phy, direction),
+        antenna_mode: format_connection_antenna_mode(phy, direction).to_string(),
+        throughput: format_connection_throughput(runtime_current, false, direction),
+        link_state: format_link_state(link.state).to_string(),
+        pair_state: format_pair_state(link),
+        pairing_active: link.pair_state,
+        mac_address: resolve_connection_mac_address(status, link, runtime_current),
+        snr_db: current_snr.unwrap_or(SNR_UNAVAILABLE_DB),
+        signal_level,
+        rssi_main_history: history_from_previous(
+            previous_connection_history(previous, &slot_type, direction, true),
+            current_main,
+            CONNECTION_HISTORY_POINTS,
+        ),
+        rssi_aux_history: history_from_previous(
+            previous_connection_history(previous, &slot_type, direction, false),
+            current_aux,
+            CONNECTION_HISTORY_POINTS,
+        ),
+    }
+}
+
+fn previous_connection_history<'a>(
+    previous: Option<&'a WirelessSnapshot>,
+    slot_type: &str,
+    direction: &str,
     primary: bool,
-) -> Option<&[i32]> {
+) -> Option<&'a [i32]> {
     previous
         .and_then(|snapshot| {
             snapshot
                 .connections
                 .iter()
-                .find(|connection| connection.link_slot == format!("SLOT {}", slot))
+                .find(|connection| {
+                    connection.slot_type.eq_ignore_ascii_case(slot_type)
+                        && connection.direction.eq_ignore_ascii_case(direction)
+                })
         })
         .map(|connection| {
             if primary {
@@ -3710,7 +3731,7 @@ fn oscillate(step: u64, amplitude: i32, period: u64) -> i32 {
 fn map_signal_level_from_snr(snr_db: Option<i32>) -> u8 {
     match snr_db {
         None => 0,
-        Some(value) if value >= 23 => 4,
+        Some(value) if value >= 20 => 4,
         Some(value) if value >= 15 => 3,
         Some(value) if value >= 9 => 2,
         Some(_) => 1,
@@ -3756,10 +3777,257 @@ fn format_operation_mode(status: &BbGetStatusSummary) -> String {
     format!("{} ({})", role, sync_role)
 }
 
+fn format_master_slave_mode(status: &BbGetStatusSummary) -> &'static str {
+    match status.sync_master {
+        1 => "Master",
+        0 => "Slave",
+        _ => "Unknown",
+    }
+}
+
+fn format_networking_mode(mode: u8) -> &'static str {
+    match mode {
+        0 => "1V1",
+        1 => "1VN",
+        2 => "Relay",
+        3 => "Director",
+        _ => "Unknown",
+    }
+}
+
 fn format_role(role: u8) -> &'static str {
     match role {
         0 => "AP",
         1 => "DEV",
+        _ => "Unknown",
+    }
+}
+
+fn resolve_primary_connection_status(
+    status: &BbGetStatusSummary,
+) -> (&'static str, Option<&ffi::BbPhyStatusSummary>) {
+    if status.role == ffi::BB_ROLE_AP {
+        if let Some(phy) = status.slot_rx_status.as_ref() {
+            ("Recv", Some(phy))
+        } else if let Some(phy) = status.slot_tx_status.as_ref() {
+            ("Send", Some(phy))
+        } else {
+            ("Recv", None)
+        }
+    } else {
+        if let Some(phy) = status.slot_tx_status.as_ref() {
+            ("Send", Some(phy))
+        } else if let Some(phy) = status.slot_rx_status.as_ref() {
+            ("Recv", Some(phy))
+        } else {
+            ("Send", None)
+        }
+    }
+}
+
+fn normalize_connection_frequency(freq_khz: u32) -> Option<u32> {
+    if freq_khz == 0 {
+        None
+    } else {
+        Some(freq_khz)
+    }
+}
+
+fn format_connection_slot_type(slot: usize) -> String {
+    format!("slot{}", slot)
+}
+
+fn format_connection_duration(status: &BbGetStatusSummary, slot: usize) -> String {
+    let _ = (status, slot);
+    "Unavailable".to_string()
+}
+
+fn build_br_connection_status(
+    status: &BbGetStatusSummary,
+    runtime_current: Option<&WirelessRuntimeView>,
+    previous: Option<&WirelessSnapshot>,
+) -> Option<ConnectionStatus> {
+    let fallback_link = status.links.first();
+
+    let (direction, phy, current_main, current_aux, current_snr, link_state, pair_state, pairing_active, mac_address) =
+        if status.role == ffi::BB_ROLE_AP {
+            let (direction, phy) = if let Some(phy) = status.br_tx_status.as_ref() {
+                ("Send", phy)
+            } else if let Some(phy) = status.br_rx_status.as_ref() {
+                ("Recv", phy)
+            } else {
+                return None;
+            };
+
+            (
+                direction,
+                phy,
+                status.br_signal_main.unwrap_or(RSSI_UNAVAILABLE_DBM),
+                status.br_signal_aux.unwrap_or(RSSI_UNAVAILABLE_DBM),
+                status.br_snr_db,
+                "Stable".to_string(),
+                "Stable".to_string(),
+                false,
+                status.mac_hex.clone(),
+            )
+        } else {
+            let (direction, phy) = if let Some(phy) = status.br_rx_status.as_ref() {
+                ("Recv", phy)
+            } else if let Some(phy) = status.br_tx_status.as_ref() {
+                ("Send", phy)
+            } else {
+                return None;
+            };
+
+            let current_main = status
+                .br_signal_main
+                .or_else(|| fallback_link.and_then(|link| link.signal_main))
+                .unwrap_or(RSSI_UNAVAILABLE_DBM);
+            let current_aux = status
+                .br_signal_aux
+                .or_else(|| fallback_link.and_then(|link| link.signal_aux))
+                .unwrap_or(RSSI_UNAVAILABLE_DBM);
+            let current_snr = status.br_snr_db.or_else(|| fallback_link.and_then(|link| link.snr_db));
+            let link_state = fallback_link
+                .map(|link| format_link_state(link.state).to_string())
+                .unwrap_or_else(|| "Stable".to_string());
+            let pair_state = fallback_link
+                .map(format_pair_state)
+                .unwrap_or_else(|| "Stable".to_string());
+            let pairing_active = fallback_link.map(|link| link.pair_state).unwrap_or(false);
+            let mac_address = fallback_link
+                .map(|link| resolve_connection_mac_address(status, link, runtime_current))
+                .unwrap_or_else(|| status.mac_hex.clone());
+
+            (
+                direction,
+                phy,
+                current_main,
+                current_aux,
+                current_snr,
+                link_state,
+                pair_state,
+                pairing_active,
+                mac_address,
+            )
+        };
+
+    let signal_level = map_signal_level_from_snr(current_snr);
+
+    Some(ConnectionStatus {
+        link_slot: "BR".to_string(),
+        slot_type: "BR".to_string(),
+        direction: direction.to_string(),
+        duration: "Unavailable".to_string(),
+        frequency: normalize_connection_frequency(phy.freq_khz)
+            .map(format_frequency_khz)
+            .unwrap_or_else(|| "Unavailable".to_string()),
+        bandwidth: format_bandwidth(phy.bandwidth),
+        mcs: format_mcs(phy.mcs),
+        antenna_mode: if direction == "Send" {
+            format_tx_rf_mode(phy.rf_mode).to_string()
+        } else {
+            format_rx_rf_mode(phy.rf_mode).to_string()
+        },
+        throughput: format_connection_throughput(runtime_current, true, direction),
+        link_state,
+        pair_state,
+        pairing_active,
+        mac_address,
+        snr_db: current_snr.unwrap_or(SNR_UNAVAILABLE_DB),
+        signal_level,
+        rssi_main_history: history_from_previous(
+            previous_connection_history(previous, "BR", direction, true),
+            current_main,
+            CONNECTION_HISTORY_POINTS,
+        ),
+        rssi_aux_history: history_from_previous(
+            previous_connection_history(previous, "BR", direction, false),
+            current_aux,
+            CONNECTION_HISTORY_POINTS,
+        ),
+    })
+}
+
+fn format_connection_mcs(
+    status: &BbGetStatusSummary,
+    link: &ffi::BbLinkStatusSummary,
+    phy: Option<&ffi::BbPhyStatusSummary>,
+    direction: &str,
+) -> String {
+    if direction.eq_ignore_ascii_case("Recv") {
+        link.rx_mcs
+            .or_else(|| phy.map(|value| value.mcs))
+            .map(format_mcs)
+            .unwrap_or_else(|| "Unavailable".to_string())
+    } else {
+        phy.map(|value| value.mcs)
+            .or_else(|| {
+                if status.active_user.or(status.detected_active_user) == Some(ffi::BB_USER_0 as u8) {
+                    status.tx_mcs
+                } else {
+                    None
+                }
+            })
+            .map(format_mcs)
+            .unwrap_or_else(|| "Unavailable".to_string())
+    }
+}
+
+fn format_connection_antenna_mode(
+    phy: Option<&ffi::BbPhyStatusSummary>,
+    direction: &str,
+) -> &'static str {
+    let Some(phy) = phy else {
+        return "Unavailable";
+    };
+
+    if direction.eq_ignore_ascii_case("Send") {
+        format_tx_rf_mode(phy.rf_mode)
+    } else {
+        format_rx_rf_mode(phy.rf_mode)
+    }
+}
+
+fn format_connection_throughput(
+    runtime_current: Option<&WirelessRuntimeView>,
+    is_br: bool,
+    direction: &str,
+) -> String {
+    if is_br {
+        return "Unavailable".to_string();
+    }
+
+    runtime_current
+        .filter(|current| {
+            let expected_direction = if direction.eq_ignore_ascii_case("Send") {
+                "TX"
+            } else {
+                "RX"
+            };
+
+            current.current_mcs_direction.eq_ignore_ascii_case(expected_direction)
+        })
+        .and_then(|current| current.current_mcs_throughput_kbps)
+        .map(|value| format!("{} kbps", value))
+        .unwrap_or_else(|| "Unavailable".to_string())
+}
+
+fn format_tx_rf_mode(mode: u8) -> &'static str {
+    match mode {
+        0 => "1TX",
+        1 => "2TX_STBC",
+        2 => "2TX_MIMO",
+        _ => "Unknown",
+    }
+}
+
+fn format_rx_rf_mode(mode: u8) -> &'static str {
+    match mode {
+        0 => "1T1R",
+        1 => "1T2R",
+        2 => "2T2R_STBC",
+        3 => "2T2R_MIMO",
         _ => "Unknown",
     }
 }
@@ -3876,6 +4144,65 @@ fn format_baseband_mode(mode: u8) -> &'static str {
     }
 }
 
+fn normalize_general_status_value(value: &str) -> Option<&str> {
+    let trimmed = value.trim();
+
+    if trimmed.is_empty() || trimmed == "--" || trimmed.eq_ignore_ascii_case("Unavailable") {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn infer_band_name_from_frequency_khz(freq_khz: u32) -> &'static str {
+    if freq_khz < 2_000_000 {
+        "1G"
+    } else if freq_khz < 5_000_000 {
+        "2G"
+    } else {
+        "5G"
+    }
+}
+
+fn format_general_band_mode(
+    runtime_current: Option<&WirelessRuntimeView>,
+    status: &BbGetStatusSummary,
+) -> String {
+    let configured_label = runtime_current
+        .and_then(|current| normalize_general_status_value(&current.configured_band.label))
+        .map(str::to_string);
+    let configured_is_auto = runtime_current
+        .and_then(|current| current.configured_band.auto)
+        .unwrap_or(false)
+        || configured_label
+            .as_deref()
+            .map(|label| label.eq_ignore_ascii_case("Auto"))
+            .unwrap_or(false);
+    let live_band = runtime_current
+        .and_then(|current| {
+            normalize_general_status_value(&current.live_rf.band)
+                .or_else(|| normalize_general_status_value(&current.work_band))
+        })
+        .map(str::to_string)
+        .or_else(|| {
+            status
+                .frequency_khz
+                .map(|freq_khz| infer_band_name_from_frequency_khz(freq_khz).to_string())
+        });
+
+    if configured_is_auto {
+        if let Some(live_band) = live_band {
+            return format!("Auto ({})", live_band);
+        }
+
+        return "Auto".to_string();
+    }
+
+    configured_label
+        .or(live_band)
+        .unwrap_or_else(|| "Unavailable".to_string())
+}
+
 fn format_band_name(band: u8) -> &'static str {
     match band {
         0 => "1G",
@@ -3955,6 +4282,18 @@ fn format_mcs(mcs: u8) -> String {
 mod tests {
     use super::*;
 
+    fn sample_phy_status(freq_khz: u32, bandwidth: u8, mcs: u8, rf_mode: u8) -> ffi::BbPhyStatusSummary {
+        ffi::BbPhyStatusSummary {
+            mcs,
+            rf_mode,
+            tintlv_enable: 0,
+            tintlv_num: 0,
+            tintlv_len: 0,
+            bandwidth,
+            freq_khz,
+        }
+    }
+
     fn sample_link_status(state: u8, pair_state: bool, peer_mac_hex: Option<&str>) -> ffi::BbLinkStatusSummary {
         ffi::BbLinkStatusSummary {
             slot: 0,
@@ -3982,6 +4321,12 @@ mod tests {
             rt_sbmp: 0,
             active_user: None,
             detected_active_user: None,
+            tx_status: None,
+            rx_status: None,
+            slot_tx_status: None,
+            slot_rx_status: None,
+            br_tx_status: None,
+            br_rx_status: None,
             mac_bytes: [0; ffi::BB_MAC_LEN],
             mac_hex: "A5:54:F6:2C".to_string(),
             frequency_khz: None,
@@ -3991,10 +4336,13 @@ mod tests {
             link_state: Some(0),
             pair_state: Some(true),
             snr_db: None,
+            br_snr_db: None,
             ldpc_err: None,
             ldpc_num: None,
             signal_main: None,
             signal_aux: None,
+            br_signal_main: None,
+            br_signal_aux: None,
             peer_mac_bytes: None,
             peer_mac_hex: configured_peer_mac.map(str::to_string),
             links: vec![sample_link_status(0, true, configured_peer_mac)],
@@ -4220,6 +4568,12 @@ mod tests {
     }
 
     #[test]
+    fn map_signal_level_from_snr_treats_20_db_as_full_signal() {
+        assert_eq!(map_signal_level_from_snr(Some(20)), 4);
+        assert_eq!(map_signal_level_from_snr(Some(19)), 3);
+    }
+
+    #[test]
     fn format_pair_state_reports_pairing_for_idle_slot_with_cached_peer_mac() {
         let link = sample_link_status(0, true, Some("A5:68:B0:33"));
 
@@ -4242,6 +4596,22 @@ mod tests {
     fn resolve_pair_slot_bitmap_uses_slot_mask_for_ap_role() {
         assert_eq!(resolve_pair_slot_bitmap(0, Some(ffi::BB_ROLE_AP)).unwrap(), 0x01);
         assert_eq!(resolve_pair_slot_bitmap(3, Some(ffi::BB_ROLE_AP)).unwrap(), 0x08);
+    }
+
+    #[test]
+    fn resolve_primary_connection_status_uses_slot0_phy_when_active_user_is_br() {
+        let mut status = sample_dev_status(Some("A5:68:B0:33"));
+        status.active_user = Some(ffi::BB_USER_BR_CS as u8);
+        status.tx_status = Some(sample_phy_status(2418000, 1, 25, 1));
+        status.rx_status = Some(sample_phy_status(2418000, 1, 25, 2));
+        status.slot_tx_status = Some(sample_phy_status(2477000, 3, 12, 1));
+        status.slot_rx_status = Some(sample_phy_status(2407200, 1, 25, 2));
+
+        let (direction, phy) = resolve_primary_connection_status(&status);
+
+        assert_eq!(direction, "Send");
+        assert_eq!(phy.unwrap().freq_khz, 2477000);
+        assert_eq!(phy.unwrap().bandwidth, 3);
     }
 
     fn sample_runtime_details(role: u8, link_state: u8, pairing_active: bool) -> WirelessRuntimeDetails {

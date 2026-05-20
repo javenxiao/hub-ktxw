@@ -8,6 +8,7 @@ use crate::ffi;
 const REMOTE_SDK_CALL_GAP: Duration = Duration::from_millis(20);
 const REMOTE_HOT_UPGRADE_SDK_CALL_GAP: Duration = Duration::from_millis(0);
 const REMOTE_DEVICE_SWITCH_GAP: Duration = Duration::from_millis(1200);
+const REMOTE_STATUS_SNAPSHOT_REFRESH_GAP: Duration = Duration::from_secs(2);
 const UPGRADE_PROGRESS_UPDATE_INTERVAL: Duration = Duration::from_millis(100);
 const HOT_UPGRADE_WRITE_SEQ: u16 = 5673;
 const HOT_UPGRADE_CRC_SEQ: u16 = 3673;
@@ -85,13 +86,19 @@ impl CachedSystemInfoEntry {
 #[derive(Debug, Clone)]
 struct CachedStatusSummaryEntry {
     summary: ffi::BbGetStatusSummary,
+    cached_at: Instant,
 }
 
 impl CachedStatusSummaryEntry {
     fn new(summary: &ffi::BbGetStatusSummary) -> Self {
         Self {
             summary: summary.clone(),
+            cached_at: Instant::now(),
         }
+    }
+
+    fn is_fresh(&self, max_age: Duration) -> bool {
+        self.cached_at.elapsed() <= max_age
     }
 }
 
@@ -678,6 +685,17 @@ impl BasebandApi {
         let entry = self.status_summary_cache.get(active_mac)?;
 
         if entry.summary.role != ffi::BB_ROLE_DEV {
+            return None;
+        }
+
+        Some(entry.summary.clone())
+    }
+
+    fn cached_recent_status_summary_for_active_device(&self, max_age: Duration) -> Option<ffi::BbGetStatusSummary> {
+        let active_mac = self.active_device_mac.as_ref()?;
+        let entry = self.status_summary_cache.get(active_mac)?;
+
+        if entry.summary.role != ffi::BB_ROLE_DEV || !entry.is_fresh(max_age) {
             return None;
         }
 
@@ -1833,6 +1851,30 @@ impl BasebandApi {
         })
     }
 
+    pub fn get_status_summary_for_snapshot(&mut self) -> Result<ffi::BbGetStatusSummary, String> {
+        if self.is_remote_mode() {
+            if let Some(cached) = self
+                .cached_recent_status_summary_for_active_device(REMOTE_STATUS_SNAPSHOT_REFRESH_GAP)
+            {
+                return Ok(cached);
+            }
+        }
+
+        let is_remote = self.is_remote_mode();
+        let preferred_signal_user = self.preferred_signal_user_for_active_device();
+
+        self.with_device_operation("get_status_summary_for_snapshot", |handle| {
+            run_remote_sdk_call(is_remote, || {
+                ffi::get_status(handle, ffi::BB_ALL_DATA_USER_BMP, preferred_signal_user)
+            })
+        })
+        .map(|status| {
+            self.remember_current_device(&status);
+            self.cache_status_summary_for_active_device(&status);
+            status
+        })
+    }
+
     fn load_wireless_runtime_details(&mut self) -> Result<WirelessRuntimeDetails, String> {
         let is_remote = self.is_remote_mode();
         let status = self.get_status_summary()?;
@@ -1965,11 +2007,33 @@ impl BasebandApi {
                 None
             }
         };
-        let mcs_value = match run_remote_sdk_call(is_remote, || ffi::get_mcs(self.handle_ptr(), ffi::BB_DIR_TX, slot)) {
+        let preferred_mcs_dir = if status.role == ffi::BB_ROLE_AP {
+            ffi::BB_DIR_RX
+        } else {
+            ffi::BB_DIR_TX
+        };
+        let mcs_value = match run_remote_sdk_call(is_remote, || ffi::get_mcs(self.handle_ptr(), preferred_mcs_dir, slot)) {
             Ok(value) => Some(value),
-            Err(err) => {
-                warnings.push(err);
-                None
+            Err(primary_err) => {
+                if preferred_mcs_dir != ffi::BB_DIR_TX {
+                    match run_remote_sdk_call(is_remote, || ffi::get_mcs(self.handle_ptr(), ffi::BB_DIR_TX, slot)) {
+                        Ok(value) => {
+                            warnings.push(format!(
+                                "Preferred MCS direction read failed; fell back to TX direction: {}",
+                                primary_err
+                            ));
+                            Some(value)
+                        }
+                        Err(fallback_err) => {
+                            warnings.push(primary_err);
+                            warnings.push(fallback_err);
+                            None
+                        }
+                    }
+                } else {
+                    warnings.push(primary_err);
+                    None
+                }
             }
         };
         let power_mode = match run_remote_sdk_call(is_remote, || ffi::get_power_mode(self.handle_ptr())) {
@@ -3210,7 +3274,7 @@ impl BasebandManager {
     pub fn get_status_snapshot(&self) -> Result<ffi::BbGetStatusSummary, String> {
         tracing::debug!("BasebandManager::get_status_snapshot acquiring SDK status");
         let mut api = self.api.lock().unwrap();
-        let result = api.get_status_summary();
+        let result = api.get_status_summary_for_snapshot();
         tracing::debug!(success = result.is_ok(), "BasebandManager::get_status_snapshot finished");
         result
     }
@@ -3514,6 +3578,12 @@ mod tests {
             rt_sbmp: 0,
             active_user: None,
             detected_active_user: None,
+            tx_status: None,
+            rx_status: None,
+            slot_tx_status: None,
+            slot_rx_status: None,
+            br_tx_status: None,
+            br_rx_status: None,
             mac_bytes: [0; ffi::BB_MAC_LEN],
             mac_hex: local_mac.to_string(),
             frequency_khz: None,
@@ -3523,10 +3593,13 @@ mod tests {
             link_state: links.first().map(|link| link.state),
             pair_state: None,
             snr_db: None,
+            br_snr_db: None,
             ldpc_err: None,
             ldpc_num: None,
             signal_main: None,
             signal_aux: None,
+            br_signal_main: None,
+            br_signal_aux: None,
             peer_mac_bytes: None,
             peer_mac_hex: links.first().and_then(|link| link.peer_mac_hex.clone()),
             links,

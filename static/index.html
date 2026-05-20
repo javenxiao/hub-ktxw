@@ -458,26 +458,20 @@
                                     <table class="wireless-status-table wireless-overview-table">
                                         <thead>
                                             <tr>
+                                                <th>Role</th>
                                                 <th>MAC Address</th>
-                                                <th>Operation Mode</th>
-                                                <th>Compatibility Mode</th>
-                                                <th>Live Band</th>
-                                                <th>Live Channel</th>
-                                                <th>Bandwidth</th>
-                                                <th>Current MCS</th>
-                                                <th>Power Control</th>
+                                                <th>Master-Slave Mode</th>
+                                                <th>Networking Mode</th>
+                                                <th>Band Mode</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr>
+                                                <td id="general-role">--</td>
                                                 <td id="general-mac">--</td>
-                                                <td id="general-mode">--</td>
-                                                <td id="general-compatibility">--</td>
-                                                <td id="general-live-band">--</td>
-                                                <td id="general-work-channel">--</td>
-                                                <td id="general-bandwidth">--</td>
-                                                <td id="general-current-mcs">--</td>
-                                                <td id="general-power-control">--</td>
+                                                <td id="general-master-slave">--</td>
+                                                <td id="general-networking">--</td>
+                                                <td id="general-band-mode">--</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -488,17 +482,17 @@
                                 <h3 class="sys-section-title">Connection Info (<span id="connection-count">0</span>)</h3>
                                 <div class="wireless-status-table-scroll wireless-status-table-scroll-connection">
                                     <table class="connection-table wireless-status-table">
-                                        <thead>
+                                        <thead id="connection-table-head">
                                             <tr>
-                                                <th>Link Slot</th>
-                                                <th>Link State</th>
-                                                <th>Pair State</th>
-                                                <th>MAC Address</th>
-                                                <th>Tx Mod</th>
-                                                <th>Rx Mod</th>
-                                                <th>SNR (dB)</th>
-                                                <th>Signal</th>
-                                                <th>RSSI Graph</th>
+                                                <th>Type</th>
+                                                <th>Dir</th>
+                                                <th>Freq</th>
+                                                <th>BW</th>
+                                                <th>MCS</th>
+                                                <th>TX/RX Mode</th>
+                                                <th>TP(K)</th>
+                                                <th>Signal | SNR</th>
+                                                <th>RSSI</th>
                                             </tr>
                                         </thead>
                                         <tbody id="connection-table-body">
@@ -1052,7 +1046,9 @@
         const liveState = document.getElementById('live-state');
         const sidebarToggleInput = document.getElementById('sidebar-collapsed');
         const primaryTabLabels = Array.from(document.querySelectorAll('.top-tabs .tab-label'));
+        const connectionTableHead = document.getElementById('connection-table-head');
         const connectionTableBody = document.getElementById('connection-table-body');
+        const wirelessPanel = document.querySelector('.panel-wireless');
         const wirelessChartPanel = document.getElementById('wireless-chart-panel');
         const rfSignalUserSelects = Array.from(document.querySelectorAll('[data-rf-signal-user-select]'));
         const wirelessSubTabs = Array.from(document.querySelectorAll('.sub-tab[data-wireless-tab]'));
@@ -1101,6 +1097,9 @@
         const pairStopOverrideBySlot = new Map();
         let pairCandidatesDeviceMac = '';
         const pairPendingGraceMs = 2500;
+        const wirelessControlSyncHoldMs = 2500;
+        const RF_SIGNAL_USER_SLOT0 = 0;
+        const RF_SIGNAL_USER_BR_CS = 8;
         const rfSignalUserOptions = [
             { value: 0, label: 'User 0' },
             { value: 1, label: 'User 1' },
@@ -1219,6 +1218,7 @@
                 yAxisTitle: 'Value',
             },
         };
+        let wirelessControlSyncHoldUntil = 0;
         const maintenanceElements = {
             stage: document.getElementById('maintenance-upgrade-stage'),
             title: document.getElementById('maintenance-upgrade-stage-title'),
@@ -1410,13 +1410,45 @@
             return parts.length > 0 ? parts.join(' / ') : '--';
         }
 
-        function updateGeneralRuntimeStatus(current = wirelessRuntimeCurrent) {
-            const liveRf = current?.live_rf || current || null;
+        function normalizeGeneralStatusValue(value) {
+            const normalized = typeof value === 'string' ? value.trim() : '';
 
-            setText('general-live-band', liveRf?.band || current?.work_band || '--');
-            setText('general-work-channel', formatDiagnosticsChannel(current));
-            setText('general-current-mcs', formatDiagnosticsMcs(current));
-            setText('general-power-control', formatDiagnosticsPower(current));
+            if (!normalized || normalized === '--' || normalized === 'Unavailable') {
+                return '';
+            }
+
+            return normalized;
+        }
+
+        function formatGeneralBandMode(current = wirelessRuntimeCurrent) {
+            if (!current) {
+                return '--';
+            }
+
+            const configuredBand = current.configured_band || null;
+            const configuredLabel = normalizeGeneralStatusValue(configuredBand?.label || '');
+            const liveRf = current.live_rf || current || null;
+            const liveBand = normalizeGeneralStatusValue(liveRf?.band || current?.work_band || '');
+            const configuredIsAuto = configuredBand?.auto === true || configuredLabel.toUpperCase() === 'AUTO';
+
+            if (configuredIsAuto) {
+                return liveBand ? `Auto (${liveBand})` : 'Auto';
+            }
+
+            return configuredLabel || liveBand || '--';
+        }
+
+        function updateGeneralRuntimeStatus(current = wirelessRuntimeCurrent, options = {}) {
+            const { clearWhenUnavailable = false } = options;
+
+            if (!current) {
+                if (clearWhenUnavailable) {
+                    setText('general-band-mode', '--');
+                }
+                return;
+            }
+
+            setText('general-band-mode', formatGeneralBandMode(current));
         }
 
         function setWirelessControlStatus(message, state = 'idle') {
@@ -2999,12 +3031,145 @@
                 .join('')}</span>`;
         }
 
-        function buildMiniChart(mainHistory, auxHistory) {
-            const isPressed = plotState.panelVisible;
+        function getConnectionColumns(role) {
+            const baseColumns = [
+                { key: 'slot_type', label: 'Type' },
+                { key: 'direction', label: 'Dir' },
+                { key: 'frequency', label: 'Freq' },
+                { key: 'bandwidth', label: 'BW' },
+                { key: 'mcs', label: 'MCS' },
+                { key: 'antenna_mode', label: 'TX/RX Mode' },
+                { key: 'throughput', label: 'TP(K)' },
+                { key: 'snr_signal', label: 'Signal | SNR' },
+                { key: 'rssi_graph', label: 'RSSI' },
+            ];
+
+            return baseColumns;
+        }
+
+        function renderConnectionHeaders(columns) {
+            if (!connectionTableHead) {
+                return;
+            }
+
+            connectionTableHead.innerHTML = `
+                <tr>
+                    ${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join('')}
+                </tr>
+            `;
+        }
+
+        function renderConnectionCell(label, content) {
+            return `
+                <span class="connection-cell-label">${escapeHtml(label)}</span>
+                <span class="connection-cell-value">${content}</span>
+            `;
+        }
+
+        function markWirelessControlSyncHold(durationMs = wirelessControlSyncHoldMs) {
+            wirelessControlSyncHoldUntil = Math.max(wirelessControlSyncHoldUntil, Date.now() + Math.max(0, durationMs));
+        }
+
+        function isInteractiveWirelessElement(element) {
+            return element instanceof HTMLElement
+                && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(element.tagName);
+        }
+
+        function shouldDeferWirelessControlSync() {
+            if (Date.now() < wirelessControlSyncHoldUntil) {
+                return true;
+            }
+
+            const activeElement = document.activeElement;
+            return isInteractiveWirelessElement(activeElement)
+                && Boolean(activeElement.closest('.panel-wireless'));
+        }
+
+        function resolveConnectionRssiChartConfig(connection, role) {
+            const normalizedRole = String(role || '').trim().toUpperCase();
+            const slotType = String(connection?.slot_type || '').trim().toUpperCase();
+
+            if (normalizedRole === 'DEV') {
+                if (slotType !== 'BR') {
+                    return {
+                        visible: false,
+                        slotKey: slotType || null,
+                        targetUser: null,
+                    };
+                }
+
+                return {
+                    visible: true,
+                    slotKey: slotType,
+                    targetUser: RF_SIGNAL_USER_BR_CS,
+                };
+            }
+
+            if (normalizedRole === 'AP') {
+                if (slotType !== 'SLOT0') {
+                    return {
+                        visible: false,
+                        slotKey: slotType || null,
+                        targetUser: null,
+                    };
+                }
+
+                return {
+                    visible: true,
+                    slotKey: slotType,
+                    targetUser: RF_SIGNAL_USER_SLOT0,
+                };
+            }
+
+            return {
+                visible: true,
+                slotKey: slotType || null,
+                targetUser: null,
+            };
+        }
+
+        function renderConnectionValue(column, connection, role = latestWirelessSnapshot?.general?.role || 'AP') {
+            switch (column.key) {
+                case 'link_state':
+                    return buildStatePill(connection.link_state);
+                case 'snr_signal':
+                    return `
+                        <span class="connection-signal-cell">
+                            ${buildSignalBars(Number(connection.signal_level) || 0)}
+                            <span class="connection-signal-separator" aria-hidden="true">|</span>
+                            <span class="connection-signal-metric">${escapeHtml(connection.snr_db)}</span>
+                        </span>
+                    `;
+                case 'rssi_graph': {
+                    const chartConfig = resolveConnectionRssiChartConfig(connection, role);
+
+                    if (!chartConfig.visible) {
+                        return '';
+                    }
+
+                    return buildMiniChart(connection.rssi_main_history, connection.rssi_aux_history, chartConfig);
+                }
+                default:
+                    return escapeHtml(connection[column.key] ?? '--');
+            }
+        }
+
+        function buildMiniChart(mainHistory, auxHistory, config = {}) {
+            const slotKey = config.slotKey || null;
+            const targetUser = Number.isFinite(config.targetUser) ? config.targetUser : null;
+            const isPressed = plotState.panelVisible && (!slotKey || plotState.panelSlot === slotKey);
             const [minValue, maxValue] = normalizeRange(...resolveRange(mainHistory, auxHistory));
             const mainPoints = toPolylinePoints(mainHistory, 44, 28, minValue, maxValue, 2, 2, 41, 25);
             const auxPoints = toPolylinePoints(auxHistory, 44, 28, minValue, maxValue, 2, 2, 41, 25);
-            return `<button class="mini-chart-button${isPressed ? ' is-active' : ''}" type="button" data-rssi-toggle="true" aria-label="切换 RSSI Graph 显示" aria-pressed="${isPressed}"><span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="双路 RSSI 缩略图"><polyline class="mini-line-main" points="${mainPoints}"></polyline><polyline class="mini-line-aux" points="${auxPoints}"></polyline></svg></span></button>`;
+            const slotAttr = slotKey ? ` data-rssi-slot="${escapeHtml(slotKey)}"` : '';
+            const targetUserAttr = targetUser === null ? '' : ` data-rssi-target-user="${targetUser}"`;
+            const ariaLabel = targetUser === RF_SIGNAL_USER_BR_CS
+                ? '点击打开 User BR/CS RSSI Graph'
+                : (targetUser === RF_SIGNAL_USER_SLOT0
+                    ? '点击打开 User 0 RSSI Graph'
+                    : '点击打开 RSSI Graph');
+
+            return `<button class="mini-chart-button${isPressed ? ' is-active' : ''}" type="button" data-rssi-toggle="true"${slotAttr}${targetUserAttr} aria-label="${ariaLabel}" aria-pressed="${isPressed}"><span class="mini-chart" aria-hidden="true"><span class="mini-grid"></span><svg viewBox="0 0 44 28" role="img" aria-label="双路 RSSI 缩略图"><polyline class="mini-line-main" points="${mainPoints}"></polyline><polyline class="mini-line-aux" points="${auxPoints}"></polyline></svg></span></button>`;
         }
 
         function setPlotPanelVisibility(visible) {
@@ -5123,7 +5288,7 @@
                 updatePowerControlsState();
                 updateMcsControlsState();
                 updateBandwidthControlsState();
-                updateGeneralRuntimeStatus(null);
+                updateGeneralRuntimeStatus(null, { clearWhenUnavailable: true });
                 if (!wirelessConfigurationDirty) {
                     renderWirelessConfiguration({
                         success: false,
@@ -5154,6 +5319,7 @@
             lastKnownRfDeviceMac = currentDeviceMac;
             runtimeUnavailableFallbackDeviceMac = '';
             renderPairPanel(latestWirelessSnapshot?.connections);
+            const deferWirelessControlSync = shouldDeferWirelessControlSync();
             const wirelessControlStatus = document.getElementById('wireless-control-status');
             if (
                 wirelessControlStatus
@@ -5164,79 +5330,83 @@
             }
             ensurePairCandidatesCacheFresh();
             renderRfProfile();
-            renderRfDeviceOptions(current);
-            renderRfSignalUserOptions(current);
-            renderRfBasebandRoleOptions(current);
+            if (!deferWirelessControlSync) {
+                renderRfDeviceOptions(current);
+                renderRfSignalUserOptions(current);
+                renderRfBasebandRoleOptions(current);
+            }
             setText('runtime-mac', current.local_mac_address || '--');
             setText('runtime-system-uptime', current.system_uptime || '--');
             setText('runtime-version', current.hardware_version || '--');
             setText('runtime-firmware-version', current.firmware_version || '--');
             setText('runtime-compile-time', current.compile_time || '--');
 
-            populateChannelOptions(current.channels, channelIndexValue ?? current.work_channel_index);
-            syncMcsValueSelection(current);
-            syncRfAutoModeControls(current);
+            if (!deferWirelessControlSync) {
+                populateChannelOptions(current.channels, channelIndexValue ?? current.work_channel_index);
+                syncMcsValueSelection(current);
+                syncRfAutoModeControls(current);
 
-            if (!controlDefaultsInitialized) {
-                const bandBitmap = String(resolveBandSelectionBitmap(current));
-                const selectedBand = document.querySelector(`input[name="control-band-select"][value="${bandBitmap}"]`);
-                if (selectedBand) {
-                    selectedBand.checked = true;
-                }
-                if ((current.channel_auto ?? true) === true) {
-                    document.getElementById('control-channel-auto-on').checked = true;
-                } else {
-                    document.getElementById('control-channel-auto-off').checked = true;
-                }
-                document.getElementById('control-channel-direction').value = channelDirectionValue;
-                document.getElementById('control-power-mode').value = powerModeValue ?? (current.current_power_mode.toLowerCase().startsWith('open') ? 'openloop' : 'closeloop');
-                if ((current.current_power_auto ?? true) === true) {
-                    document.getElementById('control-power-auto-on').checked = true;
-                } else {
-                    document.getElementById('control-power-auto-off').checked = true;
-                }
-                document.getElementById('control-power-db').value = powerDbValue ?? (current.current_power_dbm ?? 20);
-                document.getElementById('control-mcs-slot').value = String(mcsSlotValue ?? current.current_slot ?? 0);
-                if ((current.current_mcs_auto ?? true) === true) {
-                    document.getElementById('control-mcs-auto-auto').checked = true;
-                } else {
-                    document.getElementById('control-mcs-auto-manual').checked = true;
-                }
-                document.getElementById('control-mcs-value').value = String(mcsValueSelection ?? current.current_mcs_value ?? 0);
-                bandwidthAutoMode = current.bandwidth_auto ?? bandwidthAutoMode;
-                if (bandwidthAutoMode === true) {
-                    document.getElementById('control-bandwidth-auto-on').checked = true;
-                    document.getElementById('control-bandwidth-auto-off').checked = false;
-                } else if (bandwidthAutoMode === false) {
-                    document.getElementById('control-bandwidth-auto-on').checked = false;
-                    document.getElementById('control-bandwidth-auto-off').checked = true;
-                } else {
-                    document.getElementById('control-bandwidth-auto-on').checked = true;
-                    document.getElementById('control-bandwidth-auto-off').checked = false;
-                }
-                bandwidthSlotValue = Number(current.current_slot ?? bandwidthSlotValue ?? 0);
-                document.getElementById('control-bandwidth-direction').value = bandwidthDirectionValue;
-                if (bandwidthValueSelection !== null && bandwidthValueSelection !== undefined) {
-                    document.getElementById('control-bandwidth-value').value = String(bandwidthValueSelection);
-                } else if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
-                    document.getElementById('control-bandwidth-value').value = String(current.bandwidth_code);
+                if (!controlDefaultsInitialized) {
+                    const bandBitmap = String(resolveBandSelectionBitmap(current));
+                    const selectedBand = document.querySelector(`input[name="control-band-select"][value="${bandBitmap}"]`);
+                    if (selectedBand) {
+                        selectedBand.checked = true;
+                    }
+                    if ((current.channel_auto ?? true) === true) {
+                        document.getElementById('control-channel-auto-on').checked = true;
+                    } else {
+                        document.getElementById('control-channel-auto-off').checked = true;
+                    }
+                    document.getElementById('control-channel-direction').value = channelDirectionValue;
+                    document.getElementById('control-power-mode').value = powerModeValue ?? (current.current_power_mode.toLowerCase().startsWith('open') ? 'openloop' : 'closeloop');
+                    if ((current.current_power_auto ?? true) === true) {
+                        document.getElementById('control-power-auto-on').checked = true;
+                    } else {
+                        document.getElementById('control-power-auto-off').checked = true;
+                    }
+                    document.getElementById('control-power-db').value = powerDbValue ?? (current.current_power_dbm ?? 20);
+                    document.getElementById('control-mcs-slot').value = String(mcsSlotValue ?? current.current_slot ?? 0);
+                    if ((current.current_mcs_auto ?? true) === true) {
+                        document.getElementById('control-mcs-auto-auto').checked = true;
+                    } else {
+                        document.getElementById('control-mcs-auto-manual').checked = true;
+                    }
+                    document.getElementById('control-mcs-value').value = String(mcsValueSelection ?? current.current_mcs_value ?? 0);
+                    bandwidthAutoMode = current.bandwidth_auto ?? bandwidthAutoMode;
+                    if (bandwidthAutoMode === true) {
+                        document.getElementById('control-bandwidth-auto-on').checked = true;
+                        document.getElementById('control-bandwidth-auto-off').checked = false;
+                    } else if (bandwidthAutoMode === false) {
+                        document.getElementById('control-bandwidth-auto-on').checked = false;
+                        document.getElementById('control-bandwidth-auto-off').checked = true;
+                    } else {
+                        document.getElementById('control-bandwidth-auto-on').checked = true;
+                        document.getElementById('control-bandwidth-auto-off').checked = false;
+                    }
+                    bandwidthSlotValue = Number(current.current_slot ?? bandwidthSlotValue ?? 0);
+                    document.getElementById('control-bandwidth-direction').value = bandwidthDirectionValue;
+                    if (bandwidthValueSelection !== null && bandwidthValueSelection !== undefined) {
+                        document.getElementById('control-bandwidth-value').value = String(bandwidthValueSelection);
+                    } else if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
+                        document.getElementById('control-bandwidth-value').value = String(current.bandwidth_code);
+                    }
+
+                    channelIndexValue = getSelectedChannelIndex();
+                    powerModeValue = document.getElementById('control-power-mode').value;
+                    powerDbValue = Number(document.getElementById('control-power-db').value);
+                    mcsSlotValue = Number(document.getElementById('control-mcs-slot').value);
+                    mcsValueSelection = Number(document.getElementById('control-mcs-value').value);
+                    bandwidthDirectionValue = document.getElementById('control-bandwidth-direction').value;
+                    bandwidthValueSelection = Number(document.getElementById('control-bandwidth-value').value);
+                    controlDefaultsInitialized = true;
                 }
 
-                channelIndexValue = getSelectedChannelIndex();
-                powerModeValue = document.getElementById('control-power-mode').value;
-                powerDbValue = Number(document.getElementById('control-power-db').value);
-                mcsSlotValue = Number(document.getElementById('control-mcs-slot').value);
-                mcsValueSelection = Number(document.getElementById('control-mcs-value').value);
-                bandwidthDirectionValue = document.getElementById('control-bandwidth-direction').value;
-                bandwidthValueSelection = Number(document.getElementById('control-bandwidth-value').value);
-                controlDefaultsInitialized = true;
+                updateChannelControlsState();
+                updatePowerControlsState();
+                updateMcsControlsState();
+                updateBandwidthControlsState();
+                updateRfSelectWidths();
             }
-
-            updateChannelControlsState();
-            updatePowerControlsState();
-            updateMcsControlsState();
-            updateBandwidthControlsState();
-            updateRfSelectWidths();
             updateGeneralRuntimeStatus(current);
 
             if (deviceChanged) {
@@ -5697,9 +5867,12 @@
             });
         }
 
-        function renderConnections(connections) {
+        function renderConnections(connections, role = latestWirelessSnapshot?.general?.role || 'AP') {
+            const columns = getConnectionColumns(role);
+            renderConnectionHeaders(columns);
+
             if (!Array.isArray(connections) || connections.length === 0) {
-                connectionTableBody.innerHTML = '<tr><td colspan="9">暂无连接数据...</td></tr>';
+                connectionTableBody.innerHTML = `<tr><td colspan="${columns.length}">暂无连接数据...</td></tr>`;
                 setText('connection-count', '0');
                 return;
             }
@@ -5707,30 +5880,23 @@
             setText('connection-count', String(connections.length));
             connectionTableBody.innerHTML = connections.map((connection) => `
                 <tr>
-                    <td>${escapeHtml(connection.link_slot)}</td>
-                    <td>${buildStatePill(connection.link_state)}</td>
-                    <td>${buildStatePill(connection.pair_state)}</td>
-                    <td>${escapeHtml(connection.mac_address)}</td>
-                    <td>${escapeHtml(connection.tx_mod)}</td>
-                    <td>${escapeHtml(connection.rx_mod)}</td>
-                    <td>${escapeHtml(connection.snr_db)}</td>
-                    <td>${buildSignalBars(Math.max(connection.signal_level_main, connection.signal_level_aux))}</td>
-                    <td>${buildMiniChart(connection.rssi_main_history, connection.rssi_aux_history)}</td>
+                    ${columns.map((column) => `<td>${renderConnectionCell(column.label, renderConnectionValue(column, connection, role))}</td>`).join('')}
                 </tr>
             `).join('');
         }
 
         function renderSnapshot(snapshot) {
             latestWirelessSnapshot = snapshot;
+            setText('general-role', snapshot.general.role);
             setText('general-mac', snapshot.general.mac_address);
-            setText('general-mode', snapshot.general.operation_mode);
-            setText('general-compatibility', snapshot.general.compatibility_mode);
-            setText('general-bandwidth', snapshot.general.bandwidth);
+            setText('general-master-slave', snapshot.general.master_slave_mode);
+            setText('general-networking', snapshot.general.networking_mode);
+            setText('general-band-mode', snapshot.general.band_mode);
 
             updateGeneralRuntimeStatus(wirelessRuntimeCurrent);
             renderRfProfile(snapshot);
             renderPairPanel(snapshot.connections);
-            renderConnections(snapshot.connections);
+            renderConnections(snapshot.connections, snapshot.general.role);
             syncPlotChart(snapshot);
         }
 
@@ -5772,13 +5938,42 @@
         });
 
         if (connectionTableBody) {
-            const toggleRssiChartPanel = () => {
-                const nextVisible = !plotState.panelVisible;
-                setPlotPanelVisibility(nextVisible);
-                if (nextVisible) {
-                    switchWirelessSubTab('rssi');
+            const toggleRssiChartPanel = (button) => {
+                markWirelessControlSyncHold();
+                const slotKey = button.dataset.rssiSlot || null;
+                const requestedUser = Number(button.dataset.rssiTargetUser);
+                const targetUser = Number.isFinite(requestedUser) ? requestedUser : null;
+                const currentUser = getCurrentSignalUser();
+                const sameContext = plotState.panelVisible
+                    && plotState.panelSlot === slotKey
+                    && (targetUser === null || targetUser === currentUser);
+
+                if (sameContext) {
+                    setPlotPanelVisibility(false);
+                    renderConnections(
+                        latestWirelessSnapshot?.connections || [],
+                        latestWirelessSnapshot?.general?.role || 'AP'
+                    );
+                    return;
                 }
-                renderConnections(latestWirelessSnapshot?.connections || []);
+
+                plotState.panelSlot = slotKey;
+                setPlotPanelVisibility(true);
+                switchWirelessSubTab('rssi');
+
+                if (targetUser !== null) {
+                    syncRfSignalUserSelectValue(targetUser);
+
+                    if (targetUser !== currentUser) {
+                        clearPlotChartForPendingContext();
+                        applyWirelessSetting('set_signal_user', { user: targetUser }).catch(() => {});
+                    }
+                }
+
+                renderConnections(
+                    latestWirelessSnapshot?.connections || [],
+                    latestWirelessSnapshot?.general?.role || 'AP'
+                );
             };
 
             connectionTableBody.addEventListener('pointerdown', (event) => {
@@ -5789,8 +5984,12 @@
                     return;
                 }
 
+                if (typeof event.button === 'number' && event.button !== 0) {
+                    return;
+                }
+
                 event.preventDefault();
-                toggleRssiChartPanel();
+                toggleRssiChartPanel(button);
             });
 
             connectionTableBody.addEventListener('click', (event) => {
@@ -5801,8 +6000,31 @@
                     return;
                 }
 
-                toggleRssiChartPanel();
+                toggleRssiChartPanel(button);
             });
+        }
+
+        if (wirelessPanel) {
+            wirelessPanel.addEventListener('pointerdown', (event) => {
+                const control = event.target instanceof Element
+                    ? event.target.closest('button, input, select, textarea')
+                    : null;
+                if (control) {
+                    markWirelessControlSyncHold();
+                }
+            }, true);
+
+            wirelessPanel.addEventListener('focusin', (event) => {
+                if (isInteractiveWirelessElement(event.target)) {
+                    markWirelessControlSyncHold(4000);
+                }
+            }, true);
+
+            wirelessPanel.addEventListener('change', (event) => {
+                if (isInteractiveWirelessElement(event.target)) {
+                    markWirelessControlSyncHold();
+                }
+            }, true);
         }
 
         const rfOperationModeSelect = document.getElementById('rf-operation-mode');
