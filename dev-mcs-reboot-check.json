@@ -1,0 +1,191 @@
+{
+  "steps": [
+    {
+      "set_auto": {
+        "success": true,
+        "message": "Wireless setting action 'set_mcs_mode' applied successfully",
+        "current": {
+          "local_mac_address": "A5:54:F6:2C",
+          "operation_mode": "DEV (Async)",
+          "dev_pair_target_mac": "A5:68:B0:33",
+          "ap_pair_target_macs": [],
+          "available_devices": [
+            {
+              "role": "DEV",
+              "mac_address": "A5:54:F6:2C",
+              "label": "DEV(M):a554f62c",
+              "selected": true
+            },
+            {
+              "role": "AP",
+              "mac_address": "A5:68:B0:33",
+              "label": "AP(M):a568b033",
+              "selected": false
+            }
+          ],
+          "selected_signal_user": 0,
+          "detected_signal_user": 0,
+          "compatibility_mode": "Single User",
+          "configured_band": {
+            "bitmap": 7,
+            "label": "Auto",
+            "auto": true
+          },
+          "live_rf": {
+            "band_code": 1,
+            "band": "2G",
+            "channel_auto": true,
+            "channel_count": 15,
+            "channel_index": 255,
+            "channel_frequency": "Unavailable"
+          },
+          "work_band_code": 1,
+          "band_bitmap": 7,
+          "bandwidth_code": 3,
+          "bandwidth": "10 MHz",
+          "frequency_khz": 5404000,
+          "frequency": "5.404 GHz",
+          "system_uptime": "0d 00:00:07",
+          "compile_time": "04/10/2026 15:34:37",
+          "software_version": "1.3.02-01",
+          "hardware_version": "Unknown_0.9",
+          "firmware_version": "1.3.02-01",
+          "running_system": "Unavailable",
+          "boot_reason": "Unavailable",
+          "band_auto": true,
+          "work_band": "2G",
+          "channel_auto": true,
+          "channel_count": 15,
+          "work_channel_index": 255,
+          "work_channel_frequency": "Unavailable",
+          "channels": [
+            {
+              "index": 0,
+              "frequency": "2.411 GHz",
+              "power_dbm": -102
+            },
+            {
+              "index": 1,
+              "frequency": "2.422 GHz",
+              "power_dbm": -95
+            },
+            {
+              "index": 2,
+              "frequency": "2.433 GHz",
+              "power_dbm": -78
+            },
+            {
+              "index": 3,
+              "frequency": "2.444 GHz",
+              "power_dbm": -78
+            },
+            {
+              "index": 4,
+              "frequency": "2.455 GHz",
+              "power_dbm": -84
+            },
+            {
+              "index": 5,
+              "frequency": "2.466 GHz",
+              "power_dbm": -80
+            },
+            {
+              "index": 6,
+              "frequency": "2.477 GHz",
+              "power_dbm": -102
+            },
+            {
+              "index": 7,
+              "frequency": "5.101 GHz",
+              "power_dbm": -101
+            },
+            {
+              "index": 8,
+              "frequency": "5.202 GHz",
+              "power_dbm": -98
+            },
+            {
+              "index": 9,
+              "frequency": "5.303 GHz",
+              "power_dbm": -95
+            },
+            {
+              "index": 10,
+              "frequency": "5.404 GHz",
+              "power_dbm": -73
+            },
+            {
+              "index": 11,
+              "frequency": "5.505 GHz",
+              "power_dbm": -76
+            },
+            {
+              "index": 12,
+              "frequency": "5.606 GHz",
+              "power_dbm": -78
+            },
+            {
+              "index": 13,
+              "frequency": "5.707 GHz",
+              "power_dbm": -100
+            },
+            {
+              "index": 14,
+              "frequency": "5.808 GHz",
+              "power_dbm": -91
+            }
+          ],
+          "bandwidth_auto": null,
+          "current_slot": 0,
+          "current_mcs_direction": "TX",
+          "current_mcs_auto": true,
+          "current_mcs_value": 12,
+          "current_mcs_label": "MCS10 64QAM 2/3",
+          "current_mcs_throughput_kbps": 15372,
+          "current_power_user": 0,
+          "current_power_mode": "Closed Loop",
+          "current_power_auto": true,
+          "current_power_dbm": 17,
+          "br_power_dbm": 17,
+          "ap_power_dbm": 15,
+          "dev_power_dbm": 17,
+          "warnings": []
+        }
+      }
+    },
+    {
+      "reboot": {
+        "success": true,
+        "message": "Immediate reboot request accepted. Device is restarting now.",
+        "delay_seconds": 0,
+        "reboot_expected": true
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "available": false,
+      "message": "Device reboot in progress. Waiting for reconnect.",
+      "mac": null,
+      "mcs_auto": null,
+      "mcs_value": null,
+      "uptime": null
+    },
+    {
+      "available": true,
+      "message": "Wireless runtime details fetched successfully",
+      "mac": "A5:54:F6:2C",
+      "mcs_auto": true,
+      "mcs_value": 12,
+      "uptime": "0d 00:00:24"
+    }
+  ],
+  "final": {
+    "available": true,
+    "message": "Wireless runtime details fetched successfully",
+    "mac": "A5:54:F6:2C",
+    "mcs_auto": true,
+    "mcs_value": 12,
+    "uptime": "0d 00:00:24"
+  }
+}

@@ -391,6 +391,7 @@ struct GeneralStatus {
     master_slave_mode: String,
     networking_mode: String,
     band_mode: String,
+    power_dbm: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -438,7 +439,7 @@ const DEFAULT_AP_PLOT_SAMPLE_POINTS: usize = 200;
 const RSSI_UNAVAILABLE_DBM: i32 = -127;
 const SNR_UNAVAILABLE_DB: i32 = -1;
 const REBOOT_REFRESH_QUIET_WINDOW_SECS: u64 = 15;
-const REBOOT_RUNTIME_RECOVERY_PROBE_DELAY_SECS: u64 = 3;
+const REBOOT_RUNTIME_RECOVERY_PROBE_DELAY_SECS: u64 = 1;
 const REBOOT_RUNTIME_UNAVAILABLE_MESSAGE: &str = "Device reboot in progress. Waiting for reconnect.";
 const REBOOT_PAIR_RESUME_WINDOW_SECS: u64 = 120;
 const REBOOT_PAIR_RESUME_RETRY_INTERVAL_SECS: u64 = 5;
@@ -797,6 +798,18 @@ async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<Wirele
     {
         if let Some(baseband) = state.baseband.as_ref() {
             let reboot_window_active = state.expected_reboot_window_active().await;
+
+            if reboot_window_active {
+                if let Ok(devices) = baseband.get_detected_remote_devices() {
+                    let response = runtime_unavailable_response_with_devices(
+                        REBOOT_RUNTIME_UNAVAILABLE_MESSAGE.to_string(),
+                        build_wireless_device_options(None, None, None, None, None, &devices),
+                    );
+                    let mut guard = state.wireless_runtime.write().await;
+                    *guard = response;
+                }
+            }
+
             let should_probe = if reboot_window_active {
                 state.expected_reboot_recovery_probe_due().await
             } else {
@@ -806,7 +819,7 @@ async fn get_wireless_runtime(State(state): State<Arc<AppState>>) -> Json<Wirele
             if should_probe {
                 match baseband.get_wireless_runtime_details() {
                     Ok(details) => {
-                        let response = runtime_response_from_details(&details);
+                        let response = build_runtime_response_after_pair_resume(&state, baseband, &details).await;
                         {
                             let mut guard = state.wireless_runtime.write().await;
                             *guard = response;
@@ -1018,13 +1031,8 @@ fn async_runtime_control_unsupported_message(
         return None;
     }
 
-    match action {
-        "set_bandwidth" | "set_bandwidth_mode" => Some(format!(
-            "Bandwidth control is not supported on {}. The current Async runtime keeps bandwidth fixed, so manual bandwidth changes are disabled.",
-            current.operation_mode
-        )),
-        _ => None,
-    }
+    let _ = action;
+    None
 }
 
 async fn apply_wireless_setting(
@@ -1193,6 +1201,10 @@ async fn apply_wireless_setting(
             .mcs
             .ok_or_else(|| "mcs is required".to_string())
             .and_then(|mcs| baseband.set_mcs(request.slot.unwrap_or(default_slot), mcs)),
+        "set_tx_mcs" => request
+            .mcs
+            .ok_or_else(|| "mcs is required".to_string())
+            .and_then(|mcs| baseband.set_tx_mcs(request.user.unwrap_or(0), mcs)),
         "set_power_mode" => request
             .power_mode
             .as_deref()
@@ -1256,8 +1268,18 @@ async fn apply_wireless_setting(
                 refresh_runtime_until_effect_or_timeout(&state, &baseband, &request).await
             };
 
+            let current_snapshot = if is_role_switch {
+                None
+            } else {
+                Some(state.snapshot.read().await.clone())
+            };
+
             if !is_role_switch {
-                if let Err(err) = verify_wireless_setting_effect(&request, current.as_ref()) {
+                if let Err(err) = verify_wireless_setting_effect(
+                    &request,
+                    current.as_ref(),
+                    current_snapshot.as_ref(),
+                ) {
                     return Json(WirelessSettingResponse {
                         success: false,
                         message: err,
@@ -1269,7 +1291,11 @@ async fn apply_wireless_setting(
             let message = if request.action == "set_role" {
                 "Baseband role switch requested; device rebooting to apply the new role".to_string()
             } else {
-                format!("Wireless setting action '{}' applied successfully", request.action)
+                format_wireless_setting_success_message(
+                    &request,
+                    current.as_ref(),
+                    current_snapshot.as_ref(),
+                )
             };
 
             Json(WirelessSettingResponse {
@@ -1704,6 +1730,15 @@ async fn request_system_reboot(
 ) -> Json<RebootActionResponse> {
     let requested_delay_seconds = request.delay_seconds.unwrap_or(0);
     let reboot_quiet_window = Duration::from_secs(REBOOT_REFRESH_QUIET_WINDOW_SECS);
+
+    if state.expected_reboot_window_active().await {
+        return Json(RebootActionResponse {
+            success: false,
+            message: "Device reboot is already in progress. Wait for reconnect before sending another reboot request.".to_string(),
+            delay_seconds: requested_delay_seconds,
+            reboot_expected: true,
+        });
+    }
 
     let Some(baseband) = state.baseband.as_ref() else {
         return Json(RebootActionResponse {
@@ -2302,6 +2337,7 @@ fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> Wireless
             master_slave_mode: "Master".to_string(),
             networking_mode: "1V1".to_string(),
             band_mode: "Auto (2G)".to_string(),
+            power_dbm: "--".to_string(),
         },
         connections: vec![ConnectionStatus {
             link_slot: "SLOT 0".to_string(),
@@ -2580,6 +2616,7 @@ fn build_hardware_snapshot(
             master_slave_mode: format_master_slave_mode(status).to_string(),
             networking_mode: format_networking_mode(status.mode).to_string(),
             band_mode: format_general_band_mode(runtime_current, status),
+            power_dbm: format_general_power_dbm(runtime_current, status),
         },
         connections,
         chart: RssiChart {
@@ -3125,6 +3162,20 @@ fn runtime_response_from_details(details: &WirelessRuntimeDetails) -> WirelessRu
     }
 }
 
+async fn build_runtime_response_after_pair_resume(
+    state: &Arc<AppState>,
+    baseband: &Arc<BasebandManager>,
+    details: &WirelessRuntimeDetails,
+) -> WirelessRuntimeResponse {
+    maybe_resume_pair_after_reboot(state, baseband, details).await;
+    if pair_connected(details) {
+        state
+            .clear_reboot_pair_resume_if_matches(&details.status.mac_hex)
+            .await;
+    }
+    runtime_response_from_details(details)
+}
+
 fn pair_blocking_notice_from_runtime(details: &WirelessRuntimeDetails) -> Option<String> {
     details.warnings.iter().find_map(|warning| {
         let text = warning.trim();
@@ -3348,15 +3399,7 @@ async fn refresh_runtime_from_baseband(state: &Arc<AppState>, baseband: &Arc<Bas
     }
 
     let response = match baseband.get_wireless_runtime_details() {
-        Ok(details) => {
-            maybe_resume_pair_after_reboot(state, baseband, &details).await;
-            if pair_connected(&details) {
-                state
-                    .clear_reboot_pair_resume_if_matches(&details.status.mac_hex)
-                    .await;
-            }
-            runtime_response_from_details(&details)
-        }
+        Ok(details) => build_runtime_response_after_pair_resume(state, baseband, &details).await,
         Err(err) => runtime_unavailable_response(format_runtime_fetch_error_message(&err)),
     };
 
@@ -3383,11 +3426,12 @@ async fn refresh_runtime_until_effect_or_timeout(
     refresh_snapshot_from_baseband(state, baseband).await;
 
     let mut current = state.wireless_runtime.read().await.current.clone();
+    let mut snapshot = Some(state.snapshot.read().await.clone());
     let Some((attempts, retry_interval)) = wireless_setting_retry_budget(&request.action) else {
         return current;
     };
 
-    if verify_wireless_setting_effect(request, current.as_ref()).is_ok() {
+    if verify_wireless_setting_effect(request, current.as_ref(), snapshot.as_ref()).is_ok() {
         return current;
     }
 
@@ -3396,8 +3440,9 @@ async fn refresh_runtime_until_effect_or_timeout(
         refresh_runtime_from_baseband(state, baseband).await;
         refresh_snapshot_from_baseband(state, baseband).await;
         current = state.wireless_runtime.read().await.current.clone();
+        snapshot = Some(state.snapshot.read().await.clone());
 
-        if verify_wireless_setting_effect(request, current.as_ref()).is_ok() {
+        if verify_wireless_setting_effect(request, current.as_ref(), snapshot.as_ref()).is_ok() {
             break;
         }
     }
@@ -3405,9 +3450,84 @@ async fn refresh_runtime_until_effect_or_timeout(
     current
 }
 
+fn requested_bandwidth_direction_label(direction: Option<&str>) -> &'static str {
+    match direction.map(|value| value.trim().to_ascii_lowercase()) {
+        Some(value) if value == "tx" || value == "0" => "Send",
+        _ => "Recv",
+    }
+}
+
+fn requested_bandwidth_slot(
+    request: &WirelessSettingRequest,
+    current: Option<&WirelessRuntimeView>,
+) -> Option<u8> {
+    request.slot.or_else(|| current.and_then(|runtime| runtime.current_slot))
+}
+
+fn format_requested_bandwidth_target(
+    request: &WirelessSettingRequest,
+    current: Option<&WirelessRuntimeView>,
+) -> String {
+    let direction = requested_bandwidth_direction_label(request.direction.as_deref());
+
+    match requested_bandwidth_slot(request, current) {
+        Some(slot) => format!("SLOT {} / {}", slot, direction),
+        None => format!("selected link / {}", direction),
+    }
+}
+
+fn format_requested_bandwidth_value(
+    request: &WirelessSettingRequest,
+    current: Option<&WirelessRuntimeView>,
+) -> Option<String> {
+    request.bandwidth.map(|bandwidth| {
+        format!(
+            "{} / {}",
+            format_requested_bandwidth_target(request, current),
+            format_bandwidth(bandwidth)
+        )
+    })
+}
+
+fn format_connection_bandwidth_value(connection: &ConnectionStatus) -> String {
+    format!(
+        "{} / {} / {}",
+        connection.link_slot, connection.direction, connection.bandwidth
+    )
+}
+
+fn format_runtime_effective_bandwidth(current: &WirelessRuntimeView) -> String {
+    let reported = current.bandwidth.trim();
+    if !reported.is_empty() && !reported.eq_ignore_ascii_case("unavailable") {
+        return reported.to_string();
+    }
+
+    current
+        .bandwidth_code
+        .map(format_bandwidth)
+        .unwrap_or_else(|| "unavailable".to_string())
+}
+
+fn requested_bandwidth_connection<'a>(
+    request: &WirelessSettingRequest,
+    current: Option<&WirelessRuntimeView>,
+    snapshot: Option<&'a WirelessSnapshot>,
+) -> Option<&'a ConnectionStatus> {
+    let snapshot = snapshot?;
+    let slot = requested_bandwidth_slot(request, current)?;
+    let direction = requested_bandwidth_direction_label(request.direction.as_deref());
+    let link_slot = format!("SLOT {}", slot);
+
+    snapshot.connections.iter().find(|connection| {
+        connection.link_slot.eq_ignore_ascii_case(&link_slot)
+            && connection.direction.eq_ignore_ascii_case(direction)
+    })
+}
+
 fn verify_wireless_setting_effect(
     request: &WirelessSettingRequest,
     current: Option<&WirelessRuntimeView>,
+    snapshot: Option<&WirelessSnapshot>,
 ) -> Result<(), String> {
     let Some(current) = current else {
         return Ok(());
@@ -3497,12 +3617,35 @@ fn verify_wireless_setting_effect(
         }
         "set_bandwidth" => {
             if let Some(requested) = request.bandwidth {
+                let requested_label = format_bandwidth(requested);
+                let requested_value = format_requested_bandwidth_value(request, Some(current))
+                    .unwrap_or_else(|| {
+                        format!(
+                            "{} / {}",
+                            format_requested_bandwidth_target(request, Some(current)),
+                            requested_label
+                        )
+                    });
+
+                if let Some(connection) = requested_bandwidth_connection(request, Some(current), snapshot) {
+                    if connection.bandwidth.eq_ignore_ascii_case(&requested_label) {
+                        return Ok(());
+                    }
+
+                    return Err(format!(
+                        "Manual bandwidth did not take effect on {}. Requested {}, but status snapshot still reports {}.",
+                        current.operation_mode,
+                        requested_value,
+                        format_connection_bandwidth_value(connection),
+                    ));
+                }
+
                 if current.bandwidth_code != Some(requested) {
                     return Err(format!(
-                        "Manual bandwidth did not take effect on {}. Requested {}, but runtime still reports {}.",
+                        "Manual bandwidth did not take effect on {}. Requested {}, but runtime effective bandwidth still reports {}.",
                         current.operation_mode,
-                        requested,
-                        format_optional_u8(current.bandwidth_code)
+                        requested_value,
+                        format_runtime_effective_bandwidth(current)
                     ));
                 }
             }
@@ -3510,6 +3653,32 @@ fn verify_wireless_setting_effect(
         }
         _ => Ok(()),
     }
+}
+
+fn format_wireless_setting_success_message(
+    request: &WirelessSettingRequest,
+    current: Option<&WirelessRuntimeView>,
+    snapshot: Option<&WirelessSnapshot>,
+) -> String {
+    if request.action == "set_bandwidth" {
+        let operation_mode = current
+            .map(|runtime| runtime.operation_mode.as_str())
+            .unwrap_or("current runtime");
+
+        if let Some(connection) = requested_bandwidth_connection(request, current, snapshot) {
+            return format!(
+                "Bandwidth applied on {}. Status snapshot reports {}.",
+                operation_mode,
+                format_connection_bandwidth_value(connection)
+            );
+        }
+
+        if let Some(requested_value) = format_requested_bandwidth_value(request, current) {
+            return format!("Bandwidth applied on {}. Requested {}.", operation_mode, requested_value);
+        }
+    }
+
+    format!("Wireless setting action '{}' applied successfully", request.action)
 }
 
 fn verify_bool_effect(
@@ -4164,6 +4333,16 @@ fn infer_band_name_from_frequency_khz(freq_khz: u32) -> &'static str {
     }
 }
 
+fn format_general_power_dbm(
+    runtime_current: Option<&WirelessRuntimeView>,
+    _status: &BbGetStatusSummary,
+) -> String {
+    runtime_current
+        .and_then(|current| current.current_power_dbm)
+        .map(|dbm| format!("{} dBm", dbm))
+        .unwrap_or_else(|| "--".to_string())
+}
+
 fn format_general_band_mode(
     runtime_current: Option<&WirelessRuntimeView>,
     status: &BbGetStatusSummary,
@@ -4190,17 +4369,27 @@ fn format_general_band_mode(
                 .map(|freq_khz| infer_band_name_from_frequency_khz(freq_khz).to_string())
         });
 
-    if configured_is_auto {
-        if let Some(live_band) = live_band {
-            return format!("Auto ({})", live_band);
+    let actual_band = match (&configured_label, configured_is_auto) {
+        (Some(label), true) if label.eq_ignore_ascii_case("auto") => {
+            live_band.unwrap_or_else(|| "Auto".to_string())
         }
+        (Some(label), true) => {
+            format!("Auto ({})", label)
+        }
+        (Some(label), false) => {
+            label.to_string()
+        }
+        (None, true) => {
+            live_band
+                .map(|lb| format!("Auto ({})", lb))
+                .unwrap_or_else(|| "Auto".to_string())
+        }
+        (None, false) => {
+            live_band.unwrap_or_else(|| "Unavailable".to_string())
+        }
+    };
 
-        return "Auto".to_string();
-    }
-
-    configured_label
-        .or(live_band)
-        .unwrap_or_else(|| "Unavailable".to_string())
+    actual_band
 }
 
 fn format_band_name(band: u8) -> &'static str {
@@ -4443,6 +4632,70 @@ mod tests {
         }
     }
 
+    fn sample_connection_status(link_slot: &str, direction: &str, bandwidth: &str) -> ConnectionStatus {
+        ConnectionStatus {
+            link_slot: link_slot.to_string(),
+            slot_type: link_slot.to_string(),
+            direction: direction.to_string(),
+            duration: "Unavailable".to_string(),
+            frequency: "Unavailable".to_string(),
+            bandwidth: bandwidth.to_string(),
+            mcs: "Unavailable".to_string(),
+            antenna_mode: "Unavailable".to_string(),
+            throughput: "Unavailable".to_string(),
+            link_state: "Stable".to_string(),
+            pair_state: "Stable".to_string(),
+            pairing_active: false,
+            mac_address: "A5:54:F6:2C".to_string(),
+            snr_db: 0,
+            signal_level: 0,
+            rssi_main_history: vec![RSSI_UNAVAILABLE_DBM; CONNECTION_HISTORY_POINTS],
+            rssi_aux_history: vec![RSSI_UNAVAILABLE_DBM; CONNECTION_HISTORY_POINTS],
+        }
+    }
+
+    fn sample_snapshot(connections: Vec<ConnectionStatus>) -> WirelessSnapshot {
+        WirelessSnapshot {
+            sequence: 1,
+            general: GeneralStatus {
+                role: "AP".to_string(),
+                mac_address: "A5:68:B0:33".to_string(),
+                master_slave_mode: "Master".to_string(),
+                networking_mode: "1V1".to_string(),
+                band_mode: "Auto (5G)".to_string(),
+                power_dbm: "--".to_string(),
+            },
+            connections,
+            chart: RssiChart {
+                title: "RSSI Graph".to_string(),
+                target_mac_address: "A5:68:B0:33".to_string(),
+                history_context_key: "test".to_string(),
+                series: Vec::new(),
+            },
+        }
+    }
+
+    fn sample_bandwidth_request(slot: u8, direction: &str, bandwidth: u8) -> WirelessSettingRequest {
+        WirelessSettingRequest {
+            action: "set_bandwidth".to_string(),
+            auto_mode: None,
+            band_bitmap: None,
+            device_mac: None,
+            pair_start: None,
+            pair_target_mac: None,
+            slot: Some(slot),
+            user: None,
+            target_band: None,
+            direction: Some(direction.to_string()),
+            channel_index: None,
+            mcs: None,
+            power_dbm: None,
+            bandwidth: Some(bandwidth),
+            power_mode: None,
+            role: None,
+        }
+    }
+
     #[test]
     fn resolve_dev_pair_target_mac_filters_stale_idle_peer() {
         let status = sample_dev_status(Some("66:00:00:00"));
@@ -4571,6 +4824,55 @@ mod tests {
     fn map_signal_level_from_snr_treats_20_db_as_full_signal() {
         assert_eq!(map_signal_level_from_snr(Some(20)), 4);
         assert_eq!(map_signal_level_from_snr(Some(19)), 3);
+    }
+
+    #[test]
+    fn verify_wireless_setting_effect_uses_snapshot_bandwidth_for_requested_slot_and_direction() {
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.current_slot = Some(0);
+        runtime.bandwidth_code = Some(3);
+
+        let request = sample_bandwidth_request(0, "rx", 0);
+        let snapshot = sample_snapshot(vec![
+            sample_connection_status("BR", "Send", "10 MHz"),
+            sample_connection_status("SLOT 0", "Recv", "1.25 MHz"),
+        ]);
+
+        assert!(verify_wireless_setting_effect(&request, Some(&runtime), Some(&snapshot)).is_ok());
+    }
+
+    #[test]
+    fn verify_wireless_setting_effect_reports_snapshot_bandwidth_mismatch() {
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.current_slot = Some(0);
+        runtime.bandwidth_code = Some(3);
+
+        let request = sample_bandwidth_request(0, "rx", 2);
+        let snapshot = sample_snapshot(vec![sample_connection_status("SLOT 0", "Recv", "1.25 MHz")]);
+
+        let error = verify_wireless_setting_effect(&request, Some(&runtime), Some(&snapshot)).unwrap_err();
+
+        assert!(error.contains("status snapshot still reports SLOT 0 / Recv / 1.25 MHz"));
+        assert!(error.contains("Requested SLOT 0 / Recv / 5 MHz"));
+    }
+
+    #[test]
+    fn format_wireless_setting_success_message_reports_snapshot_bandwidth_semantics() {
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.current_slot = Some(0);
+
+        let request = sample_bandwidth_request(0, "rx", 1);
+        let snapshot = sample_snapshot(vec![sample_connection_status("SLOT 0", "Recv", "2.5 MHz")]);
+
+        let message = format_wireless_setting_success_message(&request, Some(&runtime), Some(&snapshot));
+
+        assert_eq!(
+            message,
+            "Bandwidth applied on AP (Async). Status snapshot reports SLOT 0 / Recv / 2.5 MHz."
+        );
     }
 
     #[test]

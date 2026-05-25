@@ -2,7 +2,7 @@
 //!
 //! 提供类型安全的高级接口，用于与基带芯片 (ar8030) SOC 通信
 
-use std::{cell::RefCell, collections::HashMap, sync::{Arc, Mutex}, thread, time::{Duration, Instant}};
+use std::{cell::RefCell, collections::HashMap, sync::{Arc, Mutex, MutexGuard}, thread, time::{Duration, Instant}};
 use crate::ffi;
 
 const REMOTE_SDK_CALL_GAP: Duration = Duration::from_millis(20);
@@ -868,17 +868,24 @@ impl BasebandApi {
         &mut self,
         role: u8,
     ) -> Result<ffi::BbChannelInfoSummary, String> {
-        if self.is_remote_mode() && role == ffi::BB_ROLE_DEV {
-            if let Some(cached) = self.cached_channel_info_for_active_device() {
-                return Ok(cached);
+        let sdk_result = run_remote_sdk_call(self.is_remote_mode(), || {
+            ffi::get_channel_info(self.handle_ptr())
+        });
+
+        match sdk_result {
+            Ok(channel_info) => {
+                self.cache_channel_info_for_active_device(&channel_info);
+                Ok(channel_info)
+            }
+            Err(err) => {
+                if self.is_remote_mode() && role == ffi::BB_ROLE_DEV {
+                    if let Some(cached) = self.cached_channel_info_for_active_device() {
+                        return Ok(cached);
+                    }
+                }
+                Err(err)
             }
         }
-
-        let channel_info = run_remote_sdk_call(self.is_remote_mode(), || {
-            ffi::get_channel_info(self.handle_ptr())
-        })?;
-        self.cache_channel_info_for_active_device(&channel_info);
-        Ok(channel_info)
     }
 
     fn read_system_info_for_active_device(&mut self) -> Result<ffi::BbSystemInfoSummary, String> {
@@ -1830,49 +1837,59 @@ impl BasebandApi {
     }
 
     pub fn get_status_summary(&mut self) -> Result<ffi::BbGetStatusSummary, String> {
-        if self.is_remote_mode() {
-            if let Some(cached) = self.cached_status_summary_for_active_device() {
-                return Ok(cached);
-            }
-        }
-
         let is_remote = self.is_remote_mode();
         let preferred_signal_user = self.preferred_signal_user_for_active_device();
 
-        self.with_device_operation("get_status_summary", |handle| {
+        let result = self.with_device_operation("get_status_summary", |handle| {
             run_remote_sdk_call(is_remote, || {
                 ffi::get_status(handle, ffi::BB_ALL_DATA_USER_BMP, preferred_signal_user)
             })
-        })
-        .map(|status| {
-            self.remember_current_device(&status);
-            self.cache_status_summary_for_active_device(&status);
-            status
-        })
+        });
+
+        match result {
+            Ok(status) => {
+                self.remember_current_device(&status);
+                self.cache_status_summary_for_active_device(&status);
+                Ok(status)
+            }
+            Err(err) => {
+                if is_remote {
+                    if let Some(cached) = self.cached_status_summary_for_active_device() {
+                        return Ok(cached);
+                    }
+                }
+                Err(err)
+            }
+        }
     }
 
     pub fn get_status_summary_for_snapshot(&mut self) -> Result<ffi::BbGetStatusSummary, String> {
-        if self.is_remote_mode() {
-            if let Some(cached) = self
-                .cached_recent_status_summary_for_active_device(REMOTE_STATUS_SNAPSHOT_REFRESH_GAP)
-            {
-                return Ok(cached);
-            }
-        }
-
         let is_remote = self.is_remote_mode();
         let preferred_signal_user = self.preferred_signal_user_for_active_device();
 
-        self.with_device_operation("get_status_summary_for_snapshot", |handle| {
+        let result = self.with_device_operation("get_status_summary_for_snapshot", |handle| {
             run_remote_sdk_call(is_remote, || {
                 ffi::get_status(handle, ffi::BB_ALL_DATA_USER_BMP, preferred_signal_user)
             })
-        })
-        .map(|status| {
-            self.remember_current_device(&status);
-            self.cache_status_summary_for_active_device(&status);
-            status
-        })
+        });
+
+        match result {
+            Ok(status) => {
+                self.remember_current_device(&status);
+                self.cache_status_summary_for_active_device(&status);
+                Ok(status)
+            }
+            Err(err) => {
+                if is_remote {
+                    if let Some(cached) = self
+                        .cached_recent_status_summary_for_active_device(REMOTE_STATUS_SNAPSHOT_REFRESH_GAP)
+                    {
+                        return Ok(cached);
+                    }
+                }
+                Err(err)
+            }
+        }
     }
 
     fn load_wireless_runtime_details(&mut self) -> Result<WirelessRuntimeDetails, String> {
@@ -2455,6 +2472,11 @@ impl BasebandApi {
 
     pub fn set_mcs(&mut self, slot: u8, mcs: u8) -> Result<(), String> {
         self.with_device_operation("set_mcs", |handle| ffi::set_mcs(handle, slot, mcs))
+    }
+
+    /// 通过 BB_SET_TX_MCS 直接设置物理用户的 TX MCS（不经过 slot，可在 DEV 端使用）
+    pub fn set_tx_mcs(&mut self, user: u8, mcs: u8) -> Result<(), String> {
+        self.with_device_operation("set_tx_mcs", |handle| ffi::set_tx_mcs(handle, user, mcs))
     }
 
     pub fn set_power_mode(&mut self, pwr_mode: u8) -> Result<(), String> {
@@ -3263,190 +3285,180 @@ impl BasebandManager {
         })
     }
 
+    fn lock_api(&self, operation: &str) -> MutexGuard<'_, BasebandApi> {
+        match self.api.lock() {
+            Ok(api) => api,
+            Err(poisoned) => {
+                tracing::warn!(
+                    "BasebandManager API mutex was poisoned during '{}'; clearing cached session state and recovering the manager.",
+                    operation
+                );
+                let mut api = poisoned.into_inner();
+                api.clear_remote_session_state();
+                api
+            }
+        }
+    }
+
+    fn with_api<T>(&self, operation: &str, action: impl FnOnce(&mut BasebandApi) -> T) -> T {
+        let mut api = self.lock_api(operation);
+        action(&mut api)
+    }
+
     /// 初始化通信 socket
     pub fn initialize_socket(&self, socket_id: u32) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        // TX + RX 双向通信
-        let flags = ffi::BB_SOCK_FLAG_TX | ffi::BB_SOCK_FLAG_RX;
-        api.create_socket(socket_id, flags, 4096)
+        self.with_api("initialize_socket", |api| {
+            // TX + RX 双向通信
+            let flags = ffi::BB_SOCK_FLAG_TX | ffi::BB_SOCK_FLAG_RX;
+            api.create_socket(socket_id, flags, 4096)
+        })
     }
 
     pub fn get_status_snapshot(&self) -> Result<ffi::BbGetStatusSummary, String> {
         tracing::debug!("BasebandManager::get_status_snapshot acquiring SDK status");
-        let mut api = self.api.lock().unwrap();
-        let result = api.get_status_summary_for_snapshot();
+        let result = self.with_api("get_status_snapshot", |api| api.get_status_summary_for_snapshot());
         tracing::debug!(success = result.is_ok(), "BasebandManager::get_status_snapshot finished");
         result
     }
 
     pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
-        let mut api = self.api.lock().unwrap();
-        api.get_wireless_runtime_details()
+        self.with_api("get_wireless_runtime_details", |api| api.get_wireless_runtime_details())
     }
 
     pub fn get_detected_remote_devices(&self) -> Result<Vec<ffi::BbDiscoveredDeviceSummary>, String> {
-        let mut api = self.api.lock().unwrap();
-        api.get_detected_remote_devices()
+        self.with_api("get_detected_remote_devices", |api| api.get_detected_remote_devices())
     }
 
     pub fn get_wireless_configuration_details(&self, mode: u8) -> Result<WirelessConfigurationDetails, String> {
-        let mut api = self.api.lock().unwrap();
-        api.get_wireless_configuration_details(mode)
+        self.with_api("get_wireless_configuration_details", |api| api.get_wireless_configuration_details(mode))
     }
 
     pub fn get_boot_diagnostics(&self) -> Result<BootDiagnostics, String> {
-        let mut api = self.api.lock().unwrap();
-        api.get_boot_diagnostics()
+        self.with_api("get_boot_diagnostics", |api| api.get_boot_diagnostics())
     }
 
     pub fn get_health_status(&self) -> BasebandHealthStatus {
-        let mut api = self.api.lock().unwrap();
-        api.get_health_status()
+        self.with_api("get_health_status", |api| api.get_health_status())
     }
 
     pub fn set_signal_user_preference(&self, user: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_signal_user_preference(user)
+        self.with_api("set_signal_user_preference", |api| api.set_signal_user_preference(user))
     }
 
     pub fn set_pair_mode(&self, start: bool, slot_bmp: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_pair_mode(start, slot_bmp)
+        self.with_api("set_pair_mode", |api| api.set_pair_mode(start, slot_bmp))
     }
 
     pub fn get_pair_candidates(&self, slot: u8) -> Result<Vec<String>, String> {
-        let mut api = self.api.lock().unwrap();
-        api.get_pair_candidates(slot)
+        self.with_api("get_pair_candidates", |api| api.get_pair_candidates(slot))
     }
 
     pub fn set_pair_candidates(&self, slot: u8, macs: &[String]) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_pair_candidates(slot, macs)
+        self.with_api("set_pair_candidates", |api| api.set_pair_candidates(slot, macs))
     }
 
     pub fn set_ap_mac(&self, mac: &str) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_ap_mac(mac)
+        self.with_api("set_ap_mac", |api| api.set_ap_mac(mac))
     }
 
     pub fn set_minidb_ap_mac(&self, mac: &str) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_minidb_ap_mac(mac)
+        self.with_api("set_minidb_ap_mac", |api| api.set_minidb_ap_mac(mac))
     }
 
     pub fn set_minidb_local_mac(&self, mac: &str) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_minidb_local_mac(mac)
+        self.with_api("set_minidb_local_mac", |api| api.set_minidb_local_mac(mac))
     }
 
     pub fn set_minidb_role(&self, role: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_minidb_role(role)
+        self.with_api("set_minidb_role", |api| api.set_minidb_role(role))
     }
 
     pub fn set_minidb_power(&self, power: ffi::bb_phy_pwr_basic_t) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_minidb_power(power)
+        self.with_api("set_minidb_power", |api| api.set_minidb_power(power))
     }
 
     pub fn save_configuration_text(&self, text: &str) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.save_configuration_text(text)
+        self.with_api("save_configuration_text", |api| api.save_configuration_text(text))
     }
 
     pub fn clear_flash_configuration(&self) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.clear_flash_configuration()
+        self.with_api("clear_flash_configuration", |api| api.clear_flash_configuration())
     }
 
     pub fn clear_minidb_configuration(&self) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.clear_minidb_configuration()
+        self.with_api("clear_minidb_configuration", |api| api.clear_minidb_configuration())
     }
 
     pub fn restore_factory_configuration(&self) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.restore_factory_configuration()
+        self.with_api("restore_factory_configuration", |api| api.restore_factory_configuration())
     }
 
     pub fn set_minidb_slot_mac(&self, slot: u8, mac: &str) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_minidb_slot_mac(slot, mac)
+        self.with_api("set_minidb_slot_mac", |api| api.set_minidb_slot_mac(slot, mac))
     }
 
     pub fn set_channel_mode(&self, auto_mode: bool) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_channel_mode(auto_mode)
+        self.with_api("set_channel_mode", |api| api.set_channel_mode(auto_mode))
     }
 
     pub fn set_channel(&self, dir: u8, chan_index: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_channel(dir, chan_index)
+        self.with_api("set_channel", |api| api.set_channel(dir, chan_index))
     }
 
     pub fn set_mcs_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_mcs_mode(slot, auto_mode)
+        self.with_api("set_mcs_mode", |api| api.set_mcs_mode(slot, auto_mode))
     }
 
     pub fn set_mcs(&self, slot: u8, mcs: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_mcs(slot, mcs)
+        self.with_api("set_mcs", |api| api.set_mcs(slot, mcs))
+    }
+
+    pub fn set_tx_mcs(&self, user: u8, mcs: u8) -> Result<(), String> {
+        self.with_api("set_tx_mcs", |api| api.set_tx_mcs(user, mcs))
     }
 
     pub fn set_power_mode(&self, pwr_mode: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_power_mode(pwr_mode)
+        self.with_api("set_power_mode", |api| api.set_power_mode(pwr_mode))
     }
 
     pub fn set_power(&self, user: u8, power_dbm: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_power(user, power_dbm)
+        self.with_api("set_power", |api| api.set_power(user, power_dbm))
     }
 
     pub fn set_power_auto(&self, enabled: bool) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_power_auto(enabled)
+        self.with_api("set_power_auto", |api| api.set_power_auto(enabled))
     }
 
     pub fn switch_active_device(&self, target_mac: &str) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.switch_active_device(target_mac)
+        self.with_api("switch_active_device", |api| api.switch_active_device(target_mac))
     }
 
     pub fn set_band_mode(&self, auto_mode: bool) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_band_mode(auto_mode)
+        self.with_api("set_band_mode", |api| api.set_band_mode(auto_mode))
     }
 
     pub fn set_band(&self, target_band: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_band(target_band)
+        self.with_api("set_band", |api| api.set_band(target_band))
     }
 
     pub fn set_band_selection(&self, band_bitmap: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_band_selection(band_bitmap)
+        self.with_api("set_band_selection", |api| api.set_band_selection(band_bitmap))
     }
 
     pub fn set_bandwidth(&self, slot: u8, dir: u8, bandwidth: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_bandwidth(slot, dir, bandwidth)
+        self.with_api("set_bandwidth", |api| api.set_bandwidth(slot, dir, bandwidth))
     }
 
     pub fn set_bandwidth_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_bandwidth_mode(slot, auto_mode)
+        self.with_api("set_bandwidth_mode", |api| api.set_bandwidth_mode(slot, auto_mode))
     }
 
     pub fn set_baseband_role(&self, role: u8) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.set_baseband_role(role)
+        self.with_api("set_baseband_role", |api| api.set_baseband_role(role))
     }
 
     pub fn reboot_device(&self, delay_ms: u32) -> Result<(), String> {
-        let mut api = self.api.lock().unwrap();
-        api.reboot_device(delay_ms)
+        self.with_api("reboot_device", |api| api.reboot_device(delay_ms))
     }
 
     /// 在后台线程中执行固件升级，立即返回（通过 progress 轮询进度）
@@ -3477,12 +3489,12 @@ impl BasebandManager {
         std::thread::spawn(move || {
             // 将进度追踪器注入 BasebandApi
             {
-                let mut api = mgr.api.lock().unwrap();
+                let mut api = mgr.lock_api("start_upgrade_background progress setup");
                 api.upgrade_progress = Some(Arc::clone(&progress));
             }
 
             let (result, board_write_elapsed_ms) = {
-                let mut api = mgr.api.lock().unwrap();
+                let mut api = mgr.lock_api("start_upgrade_background upgrade_firmware");
                 api.upgrade_board_write_started_at = Some(Instant::now());
                 let result = api.upgrade_firmware(&firmware);
                 let board_write_elapsed_ms = api.current_upgrade_board_write_elapsed_ms();

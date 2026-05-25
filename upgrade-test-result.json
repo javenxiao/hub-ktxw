@@ -1,0 +1,37 @@
+{
+  "firmware_path": "D:\\TEMP\\dummy_fw_test.bin",
+  "firmware_size": 131072,
+  "firmware_md5": "240ed17a673706e498245a43802aa8b3",
+  "upload_success": true,
+  "upload_message": "Firmware 'dummy_fw_test.bin' upload accepted. Flashing in background...",
+  "backend_file_name": "dummy_fw_test.bin",
+  "progress_timeline": [
+    {
+      "timestamp_ms": 1779350439713,
+      "state": "done",
+      "stage_title": "Upgrade complete",
+      "percent": 100,
+      "detail": "Firmware written and verified. Device is rebooting...",
+      "raw_progress": {
+        "state": "done",
+        "file_name": "dummy_fw_test.bin",
+        "file_size": 131072,
+        "bytes_written": 131072,
+        "http_upload_elapsed_ms": 89,
+        "board_write_elapsed_ms": 1244,
+        "total_steps": 171,
+        "current_step": 171,
+        "step_label": "Upgrade complete",
+        "percent": 100.0,
+        "message": "Firmware written and verified. Device is rebooting...",
+        "crc32": "B635614A",
+        "reboot_expected": true
+      }
+    }
+  ],
+  "final_state": "done",
+  "error": "",
+  "console_errors": [],
+  "page_errors": [],
+  "total_elapsed_ms": 2734
+}

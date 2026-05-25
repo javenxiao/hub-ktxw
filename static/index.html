@@ -463,6 +463,7 @@
                                                 <th>Master-Slave Mode</th>
                                                 <th>Networking Mode</th>
                                                 <th>Band Mode</th>
+                                                <th>Power</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -472,6 +473,7 @@
                                                 <td id="general-master-slave">--</td>
                                                 <td id="general-networking">--</td>
                                                 <td id="general-band-mode">--</td>
+                                                <td id="general-power">--</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -544,37 +546,6 @@
                         <section class="panel-box rf-config-panel">
                             <div class="wireless-runtime-notices" id="wireless-rf-notices" aria-live="polite" hidden></div>
                             <div class="rf-config-box">
-                                <div class="sys-section rf-summary-section rf-config-group-band">
-                                    <h3 class="sys-section-title">Frequency Band</h3>
-                                    <table class="sys-table rf-summary-table">
-                                        <tbody>
-                                            <tr>
-                                                <td>Band</td>
-                                                <td>
-                                                    <div class="rf-boolean-group rf-band-group" role="radiogroup" aria-label="Band selection">
-                                                        <label class="rf-boolean-option" for="control-band-2g">
-                                                            <input id="control-band-2g" type="radio" name="control-band-select" value="2">
-                                                            <span>2.4G</span>
-                                                        </label>
-                                                        <label class="rf-boolean-option" for="control-band-5g">
-                                                            <input id="control-band-5g" type="radio" name="control-band-select" value="4">
-                                                            <span>5.8G</span>
-                                                        </label>
-                                                        <label class="rf-boolean-option" for="control-band-1g">
-                                                            <input id="control-band-1g" type="radio" name="control-band-select" value="1">
-                                                            <span>600M</span>
-                                                        </label>
-                                                        <label class="rf-boolean-option" for="control-band-auto">
-                                                            <input id="control-band-auto" type="radio" name="control-band-select" value="7">
-                                                            <span>Auto</span>
-                                                        </label>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-
                                 <div class="rf-summary-pair">
                                     <div class="sys-section rf-summary-section rf-config-group-channel">
                                         <h3 class="sys-section-title">Channel</h3>
@@ -593,15 +564,6 @@
                                                                 <span>Off</span>
                                                             </label>
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Chan Direction</td>
-                                                    <td>
-                                                        <select id="control-channel-direction" class="sys-input rf-input-short">
-                                                            <option value="tx">TX</option>
-                                                            <option value="rx">RX</option>
-                                                        </select>
                                                     </td>
                                                 </tr>
                                                 <tr>
@@ -631,15 +593,6 @@
                                                                 <span>Off</span>
                                                             </label>
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                                <tr>
-                                                    <td>Direction</td>
-                                                    <td>
-                                                        <select id="control-bandwidth-direction" class="sys-input rf-input-short">
-                                                            <option value="tx">TX</option>
-                                                            <option value="rx">RX</option>
-                                                        </select>
                                                     </td>
                                                 </tr>
                                                 <tr>
@@ -691,7 +644,7 @@
                                                     </td>
                                                 </tr>
                                                 <tr>
-                                                    <td>Power (dB)</td>
+                                                    <td>Power (dbm)</td>
                                                     <td>
                                                         <input id="control-power-db" class="sys-input rf-input-mini" type="number" min="0" max="31" value="20">
                                                     </td>
@@ -699,7 +652,7 @@
                                                 <tr>
                                                     <td>User</td>
                                                     <td>
-                                                        <select id="rf-settings-signal-user" class="sys-input rf-input-medium rf-signal-user-select" data-rf-signal-user-select aria-label="RF Settings user selection" disabled>
+                                                        <select id="control-power-user" class="sys-input rf-input-medium" aria-label="Power Control user selection" disabled>
                                                             <option value="0">User 0</option>
                                                         </select>
                                                     </td>
@@ -730,33 +683,7 @@
                                                 <tr>
                                                 <td>QAM</td>
                                                     <td>
-                                                    <select id="control-mcs-value" class="sys-input rf-input-wide">
-                                                        <option value="0">-1,BPSK CR_1/2 REP_2 dual</option>
-                                                        <option value="1">-1,BPSK CR_1/2 REP_2 single</option>
-                                                        <option value="2">0,BPSK CR_1/2 REP_1 single</option>
-                                                        <option value="3">1,QPSK CR_2/3 REP_1 single</option>
-                                                        <option value="4">2,QPSK CR_3/4 REP_1 single</option>
-                                                        <option value="5">3,QPSK CR_1/2 REP_1 single</option>
-                                                        <option value="6">4,16QAM CR_2/3 REP_1 single</option>
-                                                        <option value="7">5,16QAM CR_3/4 REP_1 single</option>
-                                                        <option value="8">6,16QAM CR_1/2 REP_1 single</option>
-                                                        <option value="9">7,64QAM CR_2/3 REP_1 single</option>
-                                                        <option value="10">8,64QAM CR_3/4 REP_1 single</option>
-                                                        <option value="11">9,64QAM CR_1/2 REP_1 single</option>
-                                                        <option value="12">10,64QAM CR_2/3 REP_1 dual</option>
-                                                        <option value="13">11,64QAM CR_3/4 REP_1 dual</option>
-                                                        <option value="14">12,256QAM CR_1/2 REP_1 single</option>
-                                                        <option value="15">13,256QAM CR_2/3 REP_1 single</option>
-                                                        <option value="16">14,QPSK CR_1/2 REP_1 dual</option>
-                                                        <option value="17">15,QPSK CR_2/3 REP_1 dual</option>
-                                                        <option value="18">16,QPSK CR_3/4 REP_1 dual</option>
-                                                        <option value="19">17,16QAM CR_1/2 REP_1 dual</option>
-                                                        <option value="20">18,16QAM CR_2/3 REP_1 dual</option>
-                                                        <option value="21">19,16QAM CR_3/4 REP_1 dual</option>
-                                                        <option value="22">20,64QAM CR_1/2 REP_1 dual</option>
-                                                        <option value="23">21,64QAM CR_2/3 REP_1 dual</option>
-                                                        <option value="24">22,64QAM CR_3/4 REP_1 dual</option>
-                                                        </select>
+                                                    <select id="control-mcs-value" class="sys-input rf-input-wide"></select>
                                                     </td>
                                                 </tr>
                                                 <tr>
@@ -1050,7 +977,8 @@
         const connectionTableBody = document.getElementById('connection-table-body');
         const wirelessPanel = document.querySelector('.panel-wireless');
         const wirelessChartPanel = document.getElementById('wireless-chart-panel');
-        const rfSignalUserSelects = Array.from(document.querySelectorAll('[data-rf-signal-user-select]'));
+        const plotSignalUserSelects = Array.from(document.querySelectorAll('[data-rf-signal-user-select]'));
+        const powerUserSelect = document.getElementById('control-power-user');
         const wirelessSubTabs = Array.from(document.querySelectorAll('.sub-tab[data-wireless-tab]'));
         const wirelessSubPages = Array.from(document.querySelectorAll('.wireless-subpage'));
         let socket = null;
@@ -1080,15 +1008,16 @@
         let maintenanceUpgradeCompletionAnimationFrame = null;
         let maintenanceUpgradePendingAnimationFrame = null;
         let maintenanceRefreshTimer = null;
-        let channelDirectionValue = 'rx';
         let channelIndexValue = null;
+        let powerUserValue = null;
         let powerModeValue = null;
         let powerDbValue = null;
         let mcsSlotValue = null;
         let mcsValueSelection = null;
         let bandwidthSlotValue = null;
-        let bandwidthDirectionValue = 'rx';
+        const bandwidthDirectionValue = 'rx';
         let bandwidthValueSelection = null;
+        let bandwidthSelectionDirty = false;
         let bandwidthAutoMode = true;
         const pairMacDraftBySlot = new Map();
         const pairCandidatesBySlot = new Map();
@@ -1112,6 +1041,16 @@
             { value: 8, label: 'User BR/CS' },
             { value: 9, label: 'User BR2/CS2' },
         ];
+        const manualMcsOptions = [
+            { value: 1, label: '-1,BPSK CR_1/2 REP_2 single' },
+            { value: 2, label: '0,BPSK CR_1/2 REP_1 single' },
+            { value: 5, label: '3,QPSK CR_1/2 REP_1 single' },
+            { value: 6, label: '4,QPSK CR_2/3 REP_1 single' },
+            { value: 8, label: '6,16QAM CR_1/2 REP_1 single' },
+            { value: 9, label: '7,16QAM CR_2/3 REP_1 single' },
+            { value: 10, label: '8,16QAM CR_3/4 REP_1 single' },
+            { value: 12, label: '10,64QAM CR_2/3 REP_1 single' },
+        ];
         const rfBasebandRoleOptions = [
             { value: 0, label: 'AP' },
             { value: 1, label: 'DEV' },
@@ -1132,7 +1071,7 @@
         const maintenanceUpgradeWaitingDetail = 'Waiting for the first board write acknowledgement from the device.';
         const maintenanceUpgradeProgressPollIntervalMs = 250;
         const wirelessRuntimePollIntervalMs = 2000;
-        const rebootRecoveryPollIntervalMs = 2000;
+        const rebootRecoveryPollIntervalMs = 1000;
         const rebootRecoveryMaxAttempts = 18;
         const rebootDelayFieldDefinitions = [
             { key: 'days', unitSeconds: 24 * 60 * 60, maxValue: 30, elementKey: 'delayDayInput' },
@@ -2691,12 +2630,14 @@
 
         function beginRebootRecoveryWatch(delaySeconds, targetLabel, targetMac = '') {
             cancelRebootRecoveryWatch();
+            rebootBusy = true;
+            updateRebootControlsState();
 
             const token = ++rebootRecoveryWatchToken;
             const normalizedDelaySeconds = Math.max(0, Math.round(Number(delaySeconds) || 0));
             const initialDelayMs = normalizedDelaySeconds > 0
-                ? Math.max(1500, (normalizedDelaySeconds * 1000) + 500)
-                : 4000;
+                ? Math.max(1200, (normalizedDelaySeconds * 1000) + 300)
+                : 1500;
             const requireOutageBeforeSuccess = normalizedDelaySeconds > 0;
 
             rebootRecoveryStartTimer = window.setTimeout(() => {
@@ -3214,6 +3155,77 @@
             return match ? Number(match[1]) : null;
         }
 
+        function resolveBandwidthCodeFromLabel(label) {
+            const bandwidthControl = document.getElementById('control-bandwidth-value');
+            if (!bandwidthControl) {
+                return null;
+            }
+
+            const normalizedLabel = String(label || '').trim().toLowerCase();
+            if (!normalizedLabel) {
+                return null;
+            }
+
+            const matchedOption = Array.from(bandwidthControl.options).find((option) => {
+                return String(option.textContent || '').trim().toLowerCase() === normalizedLabel;
+            });
+
+            if (!matchedOption) {
+                return null;
+            }
+
+            const nextValue = Number(matchedOption.value);
+            return Number.isFinite(nextValue) ? nextValue : null;
+        }
+
+        function resolveSnapshotBandwidthValue(
+            slot = getCurrentBandwidthSlot(),
+            direction = bandwidthDirectionValue,
+            connections = latestWirelessSnapshot?.connections,
+        ) {
+            if (!Array.isArray(connections)) {
+                return null;
+            }
+
+            const expectedSlot = Number(slot);
+            const expectedDirection = String(direction || 'rx').trim().toLowerCase() === 'tx'
+                ? 'send'
+                : 'recv';
+            const matchedConnection = connections.find((connection) => {
+                return parseConnectionSlot(connection.link_slot) === expectedSlot
+                    && String(connection.direction || '').trim().toLowerCase() === expectedDirection;
+            });
+
+            return matchedConnection
+                ? resolveBandwidthCodeFromLabel(matchedConnection.bandwidth)
+                : null;
+        }
+
+        function syncBandwidthSelectionFromSnapshot(
+            slot = getCurrentBandwidthSlot(),
+            direction = bandwidthDirectionValue,
+            connections = latestWirelessSnapshot?.connections,
+        ) {
+            if (bandwidthSelectionDirty) {
+                return false;
+            }
+
+            const bandwidthControl = document.getElementById('control-bandwidth-value');
+            if (!bandwidthControl) {
+                return false;
+            }
+
+            const nextValue = resolveSnapshotBandwidthValue(slot, direction, connections);
+            if (nextValue === null || nextValue === undefined) {
+                return false;
+            }
+
+            bandwidthControl.value = String(nextValue);
+            bandwidthValueSelection = nextValue;
+            updateSelectWidth(bandwidthControl);
+            return true;
+        }
+
         function normalizePairMac(macAddress) {
             const normalized = String(macAddress || '').trim().replaceAll(':', '').replaceAll('-', '');
             return /^[0-9a-fA-F]{8}$/.test(normalized) ? normalized.toUpperCase() : '00000000';
@@ -3469,6 +3481,10 @@
             if (devPairMode) {
                 if (isLinked) {
                     return 'paired';
+                }
+
+                if (pairingActive || pairState.includes('pairing')) {
+                    return 'pairing';
                 }
 
                 return 'idle';
@@ -4697,6 +4713,8 @@
 
             if (!controlDefaultsInitialized) {
                 select.value = String(currentIndex ?? 0);
+            } else if (currentIndex !== null && currentIndex !== undefined && safeChannels.some((channel) => String(channel.index) === String(currentIndex))) {
+                select.value = String(currentIndex);
             } else if (previousValue && safeChannels.some((channel) => String(channel.index) === previousValue)) {
                 select.value = previousValue;
             }
@@ -4753,15 +4771,17 @@
         }
 
         function getMcsControlNotice(current = wirelessRuntimeCurrent) {
+            if (current && !isAsyncWirelessRuntime(current)) {
+                return 'Manual MCS setting is supported only in Async (1V1) mode.';
+            }
             return '';
         }
 
         function getBandwidthControlNotice(current = wirelessRuntimeCurrent) {
-            if (!isAsyncWirelessRuntime(current)) {
-                return '';
+            if (current && !isAsyncWirelessRuntime(current)) {
+                return 'Manual bandwidth setting is supported only in Async (1V1) mode. Use Bandwidth Auto or switch to Async mode.';
             }
-
-            return `Bandwidth control is not supported on ${current?.operation_mode || 'the current runtime'}. The current Async runtime keeps bandwidth fixed, so manual bandwidth changes are disabled.`;
+            return '';
         }
 
         function syncMcsValueSelection(current = wirelessRuntimeCurrent) {
@@ -4770,23 +4790,29 @@
                 return;
             }
 
-            select.querySelectorAll('option[data-runtime-option="true"]').forEach((option) => option.remove());
+            select.innerHTML = manualMcsOptions.map((option) => (
+                `<option value="${option.value}">${escapeHtml(option.label)}</option>`
+            )).join('');
 
             const runtimeValue = current?.current_mcs_value;
-            if (runtimeValue === null || runtimeValue === undefined) {
-                return;
+            const runtimeValueText = runtimeValue === null || runtimeValue === undefined
+                ? ''
+                : String(runtimeValue);
+
+            if (runtimeValueText && !select.querySelector(`option[value="${runtimeValueText}"]`)) {
+                const option = document.createElement('option');
+                option.value = runtimeValueText;
+                option.textContent = current?.current_mcs_label || `Unknown MCS (${runtimeValueText})`;
+                option.dataset.runtimeOption = 'true';
+                select.prepend(option);
             }
 
-            const runtimeValueText = String(runtimeValue);
-            if (select.querySelector(`option[value="${runtimeValueText}"]`)) {
-                return;
+            const preferredValue = String(runtimeValue ?? mcsValueSelection ?? manualMcsOptions[0].value);
+            if (select.querySelector(`option[value="${preferredValue}"]`)) {
+                select.value = preferredValue;
             }
 
-            const option = document.createElement('option');
-            option.value = runtimeValueText;
-            option.textContent = current?.current_mcs_label || `Unknown MCS (${runtimeValueText})`;
-            option.dataset.runtimeOption = 'true';
-            select.prepend(option);
+            updateSelectWidth(select);
         }
 
         function syncRfAutoModeControls(current = wirelessRuntimeCurrent) {
@@ -4899,26 +4925,33 @@
 
         function maybeQueueRuntimeUnavailableFallback(payload) {
             if (isDaemonUnavailableMessage(payload?.message)
-                || isRebootInProgressMessage(payload?.message)
                 || deviceSelectionInFlight
                 || pendingDeviceSelectionMac) {
                 return;
             }
 
-            const fallbackMac = getRuntimeUnavailableFallbackDeviceMac();
+            const select = document.getElementById('rf-operation-mode');
+            const unavailableMac = normalizeRfDeviceMac(lastKnownRfDeviceMac || select?.value);
+            const detectedDevices = dedupeRfDeviceOptions(payload?.available_devices);
+            const fallbackMac = detectedDevices.length > 0
+                ? getAlternateRfDeviceMac(unavailableMac, detectedDevices)
+                : (isRebootInProgressMessage(payload?.message) ? '' : getRuntimeUnavailableFallbackDeviceMac());
+
             if (!fallbackMac || fallbackMac === runtimeUnavailableFallbackDeviceMac) {
                 return;
             }
 
             runtimeUnavailableFallbackDeviceMac = fallbackMac;
 
-            const select = document.getElementById('rf-operation-mode');
             if (select && Array.from(select.options).some((option) => option.value === fallbackMac)) {
                 select.value = fallbackMac;
                 updateSelectWidth(select);
             }
 
-            setWirelessControlStatus('当前 Active Device 不可用，正在切换到其他已检测设备...', 'pending');
+            const fallbackStatusMessage = isRebootInProgressMessage(payload?.message)
+                ? '当前设备正在重启，已检测到其他在线设备，正在切换 Active Device...'
+                : '当前 Active Device 不可用，正在切换到其他已检测设备...';
+            setWirelessControlStatus(fallbackStatusMessage, 'pending');
             queueDeviceSelection(fallbackMac);
         }
 
@@ -5022,7 +5055,7 @@
         function syncRfSignalUserSelectValue(value) {
             const normalizedValue = `${Number.isFinite(Number(value)) ? Number(value) : 0}`;
 
-            rfSignalUserSelects.forEach((select) => {
+            plotSignalUserSelects.forEach((select) => {
                 if (!select) {
                     return;
                 }
@@ -5036,7 +5069,7 @@
         }
 
         function renderRfSignalUserOptions(current) {
-            if (rfSignalUserSelects.length === 0) {
+            if (plotSignalUserSelects.length === 0) {
                 return;
             }
 
@@ -5045,12 +5078,31 @@
             )).join('');
             const selectedUser = getCurrentSignalUser(current);
 
-            rfSignalUserSelects.forEach((select) => {
+            plotSignalUserSelects.forEach((select) => {
                 select.innerHTML = optionsMarkup;
                 select.value = `${selectedUser}`;
                 select.disabled = !current;
                 updateSelectWidth(select);
             });
+        }
+
+        function renderPowerUserOptions(current) {
+            if (!powerUserSelect) {
+                return;
+            }
+
+            const optionsMarkup = rfSignalUserOptions.map((option) => (
+                `<option value="${option.value}">${escapeHtml(option.label)}</option>`
+            )).join('');
+            const selectedUser = powerUserValue ?? current?.current_power_user ?? 0;
+            const normalizedValue = String(Number(selectedUser));
+
+            powerUserSelect.innerHTML = optionsMarkup;
+            if (powerUserSelect.querySelector(`option[value="${normalizedValue}"]`)) {
+                powerUserSelect.value = normalizedValue;
+            }
+            powerUserSelect.disabled = !current;
+            updateSelectWidth(powerUserSelect);
         }
 
         function resolveCurrentBasebandRole(current) {
@@ -5260,12 +5312,14 @@
                 wirelessRuntimeCurrent = null;
                 wirelessConfigurationCurrent = null;
                 wirelessConfigurationLoadedMode = null;
+                powerUserValue = null;
                 resetPairInputState();
                 resetPairCandidatesCache('');
                 renderPairPanel(latestWirelessSnapshot?.connections);
                 renderRfProfile();
                 renderRfDeviceOptions(null, payload);
                 renderRfSignalUserOptions(null);
+                renderPowerUserOptions(null);
                 renderRfBasebandRoleOptions(null);
                 setText('runtime-mac', '--');
                 setText('runtime-system-uptime', '--');
@@ -5312,8 +5366,11 @@
             if (deviceChanged) {
                 wirelessConfigurationCurrent = null;
                 wirelessConfigurationLoadedMode = null;
+                powerUserValue = null;
                 resetPairInputState();
                 resetPairCandidatesCache(currentDeviceMac);
+                bandwidthSelectionDirty = false;
+                bandwidthValueSelection = null;
             }
             wirelessRuntimeCurrent = current;
             lastKnownRfDeviceMac = currentDeviceMac;
@@ -5333,6 +5390,7 @@
             if (!deferWirelessControlSync) {
                 renderRfDeviceOptions(current);
                 renderRfSignalUserOptions(current);
+                renderPowerUserOptions(current);
                 renderRfBasebandRoleOptions(current);
             }
             setText('runtime-mac', current.local_mac_address || '--');
@@ -5342,7 +5400,7 @@
             setText('runtime-compile-time', current.compile_time || '--');
 
             if (!deferWirelessControlSync) {
-                populateChannelOptions(current.channels, channelIndexValue ?? current.work_channel_index);
+                populateChannelOptions(current.channels, current.work_channel_index);
                 syncMcsValueSelection(current);
                 syncRfAutoModeControls(current);
 
@@ -5357,21 +5415,13 @@
                     } else {
                         document.getElementById('control-channel-auto-off').checked = true;
                     }
-                    document.getElementById('control-channel-direction').value = channelDirectionValue;
-                    document.getElementById('control-power-mode').value = powerModeValue ?? (current.current_power_mode.toLowerCase().startsWith('open') ? 'openloop' : 'closeloop');
-                    if ((current.current_power_auto ?? true) === true) {
-                        document.getElementById('control-power-auto-on').checked = true;
-                    } else {
-                        document.getElementById('control-power-auto-off').checked = true;
-                    }
-                    document.getElementById('control-power-db').value = powerDbValue ?? (current.current_power_dbm ?? 20);
                     document.getElementById('control-mcs-slot').value = String(mcsSlotValue ?? current.current_slot ?? 0);
                     if ((current.current_mcs_auto ?? true) === true) {
                         document.getElementById('control-mcs-auto-auto').checked = true;
                     } else {
                         document.getElementById('control-mcs-auto-manual').checked = true;
                     }
-                    document.getElementById('control-mcs-value').value = String(mcsValueSelection ?? current.current_mcs_value ?? 0);
+                    document.getElementById('control-mcs-value').value = String(mcsValueSelection ?? current.current_mcs_value ?? manualMcsOptions[0].value);
                     bandwidthAutoMode = current.bandwidth_auto ?? bandwidthAutoMode;
                     if (bandwidthAutoMode === true) {
                         document.getElementById('control-bandwidth-auto-on').checked = true;
@@ -5384,23 +5434,27 @@
                         document.getElementById('control-bandwidth-auto-off').checked = false;
                     }
                     bandwidthSlotValue = Number(current.current_slot ?? bandwidthSlotValue ?? 0);
-                    document.getElementById('control-bandwidth-direction').value = bandwidthDirectionValue;
                     if (bandwidthValueSelection !== null && bandwidthValueSelection !== undefined) {
                         document.getElementById('control-bandwidth-value').value = String(bandwidthValueSelection);
-                    } else if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
+                    } else if (!syncBandwidthSelectionFromSnapshot(bandwidthSlotValue, bandwidthDirectionValue)) {
+                        if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
                         document.getElementById('control-bandwidth-value').value = String(current.bandwidth_code);
+                        }
                     }
 
                     channelIndexValue = getSelectedChannelIndex();
+                    powerUserValue = getSelectedPowerUser();
                     powerModeValue = document.getElementById('control-power-mode').value;
                     powerDbValue = Number(document.getElementById('control-power-db').value);
                     mcsSlotValue = Number(document.getElementById('control-mcs-slot').value);
                     mcsValueSelection = Number(document.getElementById('control-mcs-value').value);
-                    bandwidthDirectionValue = document.getElementById('control-bandwidth-direction').value;
                     bandwidthValueSelection = Number(document.getElementById('control-bandwidth-value').value);
                     controlDefaultsInitialized = true;
                 }
 
+                syncPowerValueControls(current);
+                syncChannelValueControls(current);
+                syncBandwidthValueControls(current);
                 updateChannelControlsState();
                 updatePowerControlsState();
                 updateMcsControlsState();
@@ -5529,9 +5583,15 @@
                 const defaultSuccessMessage = action === 'set_pair_mode'
                     ? 'Pair request sent.'
                     : `${actionLabel} 已下发`;
-                setWirelessControlStatus(options.successMessage || defaultSuccessMessage, 'success');
+                const successStatusMessage = options.successMessage
+                    || ((options.useResultMessage && result.message) ? result.message : '')
+                    || defaultSuccessMessage;
+                setWirelessControlStatus(successStatusMessage, 'success');
 
                 if (result.current) {
+                    if (action === 'set_bandwidth' || action === 'set_bandwidth_mode') {
+                        bandwidthSelectionDirty = false;
+                    }
                     controlDefaultsInitialized = false;
                     renderWirelessRuntime({
                         available: true,
@@ -5625,16 +5685,16 @@
             return document.querySelector('input[name="control-bandwidth-auto"]:checked')?.value === 'true';
         }
 
-        function getSelectedChannelDirection() {
-            return document.getElementById('control-channel-direction').value;
-        }
-
         function getSelectedChannelIndex() {
             return Number(document.getElementById('control-channel-index').value);
         }
 
         function getSelectedPowerMode() {
             return document.getElementById('control-power-mode').value;
+        }
+
+        function getSelectedPowerUser() {
+            return Number(powerUserSelect?.value ?? wirelessRuntimeCurrent?.current_power_user ?? 0);
         }
 
         function getSelectedPowerDb() {
@@ -5651,10 +5711,6 @@
 
         function getCurrentBandwidthSlot() {
             return Number(wirelessRuntimeCurrent?.current_slot ?? bandwidthSlotValue ?? 0);
-        }
-
-        function getSelectedBandwidthDirection() {
-            return document.getElementById('control-bandwidth-direction').value;
         }
 
         function getSelectedBandwidthValue() {
@@ -5677,9 +5733,22 @@
 
         function updateChannelControlsState() {
             setRfControlsDisabled([
-                'control-channel-direction',
                 'control-channel-index',
             ], getSelectedChannelAuto());
+        }
+
+        function syncChannelValueControls(current = wirelessRuntimeCurrent) {
+            if (!current) {
+                return;
+            }
+
+            const channelSelect = document.getElementById('control-channel-index');
+            if (channelSelect && Array.isArray(current.channels) && current.channels.length > 0) {
+                const targetIndex = current.work_channel_index;
+                if (targetIndex !== null && targetIndex !== undefined && targetIndex !== 255 && channelSelect.querySelector(`option[value="${targetIndex}"]`)) {
+                    channelSelect.value = String(targetIndex);
+                }
+            }
         }
 
         async function applyChannelSettings() {
@@ -5687,10 +5756,9 @@
                 return;
             }
 
-            channelDirectionValue = getSelectedChannelDirection();
             channelIndexValue = getSelectedChannelIndex();
             await applyWirelessSetting('set_channel', {
-                direction: channelDirectionValue,
+                direction: 'rx',
                 channel_index: channelIndexValue,
             });
         }
@@ -5705,9 +5773,47 @@
 
         function updatePowerControlsState() {
             setRfControlsDisabled([
+                'control-power-user',
                 'control-power-mode',
                 'control-power-db',
             ], getSelectedPowerAuto());
+        }
+
+        function syncPowerValueControls(current = wirelessRuntimeCurrent) {
+            if (!current) {
+                return;
+            }
+
+            const powerModeSelect = document.getElementById('control-power-mode');
+            if (powerModeSelect && current.current_power_mode) {
+                const runtimeMode = String(current.current_power_mode).toLowerCase();
+                const targetValue = runtimeMode.startsWith('open') ? 'openloop' : 'closeloop';
+                powerModeSelect.value = targetValue;
+            }
+
+            const powerDbInput = document.getElementById('control-power-db');
+            if (powerDbInput && current.current_power_dbm !== null && current.current_power_dbm !== undefined) {
+                powerDbInput.value = String(current.current_power_dbm);
+            }
+
+            if (current.current_power_auto !== null && current.current_power_auto !== undefined) {
+                const autoOn = document.getElementById('control-power-auto-on');
+                const autoOff = document.getElementById('control-power-auto-off');
+                if (current.current_power_auto === true) {
+                    if (autoOn) autoOn.checked = true;
+                    if (autoOff) autoOff.checked = false;
+                } else {
+                    if (autoOn) autoOn.checked = false;
+                    if (autoOff) autoOff.checked = true;
+                }
+            }
+
+            if (powerUserSelect && current.current_power_user !== null && current.current_power_user !== undefined) {
+                const normalizedValue = String(Number(current.current_power_user));
+                if (powerUserSelect.querySelector(`option[value="${normalizedValue}"]`)) {
+                    powerUserSelect.value = normalizedValue;
+                }
+            }
         }
 
         async function applyPowerSettings() {
@@ -5715,13 +5821,14 @@
                 return;
             }
 
+            powerUserValue = getSelectedPowerUser();
             powerModeValue = getSelectedPowerMode();
             powerDbValue = getSelectedPowerDb();
             await applyWirelessSetting('set_power_mode', {
                 power_mode: powerModeValue,
             });
             await applyWirelessSetting('set_power', {
-                user: Number(wirelessRuntimeCurrent?.current_power_user ?? 0),
+                user: powerUserValue,
                 power_dbm: powerDbValue,
             });
         }
@@ -5765,10 +5872,19 @@
 
             mcsSlotValue = getSelectedMcsSlot();
             mcsValueSelection = getSelectedMcsValue();
-            await applyWirelessSetting('set_mcs', {
-                slot: mcsSlotValue,
-                mcs: mcsValueSelection,
-            });
+            const devMode = resolveCurrentBasebandRole(wirelessRuntimeCurrent) === 1;
+            if (devMode) {
+                const user = wirelessRuntimeCurrent?.selected_signal_user ?? 0;
+                await applyWirelessSetting('set_tx_mcs', {
+                    user: user,
+                    mcs: mcsValueSelection,
+                });
+            } else {
+                await applyWirelessSetting('set_mcs', {
+                    slot: mcsSlotValue,
+                    mcs: mcsValueSelection,
+                });
+            }
         }
 
         async function applyMcsAutoMode(autoMode) {
@@ -5789,9 +5905,33 @@
             const bandwidthControlBlocked = Boolean(bandwidthControlNotice);
             bandwidthAutoMode = isAuto;
             setRfControlsDisabled([
-                'control-bandwidth-direction',
                 'control-bandwidth-value',
             ], isAuto || bandwidthControlBlocked);
+
+            setRfRadioGroupDisabled('control-bandwidth-auto', bandwidthControlBlocked);
+
+            const note = document.getElementById('control-bandwidth-note');
+            if (note) {
+                note.hidden = !bandwidthControlBlocked;
+                note.textContent = bandwidthControlNotice || '';
+            }
+        }
+
+        function syncBandwidthValueControls(current = wirelessRuntimeCurrent) {
+            if (!current) {
+                return;
+            }
+
+            const bandwidthSelect = document.getElementById('control-bandwidth-value');
+            if (bandwidthSelect && current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
+                const targetCode = String(current.bandwidth_code);
+                if (bandwidthSelect.querySelector(`option[value="${targetCode}"]`)) {
+                    bandwidthSelect.value = targetCode;
+                }
+            }
+        }
+
+        async function applyBandwidthSettings() {
 
             setRfRadioGroupDisabled('control-bandwidth-auto', bandwidthControlBlocked, bandwidthControlNotice);
 
@@ -5799,7 +5939,7 @@
                 radio.title = bandwidthControlNotice;
             });
 
-            ['control-bandwidth-direction', 'control-bandwidth-value'].forEach((controlId) => {
+            ['control-bandwidth-value'].forEach((controlId) => {
                 const control = document.getElementById(controlId);
                 if (control) {
                     control.title = bandwidthControlNotice;
@@ -5829,22 +5969,13 @@
             }
 
             bandwidthSlotValue = getCurrentBandwidthSlot();
-            bandwidthDirectionValue = getSelectedBandwidthDirection();
             bandwidthValueSelection = getSelectedBandwidthValue();
             await applyWirelessSetting('set_bandwidth', {
                 slot: bandwidthSlotValue,
-                direction: bandwidthDirectionValue,
                 bandwidth: bandwidthValueSelection,
+            }, {
+                useResultMessage: true,
             });
-        }
-
-        async function applyBandSelection() {
-            const selected = document.querySelector('input[name="control-band-select"]:checked');
-            if (!selected) {
-                return;
-            }
-
-            await applyWirelessSetting('set_band_selection', { band_bitmap: Number(selected.value) });
         }
 
         function bindAutoApply(controlIds, action, buildPayload, eventName = 'change') {
@@ -5887,11 +6018,17 @@
 
         function renderSnapshot(snapshot) {
             latestWirelessSnapshot = snapshot;
+            syncBandwidthSelectionFromSnapshot(
+                bandwidthSlotValue ?? wirelessRuntimeCurrent?.current_slot ?? 0,
+                bandwidthDirectionValue,
+                snapshot.connections,
+            );
             setText('general-role', snapshot.general.role);
             setText('general-mac', snapshot.general.mac_address);
             setText('general-master-slave', snapshot.general.master_slave_mode);
             setText('general-networking', snapshot.general.networking_mode);
             setText('general-band-mode', snapshot.general.band_mode);
+            setText('general-power', snapshot.general.power_dbm);
 
             updateGeneralRuntimeStatus(wirelessRuntimeCurrent);
             renderRfProfile(snapshot);
@@ -6047,7 +6184,7 @@
             });
         }
 
-        rfSignalUserSelects.forEach((select) => {
+        plotSignalUserSelects.forEach((select) => {
             select.addEventListener('change', () => {
                 updateSelectWidth(select);
 
@@ -6179,13 +6316,7 @@
             });
         }
 
-        document.querySelectorAll('input[name="control-band-select"]').forEach((radio) => {
-            radio.addEventListener('change', () => {
-                applyBandSelection().catch(() => {});
-            });
-        });
-
-        ['control-channel-direction', 'control-channel-index'].forEach((controlId) => {
+        ['control-channel-index'].forEach((controlId) => {
             const control = document.getElementById(controlId);
             if (!control) {
                 return;
@@ -6198,10 +6329,6 @@
 
                 if (control.tagName === 'SELECT') {
                     updateSelectWidth(control);
-                }
-
-                if (controlId === 'control-channel-direction') {
-                    channelDirectionValue = getSelectedChannelDirection();
                 }
 
                 try {
@@ -6221,7 +6348,7 @@
             });
         });
 
-        ['control-power-mode', 'control-power-db'].forEach((controlId) => {
+        ['control-power-user', 'control-power-mode', 'control-power-db'].forEach((controlId) => {
             const control = document.getElementById(controlId);
             if (!control) {
                 return;
@@ -6236,6 +6363,7 @@
                     updateSelectWidth(control);
                 }
 
+                powerUserValue = getSelectedPowerUser();
                 powerModeValue = getSelectedPowerMode();
                 powerDbValue = getSelectedPowerDb();
 
@@ -6292,7 +6420,7 @@
             });
         });
 
-        ['control-bandwidth-direction', 'control-bandwidth-value'].forEach((controlId) => {
+        ['control-bandwidth-value'].forEach((controlId) => {
             const control = document.getElementById(controlId);
             if (!control) {
                 return;
@@ -6308,8 +6436,8 @@
                 }
 
                 bandwidthSlotValue = getCurrentBandwidthSlot();
-                bandwidthDirectionValue = getSelectedBandwidthDirection();
                 bandwidthValueSelection = getSelectedBandwidthValue();
+                bandwidthSelectionDirty = true;
 
                 try {
                     await applyBandwidthSettings();

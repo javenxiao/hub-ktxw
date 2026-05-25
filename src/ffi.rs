@@ -832,6 +832,72 @@ pub struct bb_set_mcs_t {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
+pub struct bb_set_tx_mcs_t {
+    pub user: u8,
+    pub mcs: u8,
+}
+
+/// MCS 策略条目 (bb_mcs_para_t) — packed 对齐 SDK PACK 宏
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_mcs_para_t {
+    pub mcs: u8,
+    pub snr_up: u16,
+    pub snr_dw: u16,
+    pub ldpc_up_num: u8,
+    pub ldpc_dw_num: u8,
+    pub up_keep_time: u16,
+    pub dw_keep_time: u16,
+}
+
+/// 频宽自适应参数 (bb_bw_auto_para_t)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_bw_auto_para_t {
+    pub enable: u8,
+    pub bw_low: u8,
+    pub bw_high: u8,
+    pub thred_dw: u8,
+    pub thred_up: u8,
+}
+
+/// MCS 策略配置 (BB_CFG_SLOT_RX_MCS) — packed 对齐 SDK PACK 宏
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_conf_mcs_t {
+    pub slot: u8,
+    pub flags: u8,
+    pub delay_start: u16,
+    pub hold_time: u16,
+    pub init_mcs: u8,
+    pub mcs_num: u8,
+    pub max_wait_time: u16,
+    pub mcs_auto_mode_policy: u8,
+    pub rsv: u8,
+    pub mcs_tab: [bb_mcs_para_t; BB_CONFIG_MAX_USER_MCS_NUM],
+    pub bw_auto: bb_bw_auto_para_t,
+}
+
+impl Default for bb_conf_mcs_t {
+    fn default() -> Self {
+        Self {
+            slot: 0,
+            flags: 0,
+            delay_start: 0,
+            hold_time: 0,
+            init_mcs: 0,
+            mcs_num: 0,
+            max_wait_time: 0,
+            mcs_auto_mode_policy: 0,
+            rsv: 0,
+            mcs_tab: [bb_mcs_para_t::default(); BB_CONFIG_MAX_USER_MCS_NUM],
+            bw_auto: bb_bw_auto_para_t::default(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_pwr_mode_in_t {
     pub pwr_mode: u8,
 }
@@ -1273,6 +1339,7 @@ pub const BB_HOT_UPGRADE_CHUNK_SIZE: usize = 0x300;
 pub const BB_PLOT_POINT_MAX: usize = 10;
 pub const BB_BLACK_LIST_SIZE: usize = 3;
 pub const BB_CONFIG_MAX_SLOT_CANDIDATE: usize = 5;
+pub const BB_CONFIG_MAX_USER_MCS_NUM: usize = 16;
 pub const BB_RC_FREQ_NUM: usize = 4;
 pub const BB_SOCK_INFO_NUM: usize = 8;
 pub const BB_REMOTE_CMD_WAIT_MAX: usize = 8;
@@ -1373,6 +1440,7 @@ pub const BB_SET_BAND_MODE: u32 = bb_request(BB_REQ_SET, 18);
 pub const BB_SET_BAND: u32 = bb_request(BB_REQ_SET, 19);
 pub const BB_SET_MCS_MODE: u32 = bb_request(BB_REQ_SET, 12);
 pub const BB_SET_MCS: u32 = bb_request(BB_REQ_SET, 13);
+pub const BB_SET_TX_MCS: u32 = bb_request(BB_REQ_SET, 106);
 pub const BB_SET_BANDWIDTH: u32 = bb_request(BB_REQ_SET, 22);
 pub const BB_SET_BANDWIDTH_MODE: u32 = bb_request(BB_REQ_SET, 32);
 pub const BB_SET_LOCAL_MAC: u32 = bb_request(BB_REQ_SET, 33);
@@ -3075,6 +3143,23 @@ pub fn set_mcs(handle: *mut bb_dev_handle_t, slot: u8, mcs: u8) -> Result<(), St
         ) {
             0 => Ok(()),
             e => Err(format!("bb_ioctl(BB_SET_MCS) failed with code: {}", e)),
+        }
+    }
+}
+
+pub fn set_tx_mcs(handle: *mut bb_dev_handle_t, user: u8, mcs: u8) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_tx_mcs_t { user, mcs };
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_TX_MCS as c_uint,
+            &input as *const bb_set_tx_mcs_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_TX_MCS) failed with code: {}", e)),
         }
     }
 }
