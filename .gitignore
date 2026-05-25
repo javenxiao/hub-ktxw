@@ -7,3 +7,7 @@ target_verify
 dist/
 stress-result.json
 daemon_log/
+__pycache__/
+mcs-reboot-stability-stderr.txt
+mcs-reboot-stability-stdout.txt
+rf-settings-stress-trace-current.json
