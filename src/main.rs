@@ -705,6 +705,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 0,
                 status,
                 None,
+                None,
                 DEFAULT_AP_PLOT_SAMPLE_POINTS,
                 initial_runtime.current.as_ref(),
                 None,
@@ -2254,9 +2255,11 @@ fn spawn_data_feeder(state: Arc<AppState>) {
             let snapshot = match state.baseband.as_ref() {
                 Some(baseband) => match baseband.get_status_snapshot() {
                     Ok(status) => {
+                        let peer_status = fetch_peer_plot_status(baseband, &status);
                         build_hardware_snapshot(
                             tick,
                             &status,
+                            peer_status.as_ref(),
                             Some(&previous),
                             sample_count,
                             runtime_current.as_ref(),
@@ -2449,6 +2452,7 @@ fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> Wireless
 fn build_hardware_snapshot(
     sequence: u64,
     status: &BbGetStatusSummary,
+    peer_status: Option<&BbGetStatusSummary>,
     previous: Option<&WirelessSnapshot>,
     plot_sample_count: usize,
     runtime_current: Option<&WirelessRuntimeView>,
@@ -2472,16 +2476,8 @@ fn build_hardware_snapshot(
             built_power_fallback.as_ref()
         }
     };
-    let plot_prefix = plot_series_prefix_for_role(status.role);
-    let _peer_plot_prefix = plot_series_prefix_for_role(1);
-    let fch_lock_value = fch_lock_value_from_status(status);
-    let chart_history_context = chart_history_context_key(status);
-    let has_selected_user_signal = status.snr_db.is_some()
-        || status.ldpc_err.is_some()
-        || status.ldpc_num.is_some()
-        || status.signal_main.is_some()
-        || status.signal_aux.is_some();
-    let render_chart_series = has_selected_user_signal && should_render_chart_series(status);
+    let chart_history_context = paired_chart_history_context_key(status, peer_status);
+    let render_chart_series = status_has_plot_signal(status) && should_render_chart_series(status);
     let mut connections = Vec::new();
 
     let (primary_direction, primary_phy) = resolve_primary_connection_status(status);
@@ -2502,108 +2498,33 @@ fn build_hardware_snapshot(
     }
     let chart_target = status.mac_hex.clone();
     let chart_series = if render_chart_series {
-        vec![
-            build_chart_series_from_source(
-                "ap_snr",
-                &plot_series_label(plot_prefix, "snr"),
-                "",
-                None,
+        {
+            let mut chart_series = Vec::new();
+            append_status_chart_series(
+                &mut chart_series,
+                status,
                 previous,
-                status.snr_db,
                 plot_sample_count,
                 &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "ap_ldpc_err",
-                &plot_series_label(plot_prefix, "ldpc_err"),
-                "",
-                None,
+            );
+            append_power_chart_series(
+                &mut chart_series,
                 previous,
-                status.ldpc_err,
+                power_fallback,
                 plot_sample_count,
                 &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "ap_ldpc_num",
-                &plot_series_label(plot_prefix, "ldpc_num"),
-                "",
-                None,
-                previous,
-                status.ldpc_num,
-                plot_sample_count,
-                &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "ap_gain_a",
-                &plot_series_label(plot_prefix, "gain_a"),
-                "",
-                None,
-                previous,
-                status.signal_main,
-                plot_sample_count,
-                &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "ap_gain_b",
-                &plot_series_label(plot_prefix, "gain_b"),
-                "",
-                None,
-                previous,
-                status.signal_aux,
-                plot_sample_count,
-                &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "ap_mcs_rx",
-                &plot_series_label(plot_prefix, "mcs_rx"),
-                "",
-                None,
-                previous,
-                status.rx_mcs.map(i32::from),
-                plot_sample_count,
-                &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "ap_fch_lock",
-                &plot_series_label(plot_prefix, "fch_lock"),
-                "",
-                None,
-                previous,
-                fch_lock_value,
-                plot_sample_count,
-                &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "br_power",
-                "br_power",
-                "",
-                None,
-                previous,
-                power_fallback.and_then(|p| p.br_power_dbm.map(i32::from)),
-                plot_sample_count,
-                &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "ap_power",
-                "ap_power",
-                "",
-                None,
-                previous,
-                power_fallback.and_then(|p| p.ap_power_dbm.map(i32::from)),
-                plot_sample_count,
-                &chart_history_context,
-            ),
-            build_chart_series_from_source(
-                "dev_power",
-                "dev_power",
-                "",
-                None,
-                previous,
-                power_fallback.and_then(|p| p.dev_power_dbm.map(i32::from)),
-                plot_sample_count,
-                &chart_history_context,
-            ),
-        ]
+            );
+            if let Some(peer_status) = peer_status {
+                append_status_chart_series(
+                    &mut chart_series,
+                    peer_status,
+                    previous,
+                    plot_sample_count,
+                    &chart_history_context,
+                );
+            }
+            chart_series
+        }
     } else {
         Vec::new()
     };
@@ -2754,6 +2675,148 @@ fn build_chart_series_from_source(
     build_chart_series(key, label, unit, current_value, points)
 }
 
+fn chart_series_key_prefix_for_role(role: u8) -> &'static str {
+    match role {
+        ffi::BB_ROLE_AP => "ap",
+        ffi::BB_ROLE_DEV => "dev",
+        _ => "unknown",
+    }
+}
+
+fn status_has_plot_signal(status: &BbGetStatusSummary) -> bool {
+    status.snr_db.is_some()
+        || status.ldpc_err.is_some()
+        || status.ldpc_num.is_some()
+        || status.signal_main.is_some()
+        || status.signal_aux.is_some()
+}
+
+fn append_status_chart_series(
+    chart_series: &mut Vec<ChartSeries>,
+    status: &BbGetStatusSummary,
+    previous: Option<&WirelessSnapshot>,
+    plot_sample_count: usize,
+    history_context_key: &str,
+) {
+    if !status_has_plot_signal(status) || !should_render_chart_series(status) {
+        return;
+    }
+
+    let key_prefix = chart_series_key_prefix_for_role(status.role);
+    let plot_prefix = plot_series_prefix_for_role(status.role);
+    let fch_lock_value = fch_lock_value_from_status(status);
+
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_snr", key_prefix),
+        &plot_series_label(plot_prefix, "snr"),
+        "",
+        None,
+        previous,
+        status.snr_db,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_ldpc_err", key_prefix),
+        &plot_series_label(plot_prefix, "ldpc_err"),
+        "",
+        None,
+        previous,
+        status.ldpc_err,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_ldpc_num", key_prefix),
+        &plot_series_label(plot_prefix, "ldpc_num"),
+        "",
+        None,
+        previous,
+        status.ldpc_num,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_gain_a", key_prefix),
+        &plot_series_label(plot_prefix, "gain_a"),
+        "",
+        None,
+        previous,
+        status.signal_main,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_gain_b", key_prefix),
+        &plot_series_label(plot_prefix, "gain_b"),
+        "",
+        None,
+        previous,
+        status.signal_aux,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_mcs_rx", key_prefix),
+        &plot_series_label(plot_prefix, "mcs_rx"),
+        "",
+        None,
+        previous,
+        status.rx_mcs.map(i32::from),
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_fch_lock", key_prefix),
+        &plot_series_label(plot_prefix, "fch_lock"),
+        "",
+        None,
+        previous,
+        fch_lock_value,
+        plot_sample_count,
+        history_context_key,
+    ));
+}
+
+fn append_power_chart_series(
+    chart_series: &mut Vec<ChartSeries>,
+    previous: Option<&WirelessSnapshot>,
+    power_fallback: Option<&ffi::BbPowerFallback>,
+    plot_sample_count: usize,
+    history_context_key: &str,
+) {
+    chart_series.push(build_chart_series_from_source(
+        "br_power",
+        "br_power",
+        "",
+        None,
+        previous,
+        power_fallback.and_then(|p| p.br_power_dbm.map(i32::from)),
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        "ap_power",
+        "ap_power",
+        "",
+        None,
+        previous,
+        power_fallback.and_then(|p| p.ap_power_dbm.map(i32::from)),
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        "dev_power",
+        "dev_power",
+        "",
+        None,
+        previous,
+        power_fallback.and_then(|p| p.dev_power_dbm.map(i32::from)),
+        plot_sample_count,
+        history_context_key,
+    ));
+}
+
 #[allow(dead_code)]
 fn build_optional_chart_series_from_source(
     key: &str,
@@ -2807,6 +2870,36 @@ fn chart_history_context_key(status: &BbGetStatusSummary) -> String {
         .unwrap_or_else(|| "none".to_string());
 
     format!("{}|role:{}|signal_user:{}", status.mac_hex, status.role, signal_user)
+}
+
+fn paired_chart_history_context_key(
+    status: &BbGetStatusSummary,
+    peer_status: Option<&BbGetStatusSummary>,
+) -> String {
+    let Some(peer_status) = peer_status else {
+        return chart_history_context_key(status);
+    };
+
+    let primary_mac = normalize_device_mac(&status.mac_hex);
+    let peer_mac = normalize_device_mac(&peer_status.mac_hex);
+    if primary_mac.is_empty() || peer_mac.is_empty() || primary_mac == peer_mac {
+        return chart_history_context_key(status);
+    }
+
+    let signal_user = status
+        .active_user
+        .or(status.detected_active_user)
+        .map(|user| user.to_string())
+        .unwrap_or_else(|| "none".to_string());
+    let mut pair_macs = [primary_mac, peer_mac];
+    pair_macs.sort();
+
+    format!(
+        "pair:{}|active:{}|signal_user:{}",
+        pair_macs.join("|"),
+        normalize_device_mac(&status.mac_hex),
+        signal_user
+    )
 }
 
 fn previous_chart_points(previous: Option<&WirelessSnapshot>, key: &str, history_context_key: &str) -> Option<Vec<i32>> {
@@ -3360,6 +3453,7 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
     }
 
     if let Ok(status) = baseband.get_status_snapshot() {
+        let peer_status = fetch_peer_plot_status(baseband, &status);
         let previous = state.snapshot.read().await.clone();
         let next_sequence = previous.sequence.wrapping_add(1);
         let sample_count = *state.plot_sample_count.read().await;
@@ -3378,6 +3472,7 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
         let snapshot = build_hardware_snapshot(
             next_sequence,
             &status,
+            peer_status.as_ref(),
             Some(&previous),
             sample_count,
             runtime_current.as_ref(),
@@ -3390,6 +3485,24 @@ async fn refresh_snapshot_from_baseband(state: &Arc<AppState>, baseband: &Arc<Ba
         }
 
         let _ = state.tx.send(snapshot);
+    }
+}
+
+fn fetch_peer_plot_status(
+    baseband: &BasebandManager,
+    status: &BbGetStatusSummary,
+) -> Option<ffi::BbGetStatusSummary> {
+    let peer_mac = resolve_connected_peer_mac(status)?;
+    if normalize_device_mac(&peer_mac) == normalize_device_mac(&status.mac_hex) {
+        return None;
+    }
+
+    match baseband.get_status_snapshot_for_device(&peer_mac) {
+        Ok(peer_status) => Some(peer_status),
+        Err(err) => {
+            tracing::debug!(peer_mac = %peer_mac, error = %err, "Failed to read peer RSSI plot status");
+            None
+        }
     }
 }
 

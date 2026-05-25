@@ -1143,6 +1143,7 @@
             pendingChart: null,
             renderTimerId: null,
             lastRenderedAt: 0,
+            snapshotContext: null,
             appliedUpdateIntervalMs: null,
             appliedSampleCount: null,
             controlsOpen: false,
@@ -3073,7 +3074,12 @@
             switch (column.key) {
                 case 'link_state':
                     return buildStatePill(connection.link_state);
-                case 'snr_signal':
+                case 'snr_signal': {
+                    const chartConfig = resolveConnectionRssiChartConfig(connection, role);
+                    if (!chartConfig.visible) {
+                        return '<span class="connection-signal-metric">NA</span>';
+                    }
+
                     return `
                         <span class="connection-signal-cell">
                             ${buildSignalBars(Number(connection.signal_level) || 0)}
@@ -3081,6 +3087,7 @@
                             <span class="connection-signal-metric">${escapeHtml(connection.snr_db)}</span>
                         </span>
                     `;
+                }
                 case 'rssi_graph': {
                     const chartConfig = resolveConnectionRssiChartConfig(connection, role);
 
@@ -3752,36 +3759,25 @@
             return String(series?.label || series?.key || `series_${index + 1}`).toUpperCase();
         }
 
+        function getPlotSeriesDisplayLabel(series, index) {
+            return getPlotSeriesLabel(series, index).replace(/^(AP|DEV)_/, '');
+        }
+
         function getPlotSeriesColor(series, index) {
-            const label = getPlotSeriesLabel(series, index).toUpperCase();
-            // 精确匹配：先尝试完整 label（含前缀），可区分 AP/DEV
-            const fullMatches = {
-                'AP_SNR': '#2563eb',
-                'DEV_SNR': '#0891b2',
-                'AP_GAIN_A': '#16a34a',
-                'AP_GAIN_B': '#0d9488',
-                'DEV_GAIN_A': '#65a30d',
-                'DEV_GAIN_B': '#14b8a6',
-                'BR_POWER': '#78350f',
-                'AP_POWER': '#6366f1',
-                'DEV_POWER': '#eab308',
+            const displayLabel = getPlotSeriesDisplayLabel(series, index).toUpperCase();
+            const displayMatches = {
+                'SNR': '#2563eb',
+                'GAIN_A': '#16a34a',
+                'GAIN_B': '#86efac',
+                'LDPC_ERR': '#dc2626',
+                'LDPC_NUM': '#d97706',
+                'MCS_RX': '#7c3aed',
+                'FCH_LOCK': '#eab308',
+                'POWER': '#6b7280',
+                'BR_POWER': '#4b5563',
             };
-            if (fullMatches[label] !== undefined) {
-                return fullMatches[label];
-            }
-            // 通用匹配：去掉前缀后按指标名
-            const metric = label.includes('_') ? label.split('_').slice(1).join('_') : label;
-            if (metric === 'LDPC_ERR') {
-                return '#dc2626';
-            }
-            if (metric === 'LDPC_NUM') {
-                return '#d97706';
-            }
-            if (metric === 'MCS_RX') {
-                return '#7c3aed';
-            }
-            if (metric === 'FCH_LOCK') {
-                return '#0f766e';
+            if (displayMatches[displayLabel] !== undefined) {
+                return displayMatches[displayLabel];
             }
             return plotPalette[index % plotPalette.length];
         }
@@ -3968,7 +3964,7 @@
 
         function buildPlotLegendItem(series, index, isVisible) {
             const key = getPlotSeriesKey(series, index);
-            const label = getPlotSeriesLabel(series, index);
+            const label = getPlotSeriesDisplayLabel(series, index);
             const color = getPlotSeriesColor(series, index);
             const unit = series.unit || '';
             const currentValue = formatChartValue(series.current_value, unit);
@@ -4056,22 +4052,116 @@
             };
         }
 
-        function buildCompositePlotLayout(chart) {
-            const allSeries = Array.isArray(chart && chart.series) ? chart.series : [];
-            ensurePlotVisibilityState(allSeries);
-            const sampleCount = parsePlotSampleCount(plotState.controls.xMax);
+        const plotRoleStatusMetrics = new Set([
+            'SNR',
+            'LDPC_ERR',
+            'LDPC_NUM',
+            'GAIN_A',
+            'GAIN_B',
+            'MCS_RX',
+            'FCH_LOCK',
+        ]);
 
-            const allEntries = allSeries.map((series, index) => ({
-                series: buildDisplayPlotSeries(series, sampleCount),
-                index,
-                key: getPlotSeriesKey(series, index),
-            }));
-            const visibleEntries = allEntries.filter((entry) => plotState.visibility.get(entry.key) !== false);
-            const pointCount = Math.max(...allEntries.map(({ series }) => Array.isArray(series.points) ? series.points.length : 0), 0);
+        function getPlotSeriesMetric(series, index) {
+            const label = getPlotSeriesLabel(series, index).toUpperCase();
+            return label.includes('_') ? label.split('_').slice(1).join('_') : label;
+        }
+
+        function normalizePlotContextRole(value) {
+            const role = String(value || '').trim().toUpperCase();
+            if (role === 'AP' || role === 'DEV') {
+                return role;
+            }
+            return null;
+        }
+
+        function isOneToOnePlotMode(value) {
+            return String(value || '').trim().toUpperCase() === '1V1';
+        }
+
+        function isPowerSeriesEntry(entry) {
+            return ['br_power', 'ap_power', 'dev_power'].includes(String(entry?.key || '').toLowerCase());
+        }
+
+        function orderPairPlotEntries(entries) {
+            const nonPowerEntries = [];
+            const powerEntries = [];
+
+            entries.forEach((entry) => {
+                if (isPowerSeriesEntry(entry)) {
+                    powerEntries.push(entry);
+                    return;
+                }
+                nonPowerEntries.push(entry);
+            });
+
+            return [...nonPowerEntries, ...powerEntries];
+        }
+
+        function resolveOneToOnePowerAssignment(primaryGroup, snapshotContext) {
+            if (!isOneToOnePlotMode(snapshotContext?.networkingMode)) {
+                return {
+                    pairPowerKeys: new Set(),
+                    hiddenPowerKeys: new Set(),
+                };
+            }
+
+            const activeRole = normalizePlotContextRole(snapshotContext?.role)
+                || (primaryGroup === 'dev' ? 'DEV' : primaryGroup === 'ap' ? 'AP' : null);
+            if (activeRole === 'AP') {
+                return {
+                    pairPowerKeys: new Set(['dev_power']),
+                    hiddenPowerKeys: new Set(['ap_power']),
+                };
+            }
+            if (activeRole === 'DEV') {
+                return {
+                    pairPowerKeys: new Set(['br_power']),
+                    hiddenPowerKeys: new Set(['ap_power']),
+                };
+            }
+
+            return {
+                pairPowerKeys: new Set(),
+                hiddenPowerKeys: new Set(),
+            };
+        }
+
+        function getPlotRolePrefix(groupKey) {
+            return groupKey === 'dev' ? 'DEV_' : 'AP_';
+        }
+
+        function isRoleStatusSeries(series, index, groupKey) {
+            const label = getPlotSeriesLabel(series, index).toUpperCase();
+            return label.startsWith(getPlotRolePrefix(groupKey))
+                && plotRoleStatusMetrics.has(getPlotSeriesMetric(series, index));
+        }
+
+        function inferPrimaryPlotGroup(entries) {
+            const activeEntry = entries.find(({ series, index }) => {
+                return isRoleStatusSeries(series, index, 'ap') || isRoleStatusSeries(series, index, 'dev');
+            });
+            if (!activeEntry) {
+                return null;
+            }
+            return isRoleStatusSeries(activeEntry.series, activeEntry.index, 'dev') ? 'dev' : 'ap';
+        }
+
+        function getPeerPlotGroup(groupKey) {
+            return groupKey === 'dev' ? 'ap' : 'dev';
+        }
+
+        function getPlotPanelTitle(panelType) {
+            return panelType === 'pair' ? 'Pair plot' : 'Local plot';
+        }
+
+        function buildPlotPanelLayout(panelKey, entries, sampleCount, options = {}) {
+            const visibleEntries = entries.filter((entry) => plotState.visibility.get(entry.key) !== false);
+            const pointCount = Math.max(...entries.map(({ series }) => Array.isArray(series.points) ? series.points.length : 0), 0);
             const [autoRangeMin, autoRangeMax] = resolveCompositeRange(visibleEntries.map(({ series }) => series));
-            const controlSettings = resolvePlotControlSettings(chart && chart.title ? chart.title : 'RSSI Graph', autoRangeMin, autoRangeMax, sampleCount);
+            const controlSettings = resolvePlotControlSettings(options.defaultChartTitle || 'RSSI Graph', autoRangeMin, autoRangeMax, sampleCount);
+            const panelHeading = options.heading || '';
             const hasChartTitle = Boolean(controlSettings.chartTitle);
-            const xAxisTicks = buildAxisTicks(controlSettings.xMin, controlSettings.xMax, 6);
             const plotBox = {
                 startX: 56,
                 endX: 944,
@@ -4082,8 +4172,8 @@
             };
             const rangeMin = controlSettings.yMin;
             const rangeMax = controlSettings.yMax;
+            const xAxisTicks = buildAxisTicks(controlSettings.xMin, controlSettings.xMax, 6);
             const yAxisTicks = buildAxisTicks(rangeMin, rangeMax, 7);
-
             const horizontalGrid = yAxisTicks.map((value) => {
                 const ratio = (value - rangeMin) / Math.max(rangeMax - rangeMin, 1);
                 const y = plotBox.endY - clamp(ratio, 0, 1) * (plotBox.endY - plotBox.startY);
@@ -4092,7 +4182,6 @@
                     <text class="plot-axis-value" x="44" y="${(y + 4).toFixed(1)}">${formatPlotAxisValue(value)}</text>
                 `;
             }).join('');
-
             const verticalGrid = xAxisTicks.map((xValue) => {
                 const ratio = (xValue - controlSettings.xMin) / Math.max(controlSettings.xMax - controlSettings.xMin, 1);
                 const x = plotBox.startX + (plotBox.endX - plotBox.startX) * ratio;
@@ -4101,7 +4190,6 @@
                     <text class="plot-axis-value x-axis" x="${x.toFixed(1)}" y="418">${formatPlotAxisValue(xValue)}</text>
                 `;
             }).join('');
-
             const lineMarkup = visibleEntries.map(({ series, index }) => {
                 const rawPoints = Array.isArray(series.points) ? series.points.filter((value) => Number.isFinite(value)) : [];
                 const points = rawPoints.length > 0
@@ -4119,49 +4207,123 @@
                     <circle class="plot-endpoint" cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3.5" style="fill:${color}"></circle>
                 `;
             }).join('');
-
-            const legendMarkup = allEntries.map(({ series, index, key }) => buildPlotLegendItem(series, index, plotState.visibility.get(key) !== false)).join('');
-            const innerTitleMarkup = hasChartTitle
-                ? `<text class="plot-chart-title" x="490" y="22">${escapeHtml(controlSettings.chartTitle)}</text>`
-                : '';
+            const legendMarkup = entries.map(({ series, index, key }) => buildPlotLegendItem(series, index, plotState.visibility.get(key) !== false)).join('');
             const emptyMarkup = visibleEntries.length === 0
                 ? '<div class="plot-workbench-empty">All series are hidden. Re-enable them from the legend.</div>'
                 : '';
-
-            const legendDenseClass = allSeries.length > 8 ? ' is-dense' : '';
+            const legendDenseClass = entries.length > 8 ? ' is-dense' : '';
+            const innerTitleMarkup = hasChartTitle
+                ? `<text class="plot-chart-title" x="490" y="22">${escapeHtml(controlSettings.chartTitle)}</text>`
+                : '';
 
             return {
+                groupKey: panelKey,
+                entries,
                 pointCount,
                 plotBox,
                 axis: controlSettings,
                 visibleEntries,
-                allSeries,
                 markup: `
-                    <div class="plot-workbench${legendDenseClass}">
-                        <div class="plot-stage">
-                            <div class="plot-surface" id="plot-surface">
-                                <svg class="plot-composite-svg" viewBox="0 0 980 440" preserveAspectRatio="none" role="img" aria-label="Multi-series trend chart">
-                                    <rect class="plot-frame-bg" x="0.5" y="0.5" width="979" height="439" rx="18" ry="18"></rect>
-                                    ${innerTitleMarkup}
-                                    ${horizontalGrid}
-                                    ${verticalGrid}
-                                    <line class="plot-axis-line" x1="${plotBox.startX}" y1="${plotBox.startY}" x2="${plotBox.startX}" y2="${plotBox.endY}"></line>
-                                    <line class="plot-axis-line" x1="${plotBox.startX}" y1="${plotBox.endY}" x2="${plotBox.endX}" y2="${plotBox.endY}"></line>
-                                    ${lineMarkup}
-                                    <text class="plot-axis-title plot-axis-title-y" x="18" y="${((plotBox.startY + plotBox.endY) / 2).toFixed(1)}">${escapeHtml(controlSettings.yAxisTitle)}</text>
-                                    <text class="plot-axis-title plot-axis-title-x" x="490" y="434">${escapeHtml(controlSettings.xAxisTitle)}</text>
-                                </svg>
-                                ${emptyMarkup}
-                                <div class="plot-crosshair" id="plot-crosshair" hidden></div>
-                                <div class="plot-hover-panel" id="plot-hover-panel" hidden></div>
-                                ${buildPlotControlPanel(controlSettings)}
+                    <div class="plot-panel-block">
+                        ${panelHeading ? `<div class="plot-panel-heading">${escapeHtml(panelHeading)}</div>` : ''}
+                        <div class="plot-workbench${legendDenseClass}">
+                            <div class="plot-stage">
+                                <div class="plot-surface" data-plot-surface="${panelKey}">
+                                    <svg class="plot-composite-svg" viewBox="0 0 980 440" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(panelHeading || controlSettings.chartTitle || options.defaultChartTitle || 'RSSI Graph')} trend chart">
+                                        <rect class="plot-frame-bg" x="0.5" y="0.5" width="979" height="439" rx="18" ry="18"></rect>
+                                        ${innerTitleMarkup}
+                                        ${horizontalGrid}
+                                        ${verticalGrid}
+                                        <line class="plot-axis-line" x1="${plotBox.startX}" y1="${plotBox.startY}" x2="${plotBox.startX}" y2="${plotBox.endY}"></line>
+                                        <line class="plot-axis-line" x1="${plotBox.startX}" y1="${plotBox.endY}" x2="${plotBox.endX}" y2="${plotBox.endY}"></line>
+                                        ${lineMarkup}
+                                        <text class="plot-axis-title plot-axis-title-y" x="18" y="${((plotBox.startY + plotBox.endY) / 2).toFixed(1)}">${escapeHtml(controlSettings.yAxisTitle)}</text>
+                                        <text class="plot-axis-title plot-axis-title-x" x="490" y="434">${escapeHtml(controlSettings.xAxisTitle)}</text>
+                                    </svg>
+                                    ${emptyMarkup}
+                                    <div class="plot-crosshair" data-plot-crosshair="${panelKey}" hidden></div>
+                                    <div class="plot-hover-panel" data-plot-hover="${panelKey}" hidden></div>
+                                    ${options.includeControlPanel ? buildPlotControlPanel(controlSettings) : ''}
+                                </div>
                             </div>
+                            <aside class="plot-legend-sidebar">
+                                <div class="plot-legend-list${legendDenseClass}">
+                                    ${legendMarkup || '<div class="plot-series-empty">No series data</div>'}
+                                </div>
+                            </aside>
                         </div>
-                        <aside class="plot-legend-sidebar" id="plot-legend-sidebar">
-                            <div class="plot-legend-list${legendDenseClass}">
-                                ${legendMarkup || '<div class="plot-series-empty">No series data</div>'}
-                            </div>
-                        </aside>
+                    </div>
+                `,
+            };
+        }
+
+        function buildCompositePlotLayout(chart, snapshotContext = null) {
+            const allSeries = Array.isArray(chart && chart.series) ? chart.series : [];
+            ensurePlotVisibilityState(allSeries);
+            const sampleCount = parsePlotSampleCount(plotState.controls.xMax);
+            const defaultChartTitle = chart && chart.title ? chart.title : 'RSSI Graph';
+
+            const allEntries = allSeries.map((series, index) => ({
+                series: buildDisplayPlotSeries(series, sampleCount),
+                index,
+                key: getPlotSeriesKey(series, index),
+            }));
+            const visibleEntries = allEntries.filter((entry) => plotState.visibility.get(entry.key) !== false);
+            const primaryGroup = inferPrimaryPlotGroup(allEntries);
+            const panels = [];
+
+            if (!primaryGroup) {
+                panels.push(buildPlotPanelLayout('primary', allEntries, sampleCount, {
+                    defaultChartTitle,
+                    includeControlPanel: true,
+                }));
+            } else {
+                const peerGroup = getPeerPlotGroup(primaryGroup);
+                const { pairPowerKeys, hiddenPowerKeys } = resolveOneToOnePowerAssignment(primaryGroup, snapshotContext);
+                const primaryEntries = allEntries.filter((entry) => {
+                    const normalizedKey = String(entry.key).toLowerCase();
+                    if (hiddenPowerKeys.has(normalizedKey) || pairPowerKeys.has(normalizedKey)) {
+                        return false;
+                    }
+                    return !isRoleStatusSeries(entry.series, entry.index, peerGroup);
+                });
+                const peerEntries = orderPairPlotEntries(allEntries.filter((entry) => {
+                    const normalizedKey = String(entry.key).toLowerCase();
+                    if (hiddenPowerKeys.has(normalizedKey)) {
+                        return false;
+                    }
+                    if (pairPowerKeys.has(normalizedKey)) {
+                        return isPowerSeriesEntry(entry);
+                    }
+                    return isRoleStatusSeries(entry.series, entry.index, peerGroup);
+                }));
+                const showPanelHeadings = peerEntries.length > 0;
+
+                panels.push(buildPlotPanelLayout(primaryGroup, primaryEntries, sampleCount, {
+                    defaultChartTitle,
+                    includeControlPanel: true,
+                    heading: showPanelHeadings ? getPlotPanelTitle('local') : '',
+                }));
+
+                if (peerEntries.length > 0) {
+                    panels.push(buildPlotPanelLayout(peerGroup, peerEntries, sampleCount, {
+                        defaultChartTitle,
+                        heading: getPlotPanelTitle('pair'),
+                    }));
+                }
+            }
+
+            const renderedEntries = panels.flatMap((panel) => Array.isArray(panel.entries) ? panel.entries : []);
+            const visiblePanelEntries = panels.flatMap((panel) => Array.isArray(panel.visibleEntries) ? panel.visibleEntries : []);
+
+            return {
+                visibleEntries: visiblePanelEntries,
+                allSeries,
+                renderedEntryCount: renderedEntries.length,
+                panels,
+                markup: `
+                    <div class="plot-workbench-stack">
+                        ${panels.map((panel) => panel.markup).join('')}
                     </div>
                 `,
             };
@@ -4223,15 +4385,13 @@
         }
 
         function clearPlotHoverInfo() {
-            const hoverPanel = document.getElementById('plot-hover-panel');
-            const crosshair = document.getElementById('plot-crosshair');
-            if (hoverPanel) {
+            document.querySelectorAll('[data-plot-hover]').forEach((hoverPanel) => {
                 hoverPanel.hidden = true;
                 hoverPanel.innerHTML = '';
-            }
-            if (crosshair) {
+            });
+            document.querySelectorAll('[data-plot-crosshair]').forEach((crosshair) => {
                 crosshair.hidden = true;
-            }
+            });
         }
 
         function bindPlotLegendEvents(chart) {
@@ -4417,72 +4577,79 @@
         }
 
         function bindPlotSurfaceEvents(chart, renderModel) {
-            const surface = document.getElementById('plot-surface');
-            const hoverPanel = document.getElementById('plot-hover-panel');
-            const crosshair = document.getElementById('plot-crosshair');
-            if (!surface || !hoverPanel || !crosshair || renderModel.pointCount <= 0 || renderModel.visibleEntries.length === 0) {
+            const panels = Array.isArray(renderModel?.panels) ? renderModel.panels : [];
+            if (panels.length === 0) {
                 clearPlotHoverInfo();
                 return;
             }
 
-            surface.addEventListener('mouseleave', clearPlotHoverInfo);
-            surface.addEventListener('mousemove', (event) => {
-                if (event.target instanceof Element && event.target.closest('.plot-settings-dock')) {
-                    clearPlotHoverInfo();
+            panels.forEach((panel) => {
+                const surface = document.querySelector(`[data-plot-surface="${panel.groupKey}"]`);
+                const hoverPanel = document.querySelector(`[data-plot-hover="${panel.groupKey}"]`);
+                const crosshair = document.querySelector(`[data-plot-crosshair="${panel.groupKey}"]`);
+                if (!surface || !hoverPanel || !crosshair || panel.pointCount <= 0 || panel.visibleEntries.length === 0) {
                     return;
                 }
 
-                const rect = surface.getBoundingClientRect();
-                const plotLeft = (renderModel.plotBox.startX / renderModel.plotBox.viewBoxWidth) * rect.width;
-                const plotRight = (renderModel.plotBox.endX / renderModel.plotBox.viewBoxWidth) * rect.width;
-                const plotTop = (renderModel.plotBox.startY / renderModel.plotBox.viewBoxHeight) * rect.height;
-                const plotBottom = (renderModel.plotBox.endY / renderModel.plotBox.viewBoxHeight) * rect.height;
-                const localX = event.clientX - rect.left;
-                const localY = event.clientY - rect.top;
+                surface.addEventListener('mouseleave', clearPlotHoverInfo);
+                surface.addEventListener('mousemove', (event) => {
+                    if (event.target instanceof Element && event.target.closest('.plot-settings-dock')) {
+                        clearPlotHoverInfo();
+                        return;
+                    }
 
-                if (localX < plotLeft || localX > plotRight || localY < plotTop || localY > plotBottom) {
-                    clearPlotHoverInfo();
-                    return;
-                }
+                    const rect = surface.getBoundingClientRect();
+                    const plotLeft = (panel.plotBox.startX / panel.plotBox.viewBoxWidth) * rect.width;
+                    const plotRight = (panel.plotBox.endX / panel.plotBox.viewBoxWidth) * rect.width;
+                    const plotTop = (panel.plotBox.startY / panel.plotBox.viewBoxHeight) * rect.height;
+                    const plotBottom = (panel.plotBox.endY / panel.plotBox.viewBoxHeight) * rect.height;
+                    const localX = event.clientX - rect.left;
+                    const localY = event.clientY - rect.top;
 
-                const ratio = (localX - plotLeft) / Math.max(plotRight - plotLeft, 1);
-                const sampleIndex = Math.round(ratio * Math.max(renderModel.pointCount - 1, 1));
-                const xValue = renderModel.pointCount <= 1
-                    ? renderModel.axis.xMin
-                    : renderModel.axis.xMin + ((renderModel.axis.xMax - renderModel.axis.xMin) * sampleIndex) / Math.max(renderModel.pointCount - 1, 1);
-                const crosshairX = plotLeft + ((plotRight - plotLeft) * sampleIndex) / Math.max(renderModel.pointCount - 1, 1);
-                const hoverLines = renderModel.visibleEntries.map(({ series, index }) => {
-                    const label = getPlotSeriesLabel(series, index);
-                    const color = getPlotSeriesColor(index);
-                    const rawPoints = Array.isArray(series.points) ? series.points.filter((value) => Number.isFinite(value)) : [];
-                    const rawValue = rawPoints[sampleIndex] ?? series.current_value;
-                    return {
-                        label,
-                        color,
-                        text: `${label}: ${formatChartValue(rawValue, series.unit || '')}`,
-                    };
+                    if (localX < plotLeft || localX > plotRight || localY < plotTop || localY > plotBottom) {
+                        clearPlotHoverInfo();
+                        return;
+                    }
+
+                    const ratio = (localX - plotLeft) / Math.max(plotRight - plotLeft, 1);
+                    const sampleIndex = Math.round(ratio * Math.max(panel.pointCount - 1, 1));
+                    const xValue = panel.pointCount <= 1
+                        ? panel.axis.xMin
+                        : panel.axis.xMin + ((panel.axis.xMax - panel.axis.xMin) * sampleIndex) / Math.max(panel.pointCount - 1, 1);
+                    const crosshairX = plotLeft + ((plotRight - plotLeft) * sampleIndex) / Math.max(panel.pointCount - 1, 1);
+                    const hoverLines = panel.visibleEntries.map(({ series, index }) => {
+                        const label = getPlotSeriesDisplayLabel(series, index);
+                        const color = getPlotSeriesColor(series, index);
+                        const rawPoints = Array.isArray(series.points) ? series.points.filter((value) => Number.isFinite(value)) : [];
+                        const rawValue = rawPoints[sampleIndex] ?? series.current_value;
+                        return {
+                            label,
+                            color,
+                            text: `${label}: ${formatChartValue(rawValue, series.unit || '')}`,
+                        };
+                    });
+
+                    crosshair.hidden = false;
+                    crosshair.style.left = `${crosshairX}px`;
+                    crosshair.style.top = `${plotTop}px`;
+                    crosshair.style.height = `${plotBottom - plotTop}px`;
+
+                    hoverPanel.hidden = false;
+                    hoverPanel.innerHTML = `
+                        <div class="plot-hover-title">${escapeHtml(panel.axis.xAxisTitle)}=${escapeHtml(formatPlotAxisValue(xValue))}</div>
+                        ${hoverLines.map((line) => `
+                            <div class="plot-hover-line">
+                                <span class="plot-hover-swatch" style="background:${line.color}"></span>
+                                <span>${escapeHtml(line.text)}</span>
+                            </div>
+                        `).join('')}
+                    `;
+
+                    const tooltipX = clamp(localX + 16, 12, rect.width - 220);
+                    const tooltipY = clamp(localY - 12, 12, rect.height - 100);
+                    hoverPanel.style.left = `${tooltipX}px`;
+                    hoverPanel.style.top = `${tooltipY}px`;
                 });
-
-                crosshair.hidden = false;
-                crosshair.style.left = `${crosshairX}px`;
-                crosshair.style.top = `${plotTop}px`;
-                crosshair.style.height = `${plotBottom - plotTop}px`;
-
-                hoverPanel.hidden = false;
-                hoverPanel.innerHTML = `
-                    <div class="plot-hover-title">${escapeHtml(renderModel.axis.xAxisTitle)}=${escapeHtml(formatPlotAxisValue(xValue))}</div>
-                    ${hoverLines.map((line) => `
-                        <div class="plot-hover-line">
-                            <span class="plot-hover-swatch" style="background:${line.color}"></span>
-                            <span>${escapeHtml(line.text)}</span>
-                        </div>
-                    `).join('')}
-                `;
-
-                const tooltipX = clamp(localX + 16, 12, rect.width - 220);
-                const tooltipY = clamp(localY - 12, 12, rect.height - 100);
-                hoverPanel.style.left = `${tooltipX}px`;
-                hoverPanel.style.top = `${tooltipY}px`;
             });
         }
 
@@ -4599,10 +4766,10 @@
             }
 
             const focusState = capturePlotControlFocusState();
-            const renderModel = buildCompositePlotLayout(chart);
+            const renderModel = buildCompositePlotLayout(chart, plotState.snapshotContext);
             container.innerHTML = renderModel.markup;
             clearPlotHoverInfo();
-            updatePlotToolbarState(renderModel.allSeries.length, renderModel.visibleEntries.length);
+            updatePlotToolbarState(renderModel.renderedEntryCount, renderModel.visibleEntries.length);
             bindPlotLegendEvents(chart);
             bindPlotControlEvents(chart);
             bindPlotControlPanelActions(chart);
@@ -4613,6 +4780,10 @@
         function syncPlotChart(snapshot) {
             const chart = snapshot && snapshot.chart ? snapshot.chart : null;
             plotState.lastIncomingChart = chart;
+            plotState.snapshotContext = snapshot ? {
+                role: snapshot.general?.role || null,
+                networkingMode: snapshot.general?.networking_mode || null,
+            } : null;
 
             if (plotState.recording && !plotState.paused && !plotState.stopped) {
                 recordPlotFrame(snapshot);

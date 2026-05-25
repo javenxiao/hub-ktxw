@@ -3321,6 +3321,25 @@ impl BasebandManager {
         result
     }
 
+    pub fn get_status_snapshot_for_device(&self, target_mac: &str) -> Result<ffi::BbGetStatusSummary, String> {
+        self.with_api("get_status_snapshot_for_device", |api| {
+            if api.is_remote_mode() {
+                return api.remote_status_for_mac(target_mac);
+            }
+
+            let normalized_target = BasebandApi::normalize_mac(target_mac);
+            if normalized_target.is_empty() {
+                return Err("device_mac is required".to_string());
+            }
+
+            if api.active_device_mac.as_deref() == Some(normalized_target.as_str()) {
+                api.get_status_summary_for_snapshot()
+            } else {
+                Err("Device-specific snapshot requires remote bb_host mode".to_string())
+            }
+        })
+    }
+
     pub fn get_wireless_runtime_details(&self) -> Result<WirelessRuntimeDetails, String> {
         self.with_api("get_wireless_runtime_details", |api| api.get_wireless_runtime_details())
     }

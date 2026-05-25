@@ -1802,6 +1802,27 @@ tbody td {
     margin-top: 12px;
 }
 
+.plot-workbench-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.plot-panel-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.plot-panel-heading {
+    padding: 0 4px;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 .plot-workbench {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 168px;
