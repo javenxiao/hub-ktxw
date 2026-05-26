@@ -492,6 +492,7 @@
                                                 <th>BW</th>
                                                 <th>MCS</th>
                                                 <th>TX/RX Mode</th>
+                                                <th>BL(B)</th>
                                                 <th>TP(K)</th>
                                                 <th>Signal | SNR</th>
                                                 <th>RSSI</th>
@@ -499,7 +500,7 @@
                                         </thead>
                                         <tbody id="connection-table-body">
                                             <tr>
-                                                <td colspan="9">等待连接数据...</td>
+                                                <td colspan="10">等待连接数据...</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -1015,7 +1016,6 @@
         let mcsSlotValue = null;
         let mcsValueSelection = null;
         let bandwidthSlotValue = null;
-        const bandwidthDirectionValue = 'rx';
         let bandwidthValueSelection = null;
         let bandwidthSelectionDirty = false;
         let bandwidthAutoMode = true;
@@ -1042,14 +1042,14 @@
             { value: 9, label: 'User BR2/CS2' },
         ];
         const manualMcsOptions = [
-            { value: 1, label: '-1,BPSK CR_1/2 REP_2 single' },
-            { value: 2, label: '0,BPSK CR_1/2 REP_1 single' },
-            { value: 5, label: '3,QPSK CR_1/2 REP_1 single' },
-            { value: 6, label: '4,QPSK CR_2/3 REP_1 single' },
-            { value: 8, label: '6,16QAM CR_1/2 REP_1 single' },
-            { value: 9, label: '7,16QAM CR_2/3 REP_1 single' },
-            { value: 10, label: '8,16QAM CR_3/4 REP_1 single' },
-            { value: 12, label: '10,64QAM CR_2/3 REP_1 single' },
+            { value: 1, label: '-1,BPSK CR_1/2 REP_2 单流' },
+            { value: 2, label: '0,BPSK CR_1/2 REP_1 单流' },
+            { value: 5, label: '3,QPSK CR_1/2 REP_1 单流' },
+            { value: 6, label: '4,QPSK CR_2/3 REP_1 单流' },
+            { value: 8, label: '6,16QAM CR_1/2 REP_1 单流' },
+            { value: 9, label: '7,16QAM CR_2/3 REP_1 单流' },
+            { value: 10, label: '8,16QAM CR_3/4 REP_1 单流' },
+            { value: 12, label: '10,64QAM CR_2/3 REP_1 单流' },
         ];
         const rfBasebandRoleOptions = [
             { value: 0, label: 'AP' },
@@ -2981,6 +2981,7 @@
                 { key: 'bandwidth', label: 'BW' },
                 { key: 'mcs', label: 'MCS' },
                 { key: 'antenna_mode', label: 'TX/RX Mode' },
+                { key: 'block_length_bytes', label: 'BL(B)' },
                 { key: 'throughput', label: 'TP(K)' },
                 { key: 'snr_signal', label: 'Signal | SNR' },
                 { key: 'rssi_graph', label: 'RSSI' },
@@ -3187,7 +3188,7 @@
 
         function resolveSnapshotBandwidthValue(
             slot = getCurrentBandwidthSlot(),
-            direction = bandwidthDirectionValue,
+            direction = getCurrentBandwidthDirection(),
             connections = latestWirelessSnapshot?.connections,
         ) {
             if (!Array.isArray(connections)) {
@@ -3210,7 +3211,7 @@
 
         function syncBandwidthSelectionFromSnapshot(
             slot = getCurrentBandwidthSlot(),
-            direction = bandwidthDirectionValue,
+            direction = getCurrentBandwidthDirection(),
             connections = latestWirelessSnapshot?.connections,
         ) {
             if (bandwidthSelectionDirty) {
@@ -3760,7 +3761,9 @@
         }
 
         function getPlotSeriesDisplayLabel(series, index) {
-            return getPlotSeriesLabel(series, index).replace(/^(AP|DEV)_/, '');
+            const rawLabel = getPlotSeriesLabel(series, index);
+            const displayLabel = rawLabel.replace(/^(AP|DEV)_/, '');
+            return displayLabel === 'POWER' ? 'SLOT_POWER' : displayLabel;
         }
 
         function getPlotSeriesColor(series, index) {
@@ -3773,7 +3776,7 @@
                 'LDPC_NUM': '#d97706',
                 'MCS_RX': '#7c3aed',
                 'FCH_LOCK': '#eab308',
-                'POWER': '#6b7280',
+                'SLOT_POWER': '#6b7280',
                 'BR_POWER': '#4b5563',
             };
             if (displayMatches[displayLabel] !== undefined) {
@@ -4152,7 +4155,7 @@
         }
 
         function getPlotPanelTitle(panelType) {
-            return panelType === 'pair' ? 'Pair plot' : 'Local plot';
+            return panelType === 'pair' ? 'Peer plot' : 'Local plot';
         }
 
         function buildPlotPanelLayout(panelKey, entries, sampleCount, options = {}) {
@@ -4280,19 +4283,25 @@
             } else {
                 const peerGroup = getPeerPlotGroup(primaryGroup);
                 const { pairPowerKeys, hiddenPowerKeys } = resolveOneToOnePowerAssignment(primaryGroup, snapshotContext);
+                const hasPeerStatusEntries = allEntries.some((entry) => isRoleStatusSeries(entry.series, entry.index, peerGroup));
+                const effectivePairPowerKeys = hasPeerStatusEntries ? pairPowerKeys : new Set();
+                const effectiveHiddenPowerKeys = new Set(hiddenPowerKeys);
+                if (!hasPeerStatusEntries) {
+                    pairPowerKeys.forEach((key) => effectiveHiddenPowerKeys.add(key));
+                }
                 const primaryEntries = allEntries.filter((entry) => {
                     const normalizedKey = String(entry.key).toLowerCase();
-                    if (hiddenPowerKeys.has(normalizedKey) || pairPowerKeys.has(normalizedKey)) {
+                    if (effectiveHiddenPowerKeys.has(normalizedKey) || effectivePairPowerKeys.has(normalizedKey)) {
                         return false;
                     }
                     return !isRoleStatusSeries(entry.series, entry.index, peerGroup);
                 });
                 const peerEntries = orderPairPlotEntries(allEntries.filter((entry) => {
                     const normalizedKey = String(entry.key).toLowerCase();
-                    if (hiddenPowerKeys.has(normalizedKey)) {
+                    if (effectiveHiddenPowerKeys.has(normalizedKey)) {
                         return false;
                     }
-                    if (pairPowerKeys.has(normalizedKey)) {
+                    if (effectivePairPowerKeys.has(normalizedKey)) {
                         return isPowerSeriesEntry(entry);
                     }
                     return isRoleStatusSeries(entry.series, entry.index, peerGroup);
@@ -4941,11 +4950,8 @@
             return String(current?.operation_mode || '').toUpperCase().includes('ASYNC');
         }
 
-        function getMcsControlNotice(current = wirelessRuntimeCurrent) {
-            if (current && !isAsyncWirelessRuntime(current)) {
-                return 'Manual MCS setting is supported only in Async (1V1) mode.';
-            }
-            return '';
+        function isMcsControlBlocked(current = wirelessRuntimeCurrent) {
+            return Boolean(current && !isAsyncWirelessRuntime(current));
         }
 
         function getBandwidthControlNotice(current = wirelessRuntimeCurrent) {
@@ -4970,15 +4976,9 @@
                 ? ''
                 : String(runtimeValue);
 
-            if (runtimeValueText && !select.querySelector(`option[value="${runtimeValueText}"]`)) {
-                const option = document.createElement('option');
-                option.value = runtimeValueText;
-                option.textContent = current?.current_mcs_label || `Unknown MCS (${runtimeValueText})`;
-                option.dataset.runtimeOption = 'true';
-                select.prepend(option);
-            }
-
-            const preferredValue = String(runtimeValue ?? mcsValueSelection ?? manualMcsOptions[0].value);
+            const preferredValue = runtimeValueText && select.querySelector(`option[value="${runtimeValueText}"]`)
+                ? runtimeValueText
+                : String(mcsValueSelection ?? manualMcsOptions[0].value);
             if (select.querySelector(`option[value="${preferredValue}"]`)) {
                 select.value = preferredValue;
             }
@@ -5282,6 +5282,10 @@
             if (mode.includes('AP')) return 0;
             if (mode.includes('DEV')) return 1;
             return null;
+        }
+
+        function getCurrentBandwidthDirection(current = wirelessRuntimeCurrent) {
+            return resolveCurrentBasebandRole(current) === 1 ? 'tx' : 'rx';
         }
 
         function renderRfBasebandRoleOptions(current) {
@@ -5607,7 +5611,7 @@
                     bandwidthSlotValue = Number(current.current_slot ?? bandwidthSlotValue ?? 0);
                     if (bandwidthValueSelection !== null && bandwidthValueSelection !== undefined) {
                         document.getElementById('control-bandwidth-value').value = String(bandwidthValueSelection);
-                    } else if (!syncBandwidthSelectionFromSnapshot(bandwidthSlotValue, bandwidthDirectionValue)) {
+                    } else if (!syncBandwidthSelectionFromSnapshot(bandwidthSlotValue, getCurrentBandwidthDirection(current))) {
                         if (current.bandwidth_code !== null && current.bandwidth_code !== undefined) {
                         document.getElementById('control-bandwidth-value').value = String(current.bandwidth_code);
                         }
@@ -6013,26 +6017,28 @@
         }
 
         function updateMcsControlsState(current = wirelessRuntimeCurrent) {
-            const mcsControlNotice = getMcsControlNotice(current);
-            const mcsControlBlocked = Boolean(mcsControlNotice);
+            const mcsControlBlocked = isMcsControlBlocked(current);
+            const controlsDisabled = getSelectedMcsAuto() || mcsControlBlocked;
             setRfControlsDisabled([
                 'control-mcs-value',
+            ], controlsDisabled);
+            setRfControlsDisabled([
                 'control-mcs-slot',
-            ], getSelectedMcsAuto() || mcsControlBlocked);
+            ], controlsDisabled);
 
-            setRfRadioGroupDisabled('control-mcs-auto', mcsControlBlocked, mcsControlNotice);
+            setRfRadioGroupDisabled('control-mcs-auto', mcsControlBlocked, '');
 
             ['control-mcs-value', 'control-mcs-slot'].forEach((controlId) => {
                 const control = document.getElementById(controlId);
                 if (control) {
-                    control.title = mcsControlNotice;
+                    control.title = '';
                 }
             });
 
             const note = document.getElementById('control-mcs-note');
             if (note) {
-                note.hidden = !mcsControlBlocked;
-                note.textContent = mcsControlNotice;
+                note.hidden = true;
+                note.textContent = '';
             }
         }
 
@@ -6043,19 +6049,10 @@
 
             mcsSlotValue = getSelectedMcsSlot();
             mcsValueSelection = getSelectedMcsValue();
-            const devMode = resolveCurrentBasebandRole(wirelessRuntimeCurrent) === 1;
-            if (devMode) {
-                const user = wirelessRuntimeCurrent?.selected_signal_user ?? 0;
-                await applyWirelessSetting('set_tx_mcs', {
-                    user: user,
-                    mcs: mcsValueSelection,
-                });
-            } else {
-                await applyWirelessSetting('set_mcs', {
-                    slot: mcsSlotValue,
-                    mcs: mcsValueSelection,
-                });
-            }
+            await applyWirelessSetting('set_mcs', {
+                slot: mcsSlotValue,
+                mcs: mcsValueSelection,
+            });
         }
 
         async function applyMcsAutoMode(autoMode) {
@@ -6090,6 +6087,14 @@
 
         function syncBandwidthValueControls(current = wirelessRuntimeCurrent) {
             if (!current) {
+                return;
+            }
+
+            if (syncBandwidthSelectionFromSnapshot(getCurrentBandwidthSlot(), getCurrentBandwidthDirection(current))) {
+                return;
+            }
+
+            if (bandwidthSelectionDirty) {
                 return;
             }
 
@@ -6143,6 +6148,7 @@
             bandwidthValueSelection = getSelectedBandwidthValue();
             await applyWirelessSetting('set_bandwidth', {
                 slot: bandwidthSlotValue,
+                direction: getCurrentBandwidthDirection(),
                 bandwidth: bandwidthValueSelection,
             }, {
                 useResultMessage: true,
@@ -6191,7 +6197,7 @@
             latestWirelessSnapshot = snapshot;
             syncBandwidthSelectionFromSnapshot(
                 bandwidthSlotValue ?? wirelessRuntimeCurrent?.current_slot ?? 0,
-                bandwidthDirectionValue,
+                getCurrentBandwidthDirection(wirelessRuntimeCurrent),
                 snapshot.connections,
             );
             setText('general-role', snapshot.general.role);
@@ -6363,6 +6369,7 @@
                 const currentUser = getCurrentSignalUser();
 
                 syncRfSignalUserSelectValue(selectedUser);
+                updateMcsControlsState();
 
                 if (selectedUser === currentUser) {
                     return;

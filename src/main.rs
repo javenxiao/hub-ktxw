@@ -46,8 +46,8 @@ const REMOTE_RUNTIME_REFRESH_INTERVAL_SECS: u64 = 2;
 const LOCAL_RUNTIME_REFRESH_INTERVAL_SECS: u64 = 2;
 const MAX_REBOOT_DELAY_SECONDS: u32 = (30 * 24 * 60 * 60) + (24 * 60 * 60) + (60 * 60) + 60;
 const SCHEDULED_REBOOT_TRIGGER_DELAY_MS: u32 = 0;
-const CHANNEL_EFFECT_RETRY_ATTEMPTS: usize = 8;
-const CHANNEL_EFFECT_RETRY_INTERVAL_MS: u64 = 500;
+const WIRELESS_SETTING_EFFECT_RETRY_ATTEMPTS: usize = 8;
+const WIRELESS_SETTING_EFFECT_RETRY_INTERVAL_MS: u64 = 500;
 
 fn set_default_env_var(key: &str, value: &str) {
     let should_set = std::env::var(key)
@@ -279,6 +279,7 @@ struct WirelessRuntimeView {
     current_slot: Option<u8>,
     current_mcs_direction: String,
     current_mcs_auto: Option<bool>,
+    configured_mcs_value: Option<u8>,
     current_mcs_value: Option<u8>,
     current_mcs_label: String,
     current_mcs_throughput_kbps: Option<u32>,
@@ -404,6 +405,7 @@ struct ConnectionStatus {
     bandwidth: String,
     mcs: String,
     antenna_mode: String,
+    block_length_bytes: String,
     throughput: String,
     link_state: String,
     pair_state: String,
@@ -699,19 +701,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Baseband SDK not available; runtime controls require real hardware mode".to_string(),
         ),
     };
-    let initial = match (baseband.as_ref(), baseband_health.runtime.status_snapshot.as_ref()) {
-        (Some(_), Some(status)) => {
-            build_hardware_snapshot(
-                0,
-                status,
-                None,
-                None,
-                DEFAULT_AP_PLOT_SAMPLE_POINTS,
-                initial_runtime.current.as_ref(),
-                None,
-            )
+    let initial = match baseband.as_ref() {
+        Some(baseband) => {
+            let initial_status = baseband
+                .get_status_snapshot()
+                .ok()
+                .or_else(|| baseband_health.runtime.status_snapshot.clone());
+
+            match initial_status.as_ref() {
+                Some(status) => {
+                    let peer_status = fetch_peer_plot_status(baseband, status);
+                    build_hardware_snapshot(
+                        0,
+                        status,
+                        peer_status.as_ref(),
+                        None,
+                        DEFAULT_AP_PLOT_SAMPLE_POINTS,
+                        initial_runtime.current.as_ref(),
+                        None,
+                    )
+                }
+                None => build_simulated_snapshot(0, DEFAULT_AP_PLOT_SAMPLE_POINTS),
+            }
         }
-        _ => build_simulated_snapshot(0, DEFAULT_AP_PLOT_SAMPLE_POINTS),
+        None => build_simulated_snapshot(0, DEFAULT_AP_PLOT_SAMPLE_POINTS),
     };
     let initial_plot_refresh_interval_ms = default_plot_refresh_interval_ms(&baseband_health);
     let initial_plot_sample_count = DEFAULT_AP_PLOT_SAMPLE_POINTS;
@@ -1023,6 +1036,10 @@ fn resolve_runtime_role(current: &WirelessRuntimeView) -> Option<u8> {
     }
 }
 
+fn resolve_runtime_signal_user(current: Option<&WirelessRuntimeView>) -> Option<u8> {
+    current.and_then(|runtime| runtime.selected_signal_user.or(runtime.detected_signal_user))
+}
+
 fn async_runtime_control_unsupported_message(
     current: Option<&WirelessRuntimeView>,
     action: &str,
@@ -1080,6 +1097,19 @@ async fn apply_wireless_setting(
     let runtime_view_for_constraints = cached_current
         .clone()
         .or_else(|| current.as_ref().map(build_wireless_runtime_view));
+    let runtime_role = current
+        .as_ref()
+        .map(|details| details.status.role)
+        .or_else(|| runtime_view_for_constraints.as_ref().and_then(resolve_runtime_role));
+    let default_signal_user = request
+        .user
+        .or_else(|| {
+            current
+                .as_ref()
+                .and_then(|details| details.status.active_user.or(details.status.detected_active_user))
+        })
+        .or_else(|| resolve_runtime_signal_user(runtime_view_for_constraints.as_ref()))
+        .unwrap_or(ffi::BB_USER_0 as u8);
 
     if let Some(message) = async_runtime_control_unsupported_message(
         runtime_view_for_constraints.as_ref(),
@@ -1201,11 +1231,17 @@ async fn apply_wireless_setting(
         "set_mcs" => request
             .mcs
             .ok_or_else(|| "mcs is required".to_string())
-            .and_then(|mcs| baseband.set_mcs(request.slot.unwrap_or(default_slot), mcs)),
+            .and_then(|mcs| {
+                if runtime_role == Some(ffi::BB_ROLE_DEV) {
+                    baseband.set_tx_mcs(request.slot.unwrap_or(default_slot), mcs)
+                } else {
+                    baseband.set_mcs(request.slot.unwrap_or(default_slot), mcs)
+                }
+            }),
         "set_tx_mcs" => request
             .mcs
             .ok_or_else(|| "mcs is required".to_string())
-            .and_then(|mcs| baseband.set_tx_mcs(request.user.unwrap_or(0), mcs)),
+            .and_then(|mcs| baseband.set_tx_mcs(request.user.unwrap_or(default_signal_user), mcs)),
         "set_power_mode" => request
             .power_mode
             .as_deref()
@@ -1242,7 +1278,10 @@ async fn apply_wireless_setting(
             .bandwidth
             .ok_or_else(|| "bandwidth is required".to_string())
             .and_then(|bandwidth| {
-                let dir = parse_direction(request.direction.as_deref().unwrap_or("rx"))?;
+                let dir = requested_bandwidth_direction_code(
+                    request.direction.as_deref(),
+                    runtime_view_for_constraints.as_ref(),
+                )?;
                 baseband.set_bandwidth(request.slot.unwrap_or(default_slot), dir, bandwidth)
             }),
         "set_role" => request
@@ -2351,6 +2390,7 @@ fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> Wireless
             bandwidth: "10 MHz".to_string(),
             mcs: "MCS 10".to_string(),
             antenna_mode: "2T2R_STBC".to_string(),
+            block_length_bytes: "3".to_string(),
             throughput: "15372 kbps".to_string(),
             link_state: if sequence % 3 == 0 {
                 "Connect".to_string()
@@ -2496,6 +2536,7 @@ fn build_hardware_snapshot(
             primary_phy,
         ));
     }
+    apply_configured_connection_mcs(status, runtime_current, &mut connections);
     let chart_target = status.mac_hex.clone();
     let chart_series = if render_chart_series {
         {
@@ -2514,10 +2555,23 @@ fn build_hardware_snapshot(
                 plot_sample_count,
                 &chart_history_context,
             );
-            if let Some(peer_status) = peer_status {
+            let can_use_peer_status = peer_status
+                .map(|peer| status_has_plot_signal(peer) && should_render_chart_series(peer))
+                .unwrap_or(false);
+
+            if let Some(peer_status) = peer_status.filter(|_| can_use_peer_status) {
                 append_status_chart_series(
                     &mut chart_series,
                     peer_status,
+                    previous,
+                    plot_sample_count,
+                    &chart_history_context,
+                );
+            } else if let Some(peer_link) = resolve_peer_plot_link(status) {
+                append_peer_link_chart_series(
+                    &mut chart_series,
+                    status,
+                    peer_link,
                     previous,
                     plot_sample_count,
                     &chart_history_context,
@@ -2577,6 +2631,7 @@ fn build_link_connection_status(
             .unwrap_or_else(|| "Unavailable".to_string()),
         mcs: format_connection_mcs(status, link, phy, direction),
         antenna_mode: format_connection_antenna_mode(phy, direction).to_string(),
+        block_length_bytes: format_connection_block_length(phy),
         throughput: format_connection_throughput(runtime_current, false, direction),
         link_state: format_link_state(link.state).to_string(),
         pair_state: format_pair_state(link),
@@ -2691,6 +2746,32 @@ fn status_has_plot_signal(status: &BbGetStatusSummary) -> bool {
         || status.signal_aux.is_some()
 }
 
+fn link_has_plot_signal(link: &ffi::BbLinkStatusSummary) -> bool {
+    link.snr_db.is_some()
+        || link.ldpc_err.is_some()
+        || link.ldpc_num.is_some()
+        || link.signal_main.is_some()
+        || link.signal_aux.is_some()
+        || link.rx_mcs.is_some()
+}
+
+fn resolve_peer_plot_link(status: &BbGetStatusSummary) -> Option<&ffi::BbLinkStatusSummary> {
+    let local_mac = normalize_device_mac(&status.mac_hex);
+
+    status.links.iter().find(|link| {
+        if link.state == 0 {
+            return false;
+        }
+
+        let Some(peer_mac) = link.peer_mac_hex.as_ref() else {
+            return false;
+        };
+
+        let normalized_peer = normalize_device_mac(peer_mac);
+        !normalized_peer.is_empty() && normalized_peer != local_mac
+    })
+}
+
 fn append_status_chart_series(
     chart_series: &mut Vec<ChartSeries>,
     status: &BbGetStatusSummary,
@@ -2773,6 +2854,100 @@ fn append_status_chart_series(
         None,
         previous,
         fch_lock_value,
+        plot_sample_count,
+        history_context_key,
+    ));
+}
+
+fn append_peer_link_chart_series(
+    chart_series: &mut Vec<ChartSeries>,
+    status: &BbGetStatusSummary,
+    link: &ffi::BbLinkStatusSummary,
+    previous: Option<&WirelessSnapshot>,
+    plot_sample_count: usize,
+    history_context_key: &str,
+) {
+    if !link_has_plot_signal(link) {
+        return;
+    }
+
+    let peer_role = match status.role {
+        ffi::BB_ROLE_AP => ffi::BB_ROLE_DEV,
+        ffi::BB_ROLE_DEV => ffi::BB_ROLE_AP,
+        _ => return,
+    };
+
+    let key_prefix = chart_series_key_prefix_for_role(peer_role);
+    let plot_prefix = plot_series_prefix_for_role(peer_role);
+    let fallback_fch_lock = Some(if link.pair_state || link.state != 0 { 1 } else { 0 });
+
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_snr", key_prefix),
+        &plot_series_label(plot_prefix, "snr"),
+        "",
+        None,
+        previous,
+        link.snr_db,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_ldpc_err", key_prefix),
+        &plot_series_label(plot_prefix, "ldpc_err"),
+        "",
+        None,
+        previous,
+        link.ldpc_err,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_ldpc_num", key_prefix),
+        &plot_series_label(plot_prefix, "ldpc_num"),
+        "",
+        None,
+        previous,
+        link.ldpc_num,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_gain_a", key_prefix),
+        &plot_series_label(plot_prefix, "gain_a"),
+        "",
+        None,
+        previous,
+        link.signal_main,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_gain_b", key_prefix),
+        &plot_series_label(plot_prefix, "gain_b"),
+        "",
+        None,
+        previous,
+        link.signal_aux,
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_mcs_rx", key_prefix),
+        &plot_series_label(plot_prefix, "mcs_rx"),
+        "",
+        None,
+        previous,
+        link.rx_mcs.map(i32::from),
+        plot_sample_count,
+        history_context_key,
+    ));
+    chart_series.push(build_chart_series_from_source(
+        &format!("{}_fch_lock", key_prefix),
+        &plot_series_label(plot_prefix, "fch_lock"),
+        "",
+        None,
+        previous,
+        fallback_fch_lock,
         plot_sample_count,
         history_context_key,
     ));
@@ -3011,6 +3186,12 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
 
     let configured_band = build_configured_band_view(details.band_info.as_ref());
     let live_rf = build_live_rf_view(details.band_info.as_ref(), details.channel_info.as_ref());
+    let current_slot = details
+        .mcs_value
+        .as_ref()
+        .map(|info| info.slot)
+        .or_else(|| details.status.links.first().map(|link| link.slot as u8));
+    let current_connection_mcs = resolve_runtime_connection_mcs(details, current_slot);
 
     WirelessRuntimeView {
         local_mac_address: details.status.mac_hex.clone(),
@@ -3084,18 +3265,27 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
         work_channel_frequency: live_rf.channel_frequency.clone(),
         channels,
         bandwidth_auto: details.bandwidth_mode.as_ref().map(|info| info.auto_mode),
-        current_slot: details.mcs_value.as_ref().map(|info| info.slot),
-        current_mcs_direction: details
-            .mcs_value
+        current_slot,
+        current_mcs_direction: current_connection_mcs
             .as_ref()
-            .map(|info| format_direction(info.dir).to_string())
-            .unwrap_or_else(|| "Unavailable".to_string()),
+            .map(|(_, direction, _)| (*direction).to_string())
+            .unwrap_or_else(|| {
+                details
+                    .mcs_value
+                    .as_ref()
+                    .map(|info| format_direction(info.dir).to_string())
+                    .unwrap_or_else(|| "Unavailable".to_string())
+            }),
         current_mcs_auto: details.mcs_mode.as_ref().map(|info| info.auto_mode),
-        current_mcs_value: details.mcs_value.as_ref().map(|info| info.mcs),
-        current_mcs_label: details
-            .mcs_value
+        configured_mcs_value: details.mcs_value.as_ref().map(|info| info.mcs),
+        current_mcs_value: current_connection_mcs
             .as_ref()
-            .map(|info| format_mcs(info.mcs))
+            .map(|(mcs, _, _)| *mcs)
+            .or_else(|| details.mcs_value.as_ref().map(|info| info.mcs)),
+        current_mcs_label: current_connection_mcs
+            .as_ref()
+            .map(|(_, _, label)| label.clone())
+            .or_else(|| details.mcs_value.as_ref().map(|info| format_mcs(info.mcs)))
             .unwrap_or_else(|| "Unavailable".to_string()),
         current_mcs_throughput_kbps: details.mcs_value.as_ref().map(|info| info.throughput_kbps),
         current_power_user: details.current_power.as_ref().map(|info| info.user),
@@ -3111,6 +3301,68 @@ fn build_wireless_runtime_view(details: &WirelessRuntimeDetails) -> WirelessRunt
         dev_power_dbm: details.power_fallback.as_ref().and_then(|p| p.dev_power_dbm),
         warnings: details.warnings.clone(),
     }
+}
+
+fn resolve_connection_mcs_value(
+    status: &BbGetStatusSummary,
+    link: Option<&ffi::BbLinkStatusSummary>,
+    phy: Option<&ffi::BbPhyStatusSummary>,
+    direction: &str,
+) -> Option<u8> {
+    if direction.eq_ignore_ascii_case("Recv") {
+        link.and_then(|value| value.rx_mcs)
+            .or_else(|| phy.map(|value| value.mcs))
+    } else {
+        phy.map(|value| value.mcs)
+            .or_else(|| {
+                if status.active_user.or(status.detected_active_user) == Some(ffi::BB_USER_0 as u8) {
+                    status.tx_mcs
+                } else {
+                    None
+                }
+            })
+    }
+}
+
+fn resolve_runtime_connection_mcs(
+    details: &WirelessRuntimeDetails,
+    current_slot: Option<u8>,
+) -> Option<(u8, &'static str, String)> {
+    let slot = current_slot
+        .or_else(|| details.mcs_value.as_ref().map(|info| info.slot))
+        .or_else(|| details.status.links.first().map(|link| link.slot as u8))
+        .unwrap_or(0);
+    let slot_link = details
+        .status
+        .links
+        .iter()
+        .find(|link| link.slot as u8 == slot)
+        .or_else(|| details.status.links.first());
+
+    let (direction, phy) = if details.status.role == ffi::BB_ROLE_AP {
+        if let Some(phy) = details.status.slot_rx_status.as_ref() {
+            ("RX", Some(phy))
+        } else if let Some(phy) = details.status.slot_tx_status.as_ref() {
+            ("TX", Some(phy))
+        } else {
+            ("RX", None)
+        }
+    } else if let Some(phy) = details.status.slot_tx_status.as_ref() {
+        ("TX", Some(phy))
+    } else if let Some(phy) = details.status.slot_rx_status.as_ref() {
+        ("RX", Some(phy))
+    } else {
+        ("TX", None)
+    };
+
+    let connection_direction = if direction.eq_ignore_ascii_case("TX") {
+        "Send"
+    } else {
+        "Recv"
+    };
+    let mcs = resolve_connection_mcs_value(&details.status, slot_link, phy, connection_direction)?;
+
+    Some((mcs, direction, format_mcs(mcs)))
 }
 
 fn build_wireless_configuration_view(details: &WirelessConfigurationDetails) -> WirelessConfigurationView {
@@ -3522,9 +3774,18 @@ async fn refresh_runtime_from_baseband(state: &Arc<AppState>, baseband: &Arc<Bas
 
 fn wireless_setting_retry_budget(action: &str) -> Option<(usize, Duration)> {
     match action {
-        "set_channel" => Some((
-            CHANNEL_EFFECT_RETRY_ATTEMPTS,
-            Duration::from_millis(CHANNEL_EFFECT_RETRY_INTERVAL_MS),
+        "set_channel_mode"
+        | "set_channel"
+        | "set_power_mode"
+        | "set_power"
+        | "set_power_auto"
+        | "set_mcs_mode"
+        | "set_mcs"
+        | "set_tx_mcs"
+        | "set_bandwidth_mode"
+        | "set_bandwidth" => Some((
+            WIRELESS_SETTING_EFFECT_RETRY_ATTEMPTS,
+            Duration::from_millis(WIRELESS_SETTING_EFFECT_RETRY_INTERVAL_MS),
         )),
         _ => None,
     }
@@ -3563,9 +3824,33 @@ async fn refresh_runtime_until_effect_or_timeout(
     current
 }
 
-fn requested_bandwidth_direction_label(direction: Option<&str>) -> &'static str {
+fn requested_bandwidth_direction_value(
+    direction: Option<&str>,
+    current: Option<&WirelessRuntimeView>,
+) -> &'static str {
     match direction.map(|value| value.trim().to_ascii_lowercase()) {
-        Some(value) if value == "tx" || value == "0" => "Send",
+        Some(value) if value == "tx" || value == "0" => "tx",
+        Some(value) if value == "rx" || value == "1" => "rx",
+        _ => match current.and_then(resolve_runtime_role) {
+            Some(ffi::BB_ROLE_DEV) => "tx",
+            _ => "rx",
+        },
+    }
+}
+
+fn requested_bandwidth_direction_code(
+    direction: Option<&str>,
+    current: Option<&WirelessRuntimeView>,
+) -> Result<u8, String> {
+    parse_direction(requested_bandwidth_direction_value(direction, current))
+}
+
+fn requested_bandwidth_direction_label(
+    direction: Option<&str>,
+    current: Option<&WirelessRuntimeView>,
+) -> &'static str {
+    match requested_bandwidth_direction_value(direction, current) {
+        "tx" => "Send",
         _ => "Recv",
     }
 }
@@ -3581,7 +3866,7 @@ fn format_requested_bandwidth_target(
     request: &WirelessSettingRequest,
     current: Option<&WirelessRuntimeView>,
 ) -> String {
-    let direction = requested_bandwidth_direction_label(request.direction.as_deref());
+    let direction = requested_bandwidth_direction_label(request.direction.as_deref(), current);
 
     match requested_bandwidth_slot(request, current) {
         Some(slot) => format!("SLOT {} / {}", slot, direction),
@@ -3628,13 +3913,25 @@ fn requested_bandwidth_connection<'a>(
 ) -> Option<&'a ConnectionStatus> {
     let snapshot = snapshot?;
     let slot = requested_bandwidth_slot(request, current)?;
-    let direction = requested_bandwidth_direction_label(request.direction.as_deref());
+    let direction = requested_bandwidth_direction_label(request.direction.as_deref(), current);
     let link_slot = format!("SLOT {}", slot);
 
     snapshot.connections.iter().find(|connection| {
         connection.link_slot.eq_ignore_ascii_case(&link_slot)
             && connection.direction.eq_ignore_ascii_case(direction)
     })
+}
+
+fn manual_mcs_matches_runtime(requested: u8, current: &WirelessRuntimeView) -> bool {
+    let reported_mcs = current.configured_mcs_value.or(current.current_mcs_value);
+
+    if reported_mcs == Some(requested) {
+        return true;
+    }
+
+    current.operation_mode.to_ascii_uppercase().contains("AP")
+        && matches!(requested, 1 | 2)
+        && reported_mcs == Some(0)
 }
 
 fn verify_wireless_setting_effect(
@@ -3672,6 +3969,22 @@ fn verify_wireless_setting_effect(
             }
             Ok(())
         }
+        "set_power_mode" => {
+            if let Some(requested) = request.power_mode.as_deref() {
+                let requested_mode = parse_power_mode(requested)?;
+                let requested_label = format_power_mode(requested_mode);
+
+                if !current.current_power_mode.eq_ignore_ascii_case(requested_label) {
+                    return Err(format!(
+                        "Power mode did not take effect on {}. Requested {}, but runtime still reports {}.",
+                        current.operation_mode,
+                        requested_label,
+                        current.current_power_mode
+                    ));
+                }
+            }
+            Ok(())
+        }
         "set_power_auto" => {
             if let Some(requested) = request.auto_mode {
                 verify_bool_effect(
@@ -3704,27 +4017,33 @@ fn verify_wireless_setting_effect(
                     requested,
                     current.current_mcs_auto,
                     &current.operation_mode,
-                    Some("Use the AP side to control MCS in the current runtime."),
+                    None,
                 )?;
             }
             Ok(())
         }
-        "set_mcs" => {
+        "set_mcs" | "set_tx_mcs" => {
             if let Some(requested) = request.mcs {
-                if current.current_mcs_value != Some(requested) {
-                    let mut message = format!(
+                if !manual_mcs_matches_runtime(requested, current) {
+                    return Err(format!(
                         "Manual MCS did not take effect on {}. Requested {}, but runtime still reports {}.",
                         current.operation_mode,
                         requested,
-                        format_optional_u8(current.current_mcs_value)
-                    );
-
-                    if current.operation_mode.to_ascii_uppercase().contains("DEV") {
-                        message.push_str(" Use the AP side to control MCS in the current runtime.");
-                    }
-
-                    return Err(message);
+                        format_optional_u8(current.configured_mcs_value.or(current.current_mcs_value))
+                    ));
                 }
+            }
+            Ok(())
+        }
+        "set_bandwidth_mode" => {
+            if let Some(requested) = request.auto_mode {
+                verify_bool_effect(
+                    "Bandwidth auto mode",
+                    requested,
+                    current.bandwidth_auto,
+                    &current.operation_mode,
+                    None,
+                )?;
             }
             Ok(())
         }
@@ -4119,6 +4438,65 @@ fn format_connection_slot_type(slot: usize) -> String {
     format!("slot{}", slot)
 }
 
+fn resolve_configured_mcs_connection_slot_type(
+    status: &BbGetStatusSummary,
+    runtime_current: &WirelessRuntimeView,
+) -> String {
+    let slot = runtime_current
+        .current_slot
+        .or_else(|| status.links.first().map(|link| link.slot as u8))
+        .unwrap_or(0);
+    format_connection_slot_type(slot as usize)
+}
+
+fn resolve_configured_mcs_connection_direction(
+    _status: &BbGetStatusSummary,
+    runtime_current: &WirelessRuntimeView,
+) -> &'static str {
+    if runtime_current.current_mcs_direction.eq_ignore_ascii_case("TX") {
+        "Send"
+    } else {
+        "Recv"
+    }
+}
+
+fn apply_configured_connection_mcs(
+    status: &BbGetStatusSummary,
+    runtime_current: Option<&WirelessRuntimeView>,
+    connections: &mut [ConnectionStatus],
+) {
+    let Some(runtime_current) = runtime_current else {
+        return;
+    };
+
+    if runtime_current.current_mcs_auto == Some(true) || runtime_current.current_mcs_value.is_none() {
+        return;
+    }
+
+    let configured_label = runtime_current.current_mcs_label.trim();
+    if configured_label.is_empty() || configured_label.eq_ignore_ascii_case("unavailable") {
+        return;
+    }
+
+    let target_slot_type = resolve_configured_mcs_connection_slot_type(status, runtime_current);
+    let target_direction = resolve_configured_mcs_connection_direction(status, runtime_current);
+    let target_index = connections
+        .iter()
+        .position(|connection| {
+            connection.slot_type.eq_ignore_ascii_case(&target_slot_type)
+                && connection.direction.eq_ignore_ascii_case(target_direction)
+        })
+        .or_else(|| {
+            connections.iter().position(|connection| {
+                connection.slot_type.eq_ignore_ascii_case(&target_slot_type)
+            })
+        });
+
+    if let Some(index) = target_index {
+        connections[index].mcs = runtime_current.current_mcs_label.clone();
+    }
+}
+
 fn format_connection_duration(status: &BbGetStatusSummary, slot: usize) -> String {
     let _ = (status, slot);
     "Unavailable".to_string()
@@ -4211,6 +4589,7 @@ fn build_br_connection_status(
         } else {
             format_rx_rf_mode(phy.rf_mode).to_string()
         },
+        block_length_bytes: format_connection_block_length(Some(phy)),
         throughput: format_connection_throughput(runtime_current, true, direction),
         link_state,
         pair_state,
@@ -4237,23 +4616,9 @@ fn format_connection_mcs(
     phy: Option<&ffi::BbPhyStatusSummary>,
     direction: &str,
 ) -> String {
-    if direction.eq_ignore_ascii_case("Recv") {
-        link.rx_mcs
-            .or_else(|| phy.map(|value| value.mcs))
-            .map(format_mcs)
-            .unwrap_or_else(|| "Unavailable".to_string())
-    } else {
-        phy.map(|value| value.mcs)
-            .or_else(|| {
-                if status.active_user.or(status.detected_active_user) == Some(ffi::BB_USER_0 as u8) {
-                    status.tx_mcs
-                } else {
-                    None
-                }
-            })
-            .map(format_mcs)
-            .unwrap_or_else(|| "Unavailable".to_string())
-    }
+    resolve_connection_mcs_value(status, Some(link), phy, direction)
+        .map(format_mcs)
+        .unwrap_or_else(|| "Unavailable".to_string())
 }
 
 fn format_connection_antenna_mode(
@@ -4269,6 +4634,11 @@ fn format_connection_antenna_mode(
     } else {
         format_rx_rf_mode(phy.rf_mode)
     }
+}
+
+fn format_connection_block_length(phy: Option<&ffi::BbPhyStatusSummary>) -> String {
+    phy.map(|value| value.tintlv_len.to_string())
+        .unwrap_or_else(|| "Unavailable".to_string())
 }
 
 fn format_connection_throughput(
@@ -4323,16 +4693,32 @@ fn normalize_device_mac(value: &str) -> String {
 }
 
 fn resolve_connected_peer_mac(status: &BbGetStatusSummary) -> Option<String> {
+    let local_mac = normalize_device_mac(&status.mac_hex);
+    let is_peer_mac = |value: &str| {
+        let normalized = normalize_device_mac(value);
+        !normalized.is_empty() && normalized != local_mac
+    };
+
     status
         .links
         .iter()
         .find(|link| link.state != 0)
         .and_then(|link| link.peer_mac_hex.clone())
+        .filter(|value| is_peer_mac(value))
+        .or_else(|| {
+            status
+                .links
+                .iter()
+                .filter(|link| link.state != 0)
+                .filter_map(|link| link.peer_mac_hex.clone())
+                .find(|value| is_peer_mac(value))
+        })
         .or_else(|| {
             status
                 .link_state
                 .filter(|state| *state != 0)
                 .and_then(|_| status.peer_mac_hex.clone())
+                .filter(|value| is_peer_mac(value))
         })
 }
 
@@ -4731,6 +5117,7 @@ mod tests {
             current_slot: None,
             current_mcs_direction: "Unavailable".to_string(),
             current_mcs_auto: None,
+            configured_mcs_value: None,
             current_mcs_value: None,
             current_mcs_label: "Unavailable".to_string(),
             current_mcs_throughput_kbps: None,
@@ -4755,6 +5142,7 @@ mod tests {
             bandwidth: bandwidth.to_string(),
             mcs: "Unavailable".to_string(),
             antenna_mode: "Unavailable".to_string(),
+            block_length_bytes: "Unavailable".to_string(),
             throughput: "Unavailable".to_string(),
             link_state: "Stable".to_string(),
             pair_state: "Stable".to_string(),
@@ -4969,6 +5357,311 @@ mod tests {
 
         assert!(error.contains("status snapshot still reports SLOT 0 / Recv / 1.25 MHz"));
         assert!(error.contains("Requested SLOT 0 / Recv / 5 MHz"));
+    }
+
+    #[test]
+    fn verify_wireless_setting_effect_uses_dev_default_send_direction_when_direction_missing() {
+        let mut runtime = sample_runtime_view("A5:54:F6:2C", None);
+        runtime.operation_mode = "DEV (Async)".to_string();
+        runtime.current_slot = Some(0);
+        runtime.bandwidth_code = Some(1);
+
+        let request = WirelessSettingRequest {
+            action: "set_bandwidth".to_string(),
+            auto_mode: None,
+            band_bitmap: None,
+            device_mac: None,
+            pair_start: None,
+            pair_target_mac: None,
+            slot: Some(0),
+            user: None,
+            target_band: None,
+            direction: None,
+            channel_index: None,
+            mcs: None,
+            power_dbm: None,
+            bandwidth: Some(0),
+            power_mode: None,
+            role: None,
+        };
+        let snapshot = sample_snapshot(vec![sample_connection_status("SLOT 0", "Send", "1.25 MHz")]);
+
+        assert!(verify_wireless_setting_effect(&request, Some(&runtime), Some(&snapshot)).is_ok());
+
+        let message = format_wireless_setting_success_message(&request, Some(&runtime), Some(&snapshot));
+        assert_eq!(
+            message,
+            "Bandwidth applied on DEV (Async). Status snapshot reports SLOT 0 / Send / 1.25 MHz."
+        );
+    }
+
+    #[test]
+    fn verify_wireless_setting_effect_reports_power_mode_mismatch() {
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.current_power_mode = "Open Loop".to_string();
+
+        let request = WirelessSettingRequest {
+            action: "set_power_mode".to_string(),
+            auto_mode: None,
+            band_bitmap: None,
+            device_mac: None,
+            pair_start: None,
+            pair_target_mac: None,
+            slot: None,
+            user: None,
+            target_band: None,
+            direction: None,
+            channel_index: None,
+            mcs: None,
+            power_dbm: None,
+            bandwidth: None,
+            power_mode: Some("closeloop".to_string()),
+            role: None,
+        };
+
+        let error = verify_wireless_setting_effect(&request, Some(&runtime), None).unwrap_err();
+
+        assert!(error.contains("Power mode did not take effect"));
+        assert!(error.contains("Requested Closed Loop"));
+        assert!(error.contains("runtime still reports Open Loop"));
+    }
+
+    #[test]
+    fn verify_wireless_setting_effect_reports_bandwidth_mode_mismatch() {
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.bandwidth_auto = Some(true);
+
+        let request = WirelessSettingRequest {
+            action: "set_bandwidth_mode".to_string(),
+            auto_mode: Some(false),
+            band_bitmap: None,
+            device_mac: None,
+            pair_start: None,
+            pair_target_mac: None,
+            slot: Some(0),
+            user: None,
+            target_band: None,
+            direction: None,
+            channel_index: None,
+            mcs: None,
+            power_dbm: None,
+            bandwidth: None,
+            power_mode: None,
+            role: None,
+        };
+
+        let error = verify_wireless_setting_effect(&request, Some(&runtime), None).unwrap_err();
+
+        assert!(error.contains("Bandwidth auto mode did not take effect"));
+        assert!(error.contains("Requested manual"));
+        assert!(error.contains("runtime still reports auto"));
+    }
+
+    #[test]
+    fn verify_wireless_setting_effect_accepts_pc_tool_ap_bpsk_alias_values() {
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.configured_mcs_value = Some(0);
+        runtime.current_mcs_value = Some(0);
+        runtime.current_mcs_label = format_mcs(0);
+
+        for requested in [1_u8, 2_u8] {
+            let request = WirelessSettingRequest {
+                action: "set_mcs".to_string(),
+                auto_mode: None,
+                band_bitmap: None,
+                device_mac: None,
+                pair_start: None,
+                pair_target_mac: None,
+                slot: Some(0),
+                user: None,
+                target_band: None,
+                direction: None,
+                channel_index: None,
+                mcs: Some(requested),
+                power_dbm: None,
+                bandwidth: None,
+                power_mode: None,
+                role: None,
+            };
+
+            assert!(verify_wireless_setting_effect(&request, Some(&runtime), None).is_ok());
+        }
+    }
+
+    #[test]
+    fn verify_wireless_setting_effect_uses_configured_mcs_value_not_display_value() {
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.configured_mcs_value = Some(5);
+        runtime.current_mcs_value = Some(3);
+        runtime.current_mcs_label = format_mcs(3);
+
+        let request = WirelessSettingRequest {
+            action: "set_mcs".to_string(),
+            auto_mode: None,
+            band_bitmap: None,
+            device_mac: None,
+            pair_start: None,
+            pair_target_mac: None,
+            slot: Some(0),
+            user: None,
+            target_band: None,
+            direction: None,
+            channel_index: None,
+            mcs: Some(5),
+            power_dbm: None,
+            bandwidth: None,
+            power_mode: None,
+            role: None,
+        };
+
+        assert!(verify_wireless_setting_effect(&request, Some(&runtime), None).is_ok());
+    }
+
+    #[test]
+    fn wireless_setting_retry_budget_retries_runtime_rf_updates() {
+        assert!(wireless_setting_retry_budget("set_power_mode").is_some());
+        assert!(wireless_setting_retry_budget("set_power").is_some());
+        assert!(wireless_setting_retry_budget("set_power_auto").is_some());
+        assert!(wireless_setting_retry_budget("set_mcs_mode").is_some());
+        assert!(wireless_setting_retry_budget("set_mcs").is_some());
+        assert!(wireless_setting_retry_budget("set_tx_mcs").is_some());
+        assert!(wireless_setting_retry_budget("set_bandwidth_mode").is_some());
+        assert!(wireless_setting_retry_budget("set_bandwidth").is_some());
+        assert!(wireless_setting_retry_budget("set_channel_mode").is_some());
+        assert!(wireless_setting_retry_budget("set_channel").is_some());
+    }
+
+    #[test]
+    fn apply_configured_connection_mcs_overrides_ap_slot_recv_row() {
+        let mut status = sample_dev_status(Some("A5:54:F6:2C"));
+        status.role = ffi::BB_ROLE_AP;
+        status.active_user = Some(ffi::BB_USER_0 as u8);
+
+        let mut runtime = sample_runtime_view("A5:68:B0:33", None);
+        runtime.operation_mode = "AP (Async)".to_string();
+        runtime.selected_signal_user = Some(ffi::BB_USER_0 as u8);
+        runtime.current_slot = Some(0);
+        runtime.current_mcs_auto = Some(false);
+        runtime.current_mcs_value = Some(10);
+        runtime.current_mcs_label = format_mcs(10);
+
+        let mut connections = vec![
+            sample_connection_status("BR", "Send", "10 MHz"),
+            sample_connection_status("slot0", "Recv", "10 MHz"),
+        ];
+        connections[0].mcs = format_mcs(5);
+        connections[1].mcs = format_mcs(6);
+
+        apply_configured_connection_mcs(&status, Some(&runtime), &mut connections);
+
+        assert_eq!(connections[0].mcs, format_mcs(5));
+        assert_eq!(connections[1].mcs, format_mcs(10));
+    }
+
+    #[test]
+    fn apply_configured_connection_mcs_keeps_dev_slot_send_row_for_br_user() {
+        let mut status = sample_dev_status(Some("A5:68:B0:33"));
+        status.active_user = Some(ffi::BB_USER_BR_CS as u8);
+
+        let mut runtime = sample_runtime_view("A5:54:F6:2C", None);
+        runtime.operation_mode = "DEV (Async)".to_string();
+        runtime.selected_signal_user = Some(ffi::BB_USER_BR_CS as u8);
+        runtime.current_slot = Some(0);
+        runtime.current_mcs_auto = Some(false);
+        runtime.current_mcs_value = Some(9);
+        runtime.current_mcs_label = format_mcs(9);
+
+        let mut connections = vec![
+            sample_connection_status("BR", "Recv", "2.5 MHz"),
+            sample_connection_status("slot0", "Send", "10 MHz"),
+        ];
+        connections[0].mcs = "Unknown MCS (25)".to_string();
+        connections[1].mcs = format_mcs(10);
+
+        apply_configured_connection_mcs(&status, Some(&runtime), &mut connections);
+
+        assert_eq!(connections[0].mcs, "Unknown MCS (25)");
+        assert_eq!(connections[1].mcs, format_mcs(9));
+    }
+
+    #[test]
+    fn apply_configured_connection_mcs_overrides_dev_slot_send_row_for_slot_user() {
+        let mut status = sample_dev_status(Some("A5:68:B0:33"));
+        status.active_user = Some(ffi::BB_USER_0 as u8);
+
+        let mut runtime = sample_runtime_view("A5:54:F6:2C", None);
+        runtime.operation_mode = "DEV (Async)".to_string();
+        runtime.selected_signal_user = Some(ffi::BB_USER_0 as u8);
+        runtime.current_slot = Some(0);
+        runtime.current_mcs_auto = Some(false);
+        runtime.current_mcs_value = Some(8);
+        runtime.current_mcs_label = format_mcs(8);
+
+        let mut connections = vec![
+            sample_connection_status("BR", "Recv", "2.5 MHz"),
+            sample_connection_status("slot0", "Send", "10 MHz"),
+        ];
+        connections[0].mcs = "Unknown MCS (25)".to_string();
+        connections[1].mcs = format_mcs(10);
+
+        apply_configured_connection_mcs(&status, Some(&runtime), &mut connections);
+
+        assert_eq!(connections[0].mcs, "Unknown MCS (25)");
+        assert_eq!(connections[1].mcs, format_mcs(8));
+    }
+
+    #[test]
+    fn build_wireless_runtime_view_uses_ap_connection_info_mcs_value() {
+        let mut details = sample_runtime_details(ffi::BB_ROLE_AP, 1, false);
+        details.status.active_user = Some(ffi::BB_USER_0 as u8);
+        details.status.slot_rx_status = Some(sample_phy_status(2407200, 1, 6, 2));
+        details.status.slot_tx_status = Some(sample_phy_status(2477000, 3, 10, 1));
+        details.status.links[0].rx_mcs = Some(8);
+        details.mcs_mode = Some(ffi::BbMcsModeSummary {
+            slot: 0,
+            auto_mode: false,
+        });
+        details.mcs_value = Some(ffi::BbMcsValueSummary {
+            slot: 0,
+            dir: ffi::BB_DIR_RX,
+            mcs: 6,
+            throughput_kbps: 1234,
+        });
+
+        let runtime = build_wireless_runtime_view(&details);
+
+        assert_eq!(runtime.current_mcs_direction, "RX");
+        assert_eq!(runtime.current_mcs_value, Some(8));
+        assert_eq!(runtime.current_mcs_label, format_mcs(8));
+    }
+
+    #[test]
+    fn build_wireless_runtime_view_uses_dev_connection_info_mcs_value() {
+        let mut details = sample_runtime_details(ffi::BB_ROLE_DEV, 1, false);
+        details.status.active_user = Some(ffi::BB_USER_0 as u8);
+        details.status.slot_tx_status = Some(sample_phy_status(2477000, 3, 10, 1));
+        details.status.slot_rx_status = Some(sample_phy_status(2407200, 1, 6, 2));
+        details.status.tx_mcs = Some(5);
+        details.mcs_mode = Some(ffi::BbMcsModeSummary {
+            slot: 0,
+            auto_mode: false,
+        });
+        details.mcs_value = Some(ffi::BbMcsValueSummary {
+            slot: 0,
+            dir: ffi::BB_DIR_TX,
+            mcs: 6,
+            throughput_kbps: 1234,
+        });
+
+        let runtime = build_wireless_runtime_view(&details);
+
+        assert_eq!(runtime.current_mcs_direction, "TX");
+        assert_eq!(runtime.current_mcs_value, Some(10));
+        assert_eq!(runtime.current_mcs_label, format_mcs(10));
     }
 
     #[test]
