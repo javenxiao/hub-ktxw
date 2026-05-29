@@ -301,6 +301,104 @@ taskkill /F /IM wireless_status_server.exe
 - FFI 定义目前是手工维护的
 - 每次 SDK 头文件变动后，都要同步检查 src/ffi.rs
 
+## 7.x 第三方头文件 / 库文件更新流程
+
+当需要替换 `third_party/include` 或 `third_party/lib` 中的 SDK 版本时，请按下面流程执行，避免出现 ABI 失配。
+
+### 7.x.1 替换文件
+
+1. 将新版头文件覆盖到 `third_party/include/`（bb_api.h、bb_config.h、prj_rpc.h 等）。
+2. 将新版库文件覆盖到 `third_party/lib/`（ar8030_client.dll、ar8030_client.lib 等）。
+
+### 7.x.2 再生 FFI 绑定（推荐）
+
+如果已安装 LLVM（并配置了 RSHTML_LIBCLANG_PATH），建议先再生绑定作为对照基准：
+
+```powershell
+$env:RSHTML_REGENERATE_BINDINGS = '1'
+$env:RSHTML_BINDINGS_OUT = 'target/generated/ffi_bindings.rs'
+cargo check
+```
+
+或直接使用封装脚本：
+
+```powershell
+.\scripts\regenerate-ffi-bindings.ps1
+```
+
+### 7.x.3 编译检查
+
+```powershell
+cargo check
+```
+
+### 7.x.4 运行 ABI 守卫测试
+
+```powershell
+cargo test abi_ -- --nocapture
+```
+
+这组测试会锁定：
+- PRJ 命令字常量
+- PRJ dispatch 缓冲区大小、payload 偏移
+- 核心 SDK 常量（BB_MAC_LEN、BB_DATA_USER_MAX、BB_SLOT_MAX 等）
+- BB ioctl 请求宏
+- 固件升级 chunk 与 data 尺寸约束
+
+如果头文件更新引入了 ABI 破坏，这些测试会第一时间失败。
+
+### 7.x.5 运行全部测试
+
+```powershell
+cargo test
+```
+
+### 7.x.6 手工核对关键结构体
+
+对比 `target/generated/ffi_bindings.rs` 与 `src/ffi.rs` 中以下结构：
+- `bb_get_status_out_t` 及其依赖
+- `bb_get_sys_info_out_t`
+- `bb_dev_info_t`
+- `bb_set_hot_upgrade_write_in_t`
+- `prj_rpc_hdr_t`（如已通过 PACK 展开）
+- 所有 `BB_SET_*`、`BB_GET_*` 常量
+
+确保手写 FFI 与生成绑定在 size、align、字段偏移上一致。
+
+### 7.x.7 功能验证
+
+启动服务并在实际硬件上验证受影响的页面功能正常工作。
+
+### 7.x.8 SDK 升级流水线（一键执行）
+
+如果已经从 SDK 提供方获得了新版头文件和库文件（按 `include/` 和 `lib/` 目录组织），可以直接执行流水线脚本：
+
+```powershell
+.\scripts\sdk-upgrade-pipeline.ps1 -SourceDir "C:\path\to\new-sdk"
+```
+
+如果再生绑定需要指定 libclang 路径：
+
+```powershell
+.\scripts\sdk-upgrade-pipeline.ps1 -SourceDir "C:\path\to\new-sdk" -LibclangPath "C:\Program Files\LLVM\bin"
+```
+
+脚本会自动完成：复制文件 → 记录哈希 → 再生绑定 → cargo check → ABI 测试 → 生成变更摘要 → 追加版本清单。
+
+### 7.x.9 CI 门禁
+
+当 `third_party/include/**` 或 `third_party/lib/**` 在 PR 中发生变化时，`.github/workflows/sdk-guard.yml` 会自动触发：
+- LLVM 安装
+- FFI 绑定再生
+- ABI 守卫测试
+- 全部单元测试
+
+漏同步 SDK 头文件的 PR 会被 CI 阻断合并。
+
+### 7.x.10 版本清单
+
+每次 SDK 升级后，流水线脚本会自动向 `docs/sdk-version-manifest.md` 追加一条记录，包含来源、各文件 SHA256 和兼容性备注。出现线上问题时可直接根据该清单定位对应 SDK 版本。
+
 ## 8. 新增字段的标准步骤
 
 这是开发人员最常见的工作场景。无论是 System 页面还是 Wireless 页面，建议都按同一套流程执行。

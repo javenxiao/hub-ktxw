@@ -1,0 +1,42 @@
+name: SDK ABI Guard
+
+on:
+  pull_request:
+    paths:
+      - 'third_party/include/**'
+      - 'third_party/lib/**'
+      - '.github/workflows/sdk-guard.yml'
+  push:
+    branches: [master, main]
+    paths:
+      - 'third_party/include/**'
+      - 'third_party/lib/**'
+
+jobs:
+  sdk-guard:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup LLVM (for bindgen)
+        run: |
+          choco install llvm -y
+
+      - name: Regenerate FFI bindings
+        run: |
+          $env:RSHTML_REGENERATE_BINDINGS = '1'
+          $env:RSHTML_BINDINGS_OUT = 'target/generated/ffi_bindings.rs'
+          $env:RSHTML_LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'
+          cargo check
+        shell: pwsh
+
+      - name: Run ABI guard tests
+        run: cargo test abi_ -- --test-threads=1 --nocapture
+        shell: pwsh
+
+      - name: Run full test suite
+        run: cargo test -- --test-threads=1
+        shell: pwsh
