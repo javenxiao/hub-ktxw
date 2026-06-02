@@ -1388,41 +1388,6 @@ impl BasebandApi {
         Ok(status)
     }
 
-    fn remote_role_for_mac(&mut self, target_mac: &str) -> Result<Option<u8>, String> {
-        let normalized_target = Self::normalize_mac(target_mac);
-        if normalized_target.is_empty() {
-            return Ok(None);
-        }
-
-        if let Some(role) = self.cached_role_for_mac(&normalized_target) {
-            return Ok(Some(role));
-        }
-
-        let status = self.remote_status_for_mac(target_mac)?;
-        let role = match status.role {
-            ffi::BB_ROLE_AP | ffi::BB_ROLE_DEV => Some(status.role),
-            _ => None,
-        };
-        if let Some(role_code) = role {
-            self.cache_role_for_mac(&normalized_target, role_code);
-        }
-        Ok(role)
-    }
-
-    fn remote_sync_role_for_mac(&mut self, target_mac: &str) -> Result<Option<(u8, u8)>, String> {
-        let normalized_target = Self::normalize_mac(target_mac);
-        if normalized_target.is_empty() {
-            return Ok(None);
-        }
-
-        if let Some(sync_role) = self.cached_sync_role_for_mac(&normalized_target) {
-            return Ok(Some(sync_role));
-        }
-
-        let status = self.remote_status_for_mac(target_mac)?;
-        Ok(Some((status.sync_mode, status.sync_master)))
-    }
-
     fn resolve_pair_version_peer(
         &self,
         status: &ffi::BbGetStatusSummary,
@@ -1925,7 +1890,7 @@ impl BasebandApi {
         };
         let slot = status.links.first().map(|link| link.slot as u8).unwrap_or(0);
         let user = resolve_plot_user(&status);
-        let mut available_devices = if self.host_handle != 0 {
+        let available_devices = if self.host_handle != 0 {
             if let Err(err) = self.refresh_host_devices_cache() {
                 warnings.push(format!(
                     "Failed to refresh remote device list; using cached devices: {}",
@@ -1957,33 +1922,6 @@ impl BasebandApi {
         } else {
             Vec::new()
         };
-
-        if self.host_handle != 0 {
-            for device in &mut available_devices {
-                if device.role.is_none() {
-                    let resolved_role = match self.remote_role_for_mac(&device.mac_address) {
-                        Ok(value) => value,
-                        Err(_) => None,
-                    };
-
-                    if let Some(role) = resolved_role {
-                        device.role = Some(role);
-                        device.role_label = match role {
-                            ffi::BB_ROLE_AP => "AP".to_string(),
-                            ffi::BB_ROLE_DEV => "DEV".to_string(),
-                            _ => device.role_label.clone(),
-                        };
-                    }
-                }
-
-                if device.sync_mode.is_none() || device.sync_master.is_none() {
-                    if let Ok(Some((sync_mode, sync_master))) = self.remote_sync_role_for_mac(&device.mac_address) {
-                        device.sync_mode = Some(sync_mode);
-                        device.sync_master = Some(sync_master);
-                    }
-                }
-            }
-        }
 
         let system_info = match self.read_system_info_for_active_device() {
             Ok(value) => Some(value),
@@ -2139,11 +2077,7 @@ impl BasebandApi {
         let mut devices = self.host_devices_cache.borrow().clone();
         for device in &mut devices {
             let normalized_mac = Self::normalize_mac(&device.mac_address);
-            let resolved_role = self
-                .cached_role_for_mac(&normalized_mac)
-                .or_else(|| self.remote_role_for_mac(&device.mac_address).ok().flatten());
-
-            if let Some(role) = resolved_role {
+            if let Some(role) = self.cached_role_for_mac(&normalized_mac) {
                 device.role = Some(role);
                 device.role_label = match role {
                     ffi::BB_ROLE_AP => "AP".to_string(),
@@ -2152,10 +2086,10 @@ impl BasebandApi {
                 };
             }
 
-            if let Some((sync_mode, sync_master)) = self
-                .cached_sync_role_for_mac(&normalized_mac)
-                .or_else(|| self.remote_sync_role_for_mac(&device.mac_address).ok().flatten())
-            {
+            // Do not probe peer status here. Runtime/device-list refresh happens in
+            // the Active Device switch readback path, and extra remote get_status
+            // calls on non-active devices make the page appear hung.
+            if let Some((sync_mode, sync_master)) = self.cached_sync_role_for_mac(&normalized_mac) {
                 device.sync_mode = Some(sync_mode);
                 device.sync_master = Some(sync_master);
             }
@@ -3506,38 +3440,59 @@ impl BasebandManager {
 
         let mgr = Arc::clone(self);
         std::thread::spawn(move || {
-            // 将进度追踪器注入 BasebandApi
-            {
-                let mut api = mgr.lock_api("start_upgrade_background progress setup");
-                api.upgrade_progress = Some(Arc::clone(&progress));
-            }
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // 将进度追踪器注入 BasebandApi
+                {
+                    let mut api = mgr.lock_api("start_upgrade_background progress setup");
+                    api.upgrade_progress = Some(Arc::clone(&progress));
+                }
 
-            let (result, board_write_elapsed_ms) = {
-                let mut api = mgr.lock_api("start_upgrade_background upgrade_firmware");
-                api.upgrade_board_write_started_at = Some(Instant::now());
-                let result = api.upgrade_firmware(&firmware);
-                let board_write_elapsed_ms = api.current_upgrade_board_write_elapsed_ms();
-                api.upgrade_board_write_started_at = None;
-                (result, board_write_elapsed_ms)
-            };
+                let (result, board_write_elapsed_ms) = {
+                    let mut api = mgr.lock_api("start_upgrade_background upgrade_firmware");
+                    api.upgrade_board_write_started_at = Some(Instant::now());
+                    let result = api.upgrade_firmware(&firmware);
+                    let board_write_elapsed_ms = api.current_upgrade_board_write_elapsed_ms();
+                    api.upgrade_board_write_started_at = None;
+                    (result, board_write_elapsed_ms)
+                };
 
-            // 更新最终进度
-            if let Ok(mut s) = progress.lock() {
-                s.board_write_elapsed_ms = board_write_elapsed_ms;
-                match &result {
-                    Ok(r) => {
-                        s.state = "done".to_string();
-                        s.percent = 100.0;
-                        s.crc32 = Some(format!("{:08X}", r.crc32));
-                        s.step_label = "Upgrade complete".to_string();
-                        s.message = "Firmware written and verified. Device is rebooting...".to_string();
-                    }
-                    Err(e) => {
-                        s.state = "error".to_string();
-                        s.message = format!("Upgrade failed: {}", e);
+                // 更新最终进度
+                if let Ok(mut s) = progress.lock() {
+                    s.board_write_elapsed_ms = board_write_elapsed_ms;
+                    match &result {
+                        Ok(r) => {
+                            s.state = "done".to_string();
+                            s.percent = 100.0;
+                            s.crc32 = Some(format!("{:08X}", r.crc32));
+                            s.step_label = "Upgrade complete".to_string();
+                            s.message = "Firmware written and verified. Device is rebooting...".to_string();
+                        }
+                        Err(e) => {
+                            s.state = "error".to_string();
+                            s.message = format!("Upgrade failed: {}", e);
+                        }
                     }
                 }
-            }
+
+                result
+            }));
+
+            let result = match result {
+                Ok(r) => r,
+                Err(panic_payload) => {
+                    let msg = panic_payload
+                        .downcast_ref::<&str>()
+                        .copied()
+                        .or_else(|| panic_payload.downcast_ref::<String>().map(|s| s.as_str()))
+                        .unwrap_or("unknown panic");
+                    tracing::error!("Background firmware upgrade panicked: {}", msg);
+                    if let Ok(mut s) = progress.lock() {
+                        s.state = "error".to_string();
+                        s.message = format!("Internal server error during upgrade: {}", msg);
+                    }
+                    Err(format!("Background upgrade panicked: {}", msg))
+                }
+            };
 
             // 清理 BasebandApi 中的进度引用
             if let Ok(mut api) = mgr.api.lock() {

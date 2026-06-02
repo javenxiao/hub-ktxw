@@ -239,7 +239,7 @@ extern "C" {
 #define BB_CONFIG_ENABLE_AUTO_BAND_POLICY   1           /**<@note 使能频段自适应功能*/
 #define BB_CONFIG_ENABLE_LNA_POLICY         0           /**<@note 使能LNA策略*/
 #define BB_CONFIG_ENABLE_1V1_POWER_SAVE     0           /**<@note 使能1V1模式的节能机制*/
-#define BB_CONFIG_ENABLE_RF_POLICY          0           /**<@note 使能B路开关自适应策略*/
+#define BB_CONFIG_ENABLE_RF_POLICY          1           /**<@note 使能B路开关自适应策略*/
 #define BB_CONFIG_DEMO_STREAM               0           // TBD
 #define BB_CONFIG_OLD_PLOT_MODE             0           // TBD
 #define BB_CONFIG_FRAME_CROPPING            1           /**<@note 1VN模式下，动态删除或增加csma帧结构*/
@@ -255,6 +255,9 @@ extern "C" {
 #define BB_CONFIG_FREQ_PWR_LIMIT            1           /**<@note 频率功率限制*/
 #define BB_CONFIG_ENABLE_XDS_UDF            (0)         /**<@note 透传模块UDF匹配功能*/
 #define BB_CONFIG_XDS_UDF_LENGTH            (32)        /**<@note 透传模块UDF最大匹配长度*/
+#define BB_CONFIG_FS_PRO                    1           /**<@note 扫频pro版*/
+#define BB_CONFIG_ANT_PROBE                 0           /**<@note 1V1多天线探测*/
+#define BB_CONFIG_MBLK_PKT_DEBUG            1           /**<@note 使能MBLK调试*/
 
 #define BB_CONFIG_INCLUDE_D_CMD             1           /**<@note 包括d、p命令（显示地址空间）*/
 #define BB_CONFIG_INCLUDE_M_CMD             1           /**<@note 包括m命令（修改地址空间）*/
@@ -276,7 +279,7 @@ extern "C" {
 #define BB_CONFIG_INCLUDE_BR_CMD            0           /**<@note 包括br命令 （基带软件restart命令，实验室阶段）*/
 #define BB_CONFIG_INCLUDE_CI_CMD            1           /**<@note 包括chipid命令*/
 #define BB_CONFIG_INCLUDE_RT_CMD            1           /**<@note 包括rt命令*/
-#define BB_CONFIG_SO_BUFFER_CNT             16          /**<@note rpc缓冲块数量*/
+#define BB_CONFIG_SO_BUFFER_CNT             10          /**<@note rpc缓冲块数量*/
 #define BB_PORT_DEFAULT                     (50000)     /**<@note host默认端口号*/
 /** @} */  /** <!-- ==== Macro Definition end ==== */
 

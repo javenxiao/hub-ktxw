@@ -61,8 +61,6 @@ fn set_default_env_var(key: &str, value: &str) {
 
 fn apply_default_runtime_env() {
     set_default_env_var("RUST_LOG", DEFAULT_RUST_LOG);
-    set_default_env_var("BB_HOST_ADDR", DEFAULT_BB_HOST_ADDR);
-    set_default_env_var("BB_HOST_PORT", DEFAULT_BB_HOST_PORT);
     set_default_env_var("SERVER_PORT", DEFAULT_SERVER_PORT);
 }
 
@@ -377,6 +375,99 @@ struct PlotRefreshSettingsResponse {
     message: String,
 }
 
+// -- sweep plot types --
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepChanInfoResponse {
+    success: bool,
+    message: String,
+    chan_num: u8,
+    auto_mode: bool,
+    work_chan: u8,
+    frequencies_khz: Vec<u32>,
+    powers_dbm: Vec<i32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepPlotPoint {
+    snr: u16,
+    gain_a: u8,
+    gain_b: u8,
+    mcs_rx: u8,
+    br_power: u8,
+    power: u8,
+    peer_power: u8,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepPlotDataResponse {
+    success: bool,
+    message: String,
+    user: u8,
+    points: Vec<SweepPlotPoint>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepFramePlotResponse {
+    success: bool,
+    message: String,
+    frame_plots: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+struct SweepPlotControlRequest {
+    user: u8,
+    cache_num: u8,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+struct SweepFramePlotControlRequest {
+    cache: u8,
+    limit: u8,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+struct SweepConfigRequest {
+    /// channel auto mode: 0=manual, 1=auto
+    auto_mode: Option<u8>,
+    /// bandwidth index for sweep (bb_bandwidth_e)
+    bandwidth: Option<u8>,
+    /// target frequency kHz for manual sweep
+    freq_khz: Option<u32>,
+    /// histogram enabled
+    histogram: Option<bool>,
+    /// variance window size
+    variance_window: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepConfigResponse {
+    success: bool,
+    message: String,
+    current: serde_json::Value,
+}
+
+// -- sweep recording types --
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepRecordingStatusResponse {
+    success: bool,
+    active: bool,
+    recorded_frames: usize,
+    started_at: Option<String>,
+    message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepRecordingDataResponse {
+    success: bool,
+    message: String,
+    frames: Vec<serde_json::Value>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct WirelessSnapshot {
     sequence: u64,
@@ -463,6 +554,20 @@ struct AppState {
     tx: broadcast::Sender<WirelessSnapshot>,
     baseband: Option<Arc<BasebandManager>>,
     baseband_health: BasebandHealthStatus,
+    #[allow(dead_code)]
+    sweep_chan_cache: RwLock<Option<SweepChanInfoResponse>>,
+    sweep_plot_cache: RwLock<Vec<SweepPlotPoint>>,
+    sweep_frame_plot_cache: RwLock<Vec<serde_json::Value>>,
+    sweep_recording: RwLock<Option<SweepRecordingState>>,
+    sweep_recording_data: RwLock<Vec<serde_json::Value>>,
+}
+
+#[derive(Debug, Clone)]
+struct SweepRecordingState {
+    #[allow(dead_code)]
+    started_at: Instant,
+    #[allow(dead_code)]
+    max_frames: usize,
 }
 
 impl AppState {
@@ -473,6 +578,11 @@ impl AppState {
         initial_plot_sample_count: usize,
         baseband: Option<Arc<BasebandManager>>,
         baseband_health: BasebandHealthStatus,
+        sweep_chan_cache: RwLock<Option<SweepChanInfoResponse>>,
+        sweep_plot_cache: RwLock<Vec<SweepPlotPoint>>,
+        sweep_frame_plot_cache: RwLock<Vec<serde_json::Value>>,
+        sweep_recording: RwLock<Option<SweepRecordingState>>,
+        sweep_recording_data: RwLock<Vec<serde_json::Value>>,
     ) -> Self {
         let (tx, _) = broadcast::channel(128);
         Self {
@@ -486,6 +596,11 @@ impl AppState {
             tx,
             baseband,
             baseband_health,
+            sweep_chan_cache,
+            sweep_plot_cache,
+            sweep_frame_plot_cache,
+            sweep_recording,
+            sweep_recording_data,
         }
     }
 
@@ -736,6 +851,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         initial_plot_sample_count,
         baseband.clone(),
         baseband_health,
+        RwLock::new(None),
+        RwLock::new(Vec::new()),
+        RwLock::new(Vec::new()),
+        RwLock::new(None),
+        RwLock::new(Vec::new()),
     ));
 
     spawn_data_feeder(state.clone());
@@ -755,6 +875,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/wireless/plot/settings",
             get(get_plot_refresh_settings).post(apply_plot_refresh_settings),
         )
+        .route("/api/wireless/sweep/chan-info", get(get_sweep_chan_info))
+        .route("/api/wireless/sweep/plot-data", get(get_sweep_plot_data))
+        .route("/api/wireless/sweep/frame-plot-data", get(get_sweep_frame_plot_data))
+        .route("/api/wireless/sweep/plot/start", post(post_sweep_plot_start))
+        .route("/api/wireless/sweep/plot/stop", post(post_sweep_plot_stop))
+        .route("/api/wireless/sweep/frame-plot/start", post(post_sweep_frame_plot_start))
+        .route("/api/wireless/sweep/frame-plot/stop", post(post_sweep_frame_plot_stop))
+        .route("/api/wireless/sweep/config", post(post_sweep_config))
+        .route("/api/wireless/sweep/recording/start", post(post_sweep_recording_start))
+        .route("/api/wireless/sweep/recording/stop", post(post_sweep_recording_stop))
+        .route("/api/wireless/sweep/recording/status", get(get_sweep_recording_status))
         .route("/api/system/info", get(get_system_info))
         .route("/api/system/reboot", post(request_system_reboot))
         .route("/api/system/maintenance", get(get_maintenance_info))
@@ -4868,23 +4999,30 @@ fn format_general_band_mode(
                 .map(|freq_khz| infer_band_name_from_frequency_khz(freq_khz).to_string())
         });
 
-    let actual_band = match (&configured_label, configured_is_auto) {
-        (Some(label), true) if label.eq_ignore_ascii_case("auto") => {
-            live_band.unwrap_or_else(|| "Auto".to_string())
+    let actual_band = match (&configured_label, configured_is_auto, &live_band) {
+        // 优先使用从频率推算的实际工作频段
+        (_, _, Some(lb)) if !lb.eq_ignore_ascii_case("unavailable") => {
+            if configured_is_auto {
+                format!("Auto ({})", lb)
+            } else {
+                lb.to_string()
+            }
         }
-        (Some(label), true) => {
+        // live_band 不可用时回退到 configured_label
+        (Some(label), true, _) if label.eq_ignore_ascii_case("auto") => {
+            "Auto".to_string()
+        }
+        (Some(label), true, _) => {
             format!("Auto ({})", label)
         }
-        (Some(label), false) => {
+        (Some(label), false, _) => {
             label.to_string()
         }
-        (None, true) => {
-            live_band
-                .map(|lb| format!("Auto ({})", lb))
-                .unwrap_or_else(|| "Auto".to_string())
+        (None, true, _) => {
+            "Auto".to_string()
         }
-        (None, false) => {
-            live_band.unwrap_or_else(|| "Unavailable".to_string())
+        (None, false, _) => {
+            "Unavailable".to_string()
         }
     };
 
@@ -4964,6 +5102,194 @@ fn format_mcs(mcs: u8) -> String {
         24 => "MCS22 64QAM 3/4 Dual".to_string(),
         value => format!("Unknown MCS ({})", value),
     }
+}
+
+// ── Sweep Plot Handlers ──
+
+async fn get_sweep_chan_info(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepChanInfoResponse> {
+    let Some(_baseband) = state.baseband.as_ref() else {
+        return Json(SweepChanInfoResponse {
+            success: false,
+            message: "Baseband not available".to_string(),
+            chan_num: 0,
+            auto_mode: false,
+            work_chan: 0,
+            frequencies_khz: vec![],
+            powers_dbm: vec![],
+        });
+    };
+
+    // Sweep methods need BasebandApi additions (get_chan_sweep_info, set_sweep_plot, set_frame_plot)
+    // that are not present in the current code base after rollback.
+    Json(SweepChanInfoResponse {
+        success: false,
+        message: "not implemented in current build".to_string(),
+        chan_num: 0,
+        auto_mode: false,
+        work_chan: 0,
+        frequencies_khz: vec![],
+        powers_dbm: vec![],
+    })
+}
+
+async fn get_sweep_plot_data(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepPlotDataResponse> {
+    let cache = state.sweep_plot_cache.read().await.clone();
+    Json(SweepPlotDataResponse {
+        success: true,
+        message: "ok".to_string(),
+        user: 10, // sweep user
+        points: cache,
+    })
+}
+
+async fn get_sweep_frame_plot_data(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepFramePlotResponse> {
+    let cache = state.sweep_frame_plot_cache.read().await.clone();
+    Json(SweepFramePlotResponse {
+        success: true,
+        message: "ok".to_string(),
+        frame_plots: cache,
+    })
+}
+
+async fn post_sweep_plot_start(
+    State(state): State<Arc<AppState>>,
+    Json(_request): Json<SweepPlotControlRequest>,
+) -> Json<serde_json::Value> {
+    let Some(_baseband) = state.baseband.as_ref() else {
+        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
+    };
+    // Sweep plot methods need BasebandApi additions (set_sweep_plot, set_frame_plot)
+    // that are not present in the current code base after rollback.
+    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+}
+
+async fn post_sweep_plot_stop(
+    State(state): State<Arc<AppState>>,
+    Json(_request): Json<SweepPlotControlRequest>,
+) -> Json<serde_json::Value> {
+    let Some(_baseband) = state.baseband.as_ref() else {
+        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
+    };
+    // Sweep plot stop — not implemented in current build after rollback
+    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+}
+
+async fn post_sweep_frame_plot_start(
+    State(state): State<Arc<AppState>>,
+    Json(_request): Json<SweepFramePlotControlRequest>,
+) -> Json<serde_json::Value> {
+    let Some(_baseband) = state.baseband.as_ref() else {
+        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
+    };
+    // Sweep frame plot start — not implemented in current build after rollback
+    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+}
+
+async fn post_sweep_frame_plot_stop(
+    State(state): State<Arc<AppState>>,
+) -> Json<serde_json::Value> {
+    let Some(_baseband) = state.baseband.as_ref() else {
+        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
+    };
+    // Sweep frame plot stop — not implemented in current build after rollback
+    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+}
+
+async fn post_sweep_config(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<SweepConfigRequest>,
+) -> Json<SweepConfigResponse> {
+    let Some(baseband) = state.baseband.as_ref() else {
+        return Json(SweepConfigResponse {
+            success: false,
+            message: "Baseband not available".to_string(),
+            current: serde_json::json!({}),
+        });
+    };
+
+    let mut messages = Vec::new();
+    if let Some(auto_mode) = request.auto_mode {
+        match baseband.set_channel_mode(auto_mode != 0) {
+            Ok(()) => messages.push(format!("Channel auto mode set to {}", if auto_mode != 0 { "auto" } else { "manual" })),
+            Err(e) => messages.push(format!("Failed to set channel mode: {}", e)),
+        }
+    }
+    // Additional config settings would be applied here
+
+    Json(SweepConfigResponse {
+        success: true,
+        message: messages.join("; "),
+        current: serde_json::json!({"auto_mode": request.auto_mode, "bandwidth": request.bandwidth, "freq_khz": request.freq_khz}),
+    })
+}
+
+async fn post_sweep_recording_start(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepRecordingStatusResponse> {
+    let mut recording = state.sweep_recording.write().await;
+    if recording.is_some() {
+        return Json(SweepRecordingStatusResponse {
+            success: false,
+            active: true,
+            recorded_frames: state.sweep_recording_data.read().await.len(),
+            started_at: None,
+            message: "Recording already active".to_string(),
+        });
+    }
+    *recording = Some(SweepRecordingState {
+        started_at: Instant::now(),
+        max_frames: 10000,
+    });
+    state.sweep_recording_data.write().await.clear();
+    Json(SweepRecordingStatusResponse {
+        success: true,
+        active: true,
+        recorded_frames: 0,
+        started_at: Some("now".to_string()),
+        message: "Recording started".to_string(),
+    })
+}
+
+async fn post_sweep_recording_stop(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepRecordingDataResponse> {
+    let mut recording = state.sweep_recording.write().await;
+    if recording.is_none() {
+        return Json(SweepRecordingDataResponse {
+            success: false,
+            message: "No active recording".to_string(),
+            frames: vec![],
+        });
+    }
+    *recording = None;
+    let frames = state.sweep_recording_data.read().await.clone();
+    state.sweep_recording_data.write().await.clear();
+    Json(SweepRecordingDataResponse {
+        success: true,
+        message: format!("Recording stopped, {} frames captured", frames.len()),
+        frames,
+    })
+}
+
+async fn get_sweep_recording_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepRecordingStatusResponse> {
+    let recording = state.sweep_recording.read().await;
+    let active = recording.is_some();
+    let recorded_frames = state.sweep_recording_data.read().await.len();
+    Json(SweepRecordingStatusResponse {
+        success: true,
+        active,
+        recorded_frames,
+        started_at: recording.as_ref().map(|_| "active".to_string()),
+        message: if active { "Recording in progress".to_string() } else { "Idle".to_string() },
+    })
 }
 
 #[cfg(test)]

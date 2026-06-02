@@ -20,6 +20,8 @@ extern "C" {
 #define PACK(...) __VA_ARGS__
 #elif defined(_MSC_VER)
 #define PACK(__Decl__) __pragma(pack(push, 1)) __Decl__ __pragma(pack(pop))
+#elif defined(__MINGW32__) || defined(__MINGW64__)
+#define PACK(__Decl__) __Decl__ __attribute__ ((gcc_struct, __packed__))
 #else // GCC
 #define PACK(__Decl__) __Decl__ __attribute__ ((packed))
 #endif
@@ -46,6 +48,7 @@ extern "C" {
 #define BB_SOCK_FLAG_TROC           (1 << 2)                    /**<@attention 指示socket当基带连接时清空TX buffer中的历史数据（TX buffer reset on connect），仅芯片侧支持*/
 #define BB_SOCK_FLAG_DATAGRAM       (1 << 3)                    /**<@attention 指示socket传输为数据包模式，仅host driver侧支持*/
 #define BB_SOCK_FLAG_SBUS           (1 << 4)                    /**<@attention 指示socket为SBUS模式，即先清除发送队列再写入数据，以防止历史数据堆积，芯片侧支持且要求整包写入*/
+#define BB_SOCK_FLAG_ENCRYPT        (1 << 5)                    /**<@attention 指示socket为加密模式*/
 
 // chan cfg flags
 #define BB_CHAN_HOP_AUTO            (1 << 0)                    /**<@note 指示使能信道自适应的bit位标志*/
@@ -180,6 +183,11 @@ extern "C" {
 #define BB_SET_FREQ_POWER_OFFSET            BB_REQUEST(BB_REQ_SET, 36)  /**<@note 设置频率折线功率补偿配置*/
 #define BB_SET_FREQ_POWER_LIMIT             BB_REQUEST(BB_REQ_SET, 37)  /**<@note 设置频率折线功率限制配置*/
 #define BB_SET_CHANNEL_TABLE                BB_REQUEST(BB_REQ_SET, 38)  /**<@note 设置频点表*/
+#define BB_SET_FORCE_UPD_SOCKET_ENC         BB_REQUEST(BB_REQ_SET, 39)  /**<@note 强制更新socket 加密配置*/
+#define BB_SET_ANT_AP                       BB_REQUEST(BB_REQ_SET, 40)  /**<@note 设置天线*/
+#define BB_SET_ANT_DEV                      BB_REQUEST(BB_REQ_SET, 41)  /**<@note 设置天线*/
+#define BB_SET_ANT_USER                     BB_REQUEST(BB_REQ_SET, 42)  /**<@note 立刻设置天线*/
+#define BB_SET_ANT_PROBE_PARA               BB_REQUEST(BB_REQ_SET, 43)  /**<@note 设置天线探测的配置*/
 
 // 以下为调试诊断类命令字
 #define BB_SET_REG                          BB_REQUEST(BB_REQ_SET, 100) /**<@note 基带寄存器写入命令字，本类型用于调试诊断*/
@@ -200,6 +208,7 @@ extern "C" {
 #define BB_SET_PURE_SLOT                    BB_REQUEST(BB_REQ_SET, 115) /**<@note 纯图传模式，注意暂不支持退出*/
 #define BB_SET_FACTORY_POWER_OFFSET_SAVE    BB_REQUEST(BB_REQ_SET, 116) /**<@note 产测功率校准保存指令*/
 #define BB_SET_FRAME_PLOT_START             BB_REQUEST(BB_REQ_SET, 117) /**<@note 开关帧帧上报参数*/
+#define BB_SET_PT_TEST                      BB_REQUEST(BB_REQ_SET, 118) /**<@note 产测测试命令*/
 #define BB_SET_TR_SWITCH                    BB_REQUEST(BB_REQ_SET, 150) /**<@note 项目注册tr switch回调钩子*/
 
 #define BB_SET_PRJ_DISPATCH                 BB_REQUEST(BB_REQ_SET, 200) /**<@note 二级SET命令分发*/
@@ -209,6 +218,7 @@ extern "C" {
 
 // 以下为特殊控制
 #define BB_REMOTE_IOCTL_REQ                 BB_REQUEST(BB_REQ_REMOTE, 0) /**<@note 远端命令分发*/
+#define BB_REMOTE_IOCTL_REQ_EX              BB_REQUEST(BB_REQ_REMOTE, 1) /**<@note 扩展远端命令分发*/
 
 #define BB_START_REQ                        BB_REQUEST(BB_REQ_RPC_IOCTL, 0)
 #define BB_STOP_REQ                         BB_REQUEST(BB_REQ_RPC_IOCTL, 1)
@@ -379,6 +389,7 @@ typedef enum {
     BB_EVENT_BW_CHANGE,                                         /**<@note BW发生变化事件*/
     BB_EVENT_FRAME_PLOT,                                        /**<@note 帧帧上报*/
     BB_EVENT_FREQ_CHANGE,                                       /**<@note 工作频点发生变化事件*/
+    BB_EVENT_FSP,
     BB_EVENT_MAX
 } bb_event_e;
 
@@ -401,6 +412,12 @@ typedef enum {
     BB_BAND_5G,                                                 /**<@note 5G: 4000MHZ ~ 7000MHZ*/
     BB_BAND_MAX
 } bb_band_e;
+
+#if BB_CONFIG_SUBBAND_MAX_NUM > 1
+#define BB_SUBBAND_MAX BB_CONFIG_SUBBAND_MAX_NUM
+#else
+#define BB_SUBBAND_MAX BB_BAND_MAX
+#endif
 
 /**定义8030射频通道类型*/
 typedef enum {
@@ -629,8 +646,24 @@ typedef struct {
 
 /**定义项目自定义异步事件结构体*/
 typedef struct {
-    uint8_t         data[1024];                                 /**二级分发内容*/
+    uint16_t        length;                                     /**二级分发内容长度*/
+    uint8_t         data[1022];                                 /**二级分发内容*/
 } bb_event_prj_dispatch2_t;
+
+/**定义FS PRO事件结构体*/
+typedef struct {
+    uint32_t        type;                                       /**类型*/
+    uint32_t        num;                                        /**数量*/
+    uint8_t         data[768];                                  /**数据缓冲区*/
+} bb_event_fsp_t;
+
+/**定义FS PRO通知类型枚举*/
+typedef enum {
+    BB_FSP_NOTIFY_TYPE_FREQ_LIST,                            /**扫频频点列表*/
+    BB_FSP_NOTIFY_TYPE_FS_RESULT,                            /**扫频结果*/
+    BB_FSP_NOTIFY_TYPE_CANDIDATE,                            /**候选频点*/
+    BB_FSP_NOTIFY_TYPE_MAX
+} bb_fsp_notify_type_e;
 
 #define SO_USER_BASE_START 0xc0
 enum ctl_opt {
@@ -649,6 +682,8 @@ typedef enum {
     BB_SOCK_IOCTL_ECHO = SO_USER_BASE_START + sock_opt_echo,
     BB_SOCK_TX_LEN_GET,
     BB_SOCK_TX_LEN_RESET,
+    BB_SOCK_ENC_SET,
+    BB_SOCK_ENC_GET,
 
     BB_SOCK_IOCTL_MAX,
 } bb_sock_cmd_e;
@@ -659,13 +694,30 @@ typedef enum {
     BB_CB_TYPE_MAX,
 } bb_cb_type_e;
 
+/**定义socket的加密类型*/
+typedef enum {
+    BB_SOCK_ENCRYPT_MODE_DEFAULT,                               /**<@attention 默认加密模式，不使用key字段*/
+    BB_SOCK_ENCRYPT_MODE_AES128,                                /**<@attention AES128模式，key字段使用前16字节*/
+    BB_SOCK_ENCRYPT_MODE_AES256,                                /**<@attention AES256模式，key字段使用32字节*/
+    BB_SOCK_ENCRYPT_MODE_MAX,
+} bb_sock_encrypt_mode_t;
+
 /**定义数传socket创建时的自定义参数*/
 typedef struct bb_sock_opt_t {
     uint32_t tx_buf_size;                                       /**<@attention 用于指定发送buffer的大小，创建的socket具备TX属性时有效*/
     uint32_t rx_buf_size;                                       /**<@attention 用于指定接收buffer的大小，创建的socket具备RX属性时有效*/
     void*    tx_buf;                                            /**<@attention 仅芯片侧有效 由8030侧应用指定tx buffer的内存地址 20250205*/
     void*    rx_buf;                                            /**<@attention 仅芯片侧有效 由8030侧应用指定rx buffer的内存地址 20250205*/
+    uint8_t  encrypt_mode;                                      /**<@attention 创建加密通道时指定加密模式，类型为bb_sock_encrypt_mode_t*/
+    uint8_t  key[32];                                           /**<@attention 创建加密通道时指定密钥*/
 } bb_sock_opt_t;
+
+/**定义数传socket更新加密参数的自定义参数*/
+typedef struct bb_sock_upd_enc_s {
+    uint8_t  encrypt_en;                                        /**<@attention 更新加密通道是否使能加密模式*/
+    uint8_t  encrypt_mode;                                      /**<@attention 更新加密通道指定加密模式，类型为bb_sock_encrypt_mode_t*/
+    uint8_t  key[32];                                           /**<@attention 更新加密通道指定密钥*/
+} bb_sock_upd_enc_t;
 
 /**定义基本内存块*/
 typedef struct {
@@ -706,6 +758,19 @@ typedef struct {
     char     uart_dev_name[UART_NAME_LEN];
     uart_par par;
 } uart_ioctl;
+
+/**定义socket加密头部*/
+PACK(typedef struct {
+    uint8_t     magic[2];         /**<<@note 魔数: 0x80 0x30 */
+    uint8_t     ver;              /**<<@note 头部版本 */
+    uint8_t     algo;             /**<<@note 加密算法 */
+    uint8_t     mode;             /**<<@note 加密模式 */
+    uint16_t    len;              /**<<@note 负载长度(来自头部) */
+    uint8_t     iv[16];           /**<<@note AES/DES初始向量 */
+    uint16_t    hdr_crc;          /**<<@note 头部CRC校验 */
+    uint8_t     rsv[3];           /**<<@note 保留字段 */
+    uint8_t     data[0];          /**<<@note 加密负载数据 */
+}) bb_socket_encrypt_hdr_t;
 
 /**定义RPC所使用的通用设备类型*/
 typedef struct bb_dev_t        bb_dev_t;        ///<@attention 本类型由bb_dev_getlist接口返回，用于标识物理接口（USB总线、SDIO）上的8030设备
@@ -799,8 +864,9 @@ typedef struct {
 
 typedef struct {
     uint16_t        snr_diff;
-    uint8_t         rssi_diff;
-    uint8_t         keep_count;
+    uint8_t         rssi_diff : 4;
+    uint8_t         keep_count : 4;
+    uint8_t         retx;
     float           snr_db_diff;
 } bb_band_hop_item_t;
 
@@ -821,6 +887,15 @@ typedef struct {
     uint8_t         chan_num;                                   /**<@note 子频点数*/
     int32_t         offset;                                     /**<@note 子频点计算的起始偏移*/
 } bb_subchan_t;
+
+#if BB_CONFIG_SUBBAND_MAX_NUM > 1
+typedef struct {
+    char            subband_nam[BB_CONFIG_SUBBAND_MAX_NUM][8];
+    uint32_t        subband[BB_CONFIG_SUBBAND_MAX_NUM][2];
+    uint8_t         subband_num;
+    uint16_t        valid_bmp;
+} bb_subband_t;
+#endif
 
 /**定义配置命令BB_CFG_RC_POLICY的输入参数结构*/
 typedef struct {
@@ -844,6 +919,9 @@ typedef struct {
     uint32_t        chan_freq[BB_CONFIG_MAX_CHAN_NUM];          /**<@note 频点表 单位：KHz*/
     uint32_t        chan_freq_slave[BB_CONFIG_MAX_CHAN_NUM];    /**<@note 从机频点表，仅对主从AP模式有效*/
     bb_subchan_t    subchan;                                    /**<@note 子信道的配置*/
+#if BB_CONFIG_SUBBAND_MAX_NUM > 1
+    bb_subband_t    subband;                                    /**<@note 子频段的配置*/
+#endif
     bb_chan_hop_para_t hop_para;                                /**<@note 跳频条件参数*/
     bb_chan_hop_multi_para_t hop_para_multi;                    /**<@note 多套模式跳频参数*/
     bb_auto_band_para_t auto_band_para;                         /**<@note 频段自适应参数*/
@@ -1268,6 +1346,19 @@ PACK(typedef struct {
 /**定义读取命令BB_REMOTE_IOCTL_REQ的输出参数结构*/
 typedef bb_remote_ioctl_in_t bb_remote_ioctl_out_t;
 
+/**定义命令BB_REMOTE_IOCTL_REQ_EX的输入参数结构*/
+PACK(typedef struct {
+    uint8_t     side;               /* Side for remote cmd */
+    uint8_t     role;               /* role for remote cmd */
+    uint8_t     slot;               /* Slot for remote cmd */
+    uint16_t    len;                /* Length of the data */
+    uint32_t    msg_id;             /* Id of the msg(bb_ioctl) */
+    uint8_t     data[1024];
+}) bb_remote_ioctl_ex_in_t;
+
+/**定义读取命令BB_REMOTE_IOCTL_REQ_EX的输出参数结构*/
+typedef bb_remote_ioctl_ex_in_t bb_remote_ioctl_ex_out_t;
+
 /**定义读取命令BB_GET_BAND_INFO的输入输出参数*/
 typedef struct {
     char rsv[32];
@@ -1507,6 +1598,11 @@ typedef struct {
     uint8_t         enable;                                     /**<@note 使能plot与否 1：使能 0：关闭*/
     uint8_t         cache_num;                                  /**<@note 缓存多少个点后发送回调事件 不大于BB_PLOT_POINT_MAX*/
 } bb_set_plot_t;
+
+/**定义FSP事件参数结构*/
+typedef struct {
+    uint32_t sub_event_bmp:8;                                   /**<@note 子事件订阅位图（8bit） ,参考bb_fsp_notify_type_e*/
+} bb_event_fsp_param_t;
 
 /**定义设置命令BB_SET_DBG_MODE的输入参数结构*/
 typedef bb_get_dbg_mode_out_t bb_set_dbg_mode_t;                /**<@note 复用获取debug mode输出结构*/
@@ -1991,6 +2087,43 @@ typedef struct {
     uint8_t mode;                                               /**<@note mode=1为recovery mode， mode=0为正常模式 */
 } bb_get_recovery_mode_out_t;
 
+/**定义设置命令BB_SET_FORCE_UPD_SOCKET_ENC的输入参数结构*/
+typedef struct {
+    uint8_t slot;                                        /**<@note 设置的目标slot*/
+    uint8_t port;                                        /**<@note 设置的目标port*/
+    bb_sock_upd_enc_t sock_upd_enc;                      /**<@note 设置的目标加密配置*/
+} bb_set_force_upd_socket_enc_t;
+
+#define BB_PT_TEST_ITEM_NUM_MAX 32                       /**<@note 产测最大测试项*/
+typedef enum
+{
+    BB_PT_TEST_BOARD_AUTO,
+    BB_PT_TEST_BOARD_P401D_PRO,
+    BB_PT_TEST_BOARD_MAX,
+} ENUM_BB_PT_TEST_BOARD;
+
+/** P401-D PRO产测项定义 */
+typedef enum
+{
+    BB_PT_TEST_P401D_PRO_ITEM_ICC_COM,                  /**<@note 主从通信测试 */
+    BB_PT_TEST_P401D_PRO_ITEM_BB_SYNC,                  /**<@note 基带同步线连通性测试 */
+    BB_PT_TEST_P401D_PRO_ITEM_UART1,                    /**<@note Slave UART1测试 */
+    BB_PT_TEST_P401D_PRO_ITEM_UART3,                    /**<@note Slave UART3测试 */
+    BB_PT_TEST_P401D_PRO_ITEM_ETH,                      /**<@note Master eth测试 */
+    BB_PT_TEST_P401D_PRO_ITEM_RTC,                      /**<@note RTC测试 */
+    BB_PT_TEST_P401D_PRO_ITEM_MAX
+} ENUM_BB_PT_TEST_P401D_PRO_ITEM;
+
+/**定义设置命令BB_SET_PT_TEST的输入参数结构*/
+typedef struct {
+    uint8_t board;                                       /**<@note 进行产测的board类型, 定义参考ENUM_BB_PT_TEST_BOARD*/
+    uint32_t test_item_bmp;                               /**<@note 产测测试项bitmap*/
+} bb_set_pt_test_in_t;
+
+/**定义设置命令BB_SET_PT_TEST的输出参数结构*/
+typedef struct {
+    int result[BB_PT_TEST_ITEM_NUM_MAX];                 /**<@note 产测结果bitmap，0表示未测试，1表示通过，其他为错误号*/
+} bb_set_pt_test_out_t;
 /** @} */  /** <!-- ==== Structure Definition end ==== */
 
 /******************************* API Definition *********************************/
@@ -2274,6 +2407,34 @@ AR8030_API int bb_socket_ioctl_tx_len_get(int sockfd, void* ipt, int ipt_size, v
 N/A
 */
 AR8030_API int bb_socket_ioctl_tx_len_rst(int sockfd, void* ipt, int ipt_size, void* opt, int opt_size);
+
+/**
+\brief 更新socket加密相关参数
+\param[in] psoc             :   socket的id
+\param[in] ipt              :   input buffer
+\param[in] ipt_size         :   input buffer length
+\param[in] opt              :   output buffer
+\param[in] opt_size         :   output buffer length
+\retval ::= 0               :   成功
+\retval ::< 0               :   失败，其值为错误码
+\see \n
+N/A
+*/
+AR8030_API int bb_socket_ioctl_enc_set(int sockfd, void* ipt, int ipt_size, void* opt, int opt_size);
+
+/**
+\brief 获取socket加密相关参数
+\param[in] psoc             :   socket的id
+\param[in] ipt              :   input buffer
+\param[in] ipt_size         :   input buffer length
+\param[in] opt              :   output buffer
+\param[in] opt_size         :   output buffer length
+\retval ::= 0               :   成功
+\retval ::< 0               :   失败，其值为错误码
+\see \n
+N/A
+*/
+AR8030_API int bb_socket_ioctl_enc_get(int sockfd, void* ipt, int ipt_size, void* opt, int opt_size);
 
 /**
 \brief 获取API库版本号，仅host支持
