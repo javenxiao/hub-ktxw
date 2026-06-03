@@ -61,6 +61,8 @@ fn set_default_env_var(key: &str, value: &str) {
 
 fn apply_default_runtime_env() {
     set_default_env_var("RUST_LOG", DEFAULT_RUST_LOG);
+    set_default_env_var("BB_HOST_ADDR", DEFAULT_BB_HOST_ADDR);
+    set_default_env_var("BB_HOST_PORT", DEFAULT_BB_HOST_PORT);
     set_default_env_var("SERVER_PORT", DEFAULT_SERVER_PORT);
 }
 

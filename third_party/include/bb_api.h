@@ -41,6 +41,7 @@ extern "C" {
 #define BB_RC_FREQ_NUM              4
 #define BB_SOCK_INFO_NUM            8
 #define BB_REMOTE_CMD_WAIT_MAX      8                           /**<远程基带同时配置最大数量*/
+#define BB_FSP_FREQ_LIST_MAX        BB_CONFIG_MAX_CHAN_NUM      /**<FSP频率列表最大数量*/
 
 // socket option flags
 #define BB_SOCK_FLAG_RX             (1 << 0)                    /**<@attention 指示socket传输方向为接收的bit位标志*/
@@ -209,6 +210,7 @@ extern "C" {
 #define BB_SET_FACTORY_POWER_OFFSET_SAVE    BB_REQUEST(BB_REQ_SET, 116) /**<@note 产测功率校准保存指令*/
 #define BB_SET_FRAME_PLOT_START             BB_REQUEST(BB_REQ_SET, 117) /**<@note 开关帧帧上报参数*/
 #define BB_SET_PT_TEST                      BB_REQUEST(BB_REQ_SET, 118) /**<@note 产测测试命令*/
+#define BB_SET_FSP_CTRL                     BB_REQUEST(BB_REQ_SET, 119) /**<@note 设置FSP控制参数*/
 #define BB_SET_TR_SWITCH                    BB_REQUEST(BB_REQ_SET, 150) /**<@note 项目注册tr switch回调钩子*/
 
 #define BB_SET_PRJ_DISPATCH                 BB_REQUEST(BB_REQ_SET, 200) /**<@note 二级SET命令分发*/
@@ -1888,6 +1890,35 @@ typedef struct {
     uint8_t refresh;                                            /**<@note 是否刷新当前功率*/
     uint8_t rsv[28];
 } bb_set_power_range_in_t;
+
+#if (BB_CONFIG_FS_PRO == 1)
+typedef enum {
+    BB_FSP_CTRL_START = 0,
+    BB_FSP_CTRL_STOP,
+    BB_FSP_CTRL_PARAM
+} bb_fsp_ctrl_type_e;
+
+typedef enum {
+    BB_FSP_PARAM_BMP_MODE = 0,
+    BB_FSP_PARAM_BMP_FREQS,
+    BB_FSP_PARAM_BMP_BW
+} bb_fsp_param_bmp_e;
+
+typedef struct {
+    uint32_t msg_type:4;
+    uint32_t seq_id:4;
+    uint32_t len:11;
+    uint8_t data[BB_CFG_PAGE_SIZE - 4];
+} bb_set_fsp_ctrl_t;
+
+typedef struct {
+    uint32_t mode:2;
+    uint32_t freq_count:6;
+    uint32_t bw:3;
+    uint32_t param_bmp:8;
+    uint32_t freqs[BB_FSP_FREQ_LIST_MAX];
+} bb_set_fsp_param_t;
+#endif
 
 /**定义tr switch hook的参数结构*/
 typedef struct {
