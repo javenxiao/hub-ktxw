@@ -392,13 +392,14 @@ struct SweepChanInfoResponse {
 
 #[derive(Debug, Clone, Serialize)]
 struct SweepPlotPoint {
-    snr: u16,
-    gain_a: u8,
-    gain_b: u8,
-    mcs_rx: u8,
-    br_power: u8,
-    power: u8,
-    peer_power: u8,
+    sequence: u64,
+    timestamp_ms: u64,
+    target_freq_khz: u32,
+    power_dbm: i32,
+    average_dbm: f64,
+    variance: f64,
+    min_dbm: i32,
+    max_dbm: i32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -414,6 +415,12 @@ struct SweepFramePlotResponse {
     success: bool,
     message: String,
     frame_plots: Vec<serde_json::Value>,
+    /// accumulated max-hold across all frames so far
+    max_hold: Vec<i32>,
+    /// accumulated min-hold across all frames so far
+    min_hold: Vec<i32>,
+    /// running average across all frames so far
+    average: Vec<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -433,7 +440,7 @@ struct SweepFramePlotControlRequest {
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
 struct SweepConfigRequest {
-    /// channel auto mode: 0=manual, 1=auto
+    /// sweep mode: 0=manual, 1=auto
     auto_mode: Option<u8>,
     /// bandwidth index for sweep (bb_bandwidth_e)
     bandwidth: Option<u8>,
@@ -468,6 +475,33 @@ struct SweepRecordingDataResponse {
     success: bool,
     message: String,
     frames: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone)]
+struct SweepControlState {
+    running: bool,
+    auto_mode: u8,
+    bandwidth: u8,
+    target_freq_khz: Option<u32>,
+    histogram: bool,
+    variance_window: usize,
+    frequencies_khz: Vec<u32>,
+    started_at: Option<Instant>,
+}
+
+impl Default for SweepControlState {
+    fn default() -> Self {
+        Self {
+            running: false,
+            auto_mode: 1,
+            bandwidth: 4,
+            target_freq_khz: None,
+            histogram: false,
+            variance_window: 16,
+            frequencies_khz: Vec::new(),
+            started_at: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -531,6 +565,9 @@ struct RssiChart {
 
 const CONNECTION_HISTORY_POINTS: usize = 18;
 const DEFAULT_AP_PLOT_SAMPLE_POINTS: usize = 200;
+const SWEEP_FEED_INTERVAL_MS: u64 = 250;
+const SWEEP_PLOT_HISTORY_LIMIT: usize = 480;
+const SWEEP_FRAME_HISTORY_LIMIT: usize = 240;
 const RSSI_UNAVAILABLE_DBM: i32 = -127;
 const SNR_UNAVAILABLE_DB: i32 = -1;
 const REBOOT_REFRESH_QUIET_WINDOW_SECS: u64 = 15;
@@ -558,10 +595,15 @@ struct AppState {
     baseband_health: BasebandHealthStatus,
     #[allow(dead_code)]
     sweep_chan_cache: RwLock<Option<SweepChanInfoResponse>>,
+    sweep_control: RwLock<SweepControlState>,
     sweep_plot_cache: RwLock<Vec<SweepPlotPoint>>,
     sweep_frame_plot_cache: RwLock<Vec<serde_json::Value>>,
     sweep_recording: RwLock<Option<SweepRecordingState>>,
     sweep_recording_data: RwLock<Vec<serde_json::Value>>,
+    sweep_max_hold: RwLock<Vec<i32>>,
+    sweep_min_hold: RwLock<Vec<i32>>,
+    sweep_average_hold: RwLock<Vec<f64>>,
+    sweep_average_count: RwLock<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -599,10 +641,15 @@ impl AppState {
             baseband,
             baseband_health,
             sweep_chan_cache,
+            sweep_control: RwLock::new(SweepControlState::default()),
             sweep_plot_cache,
             sweep_frame_plot_cache,
             sweep_recording,
             sweep_recording_data,
+            sweep_max_hold: RwLock::new(Vec::new()),
+            sweep_min_hold: RwLock::new(Vec::new()),
+            sweep_average_hold: RwLock::new(Vec::new()),
+            sweep_average_count: RwLock::new(0),
         }
     }
 
@@ -752,6 +799,74 @@ fn clamp_plot_sample_count(value: usize) -> usize {
     value.max(10)
 }
 
+fn clamp_sweep_variance_window(value: u32) -> usize {
+    (value as usize).clamp(2, 512)
+}
+
+fn build_sweep_config_json(control: &SweepControlState) -> serde_json::Value {
+    serde_json::json!({
+        "running": control.running,
+        "auto_mode": control.auto_mode,
+        "bandwidth": control.bandwidth,
+        "freq_khz": control.target_freq_khz,
+        "histogram": control.histogram,
+        "variance_window": control.variance_window,
+        "frequencies_khz": control.frequencies_khz,
+    })
+}
+
+fn build_sweep_chan_info_response(channel_info: &ffi::BbChannelInfoSummary) -> SweepChanInfoResponse {
+    SweepChanInfoResponse {
+        success: true,
+        message: "ok".to_string(),
+        chan_num: channel_info.chan_num,
+        auto_mode: channel_info.auto_mode,
+        work_chan: channel_info.work_chan,
+        frequencies_khz: channel_info.channels.iter().map(|entry| entry.frequency_khz).collect(),
+        powers_dbm: channel_info.channels.iter().map(|entry| entry.power_dbm).collect(),
+    }
+}
+
+fn select_sweep_target_freq(control: &SweepControlState, channel_info: &ffi::BbChannelInfoSummary) -> Option<u32> {
+    control
+        .target_freq_khz
+        .or(channel_info.work_frequency_khz)
+        .or_else(|| channel_info.channels.first().map(|entry| entry.frequency_khz))
+}
+
+fn select_sweep_power_dbm(target_freq_khz: u32, channel_info: &ffi::BbChannelInfoSummary) -> Option<(u32, i32)> {
+    channel_info
+        .channels
+        .iter()
+        .min_by_key(|entry| entry.frequency_khz.abs_diff(target_freq_khz))
+        .map(|entry| (entry.frequency_khz, entry.power_dbm))
+}
+
+fn compute_sweep_stats(history: &[SweepPlotPoint], window: usize, current_power_dbm: i32) -> (f64, f64, i32, i32) {
+    let mut samples = history
+        .iter()
+        .rev()
+        .take(window.saturating_sub(1))
+        .map(|point| point.power_dbm)
+        .collect::<Vec<_>>();
+    samples.push(current_power_dbm);
+
+    let count = samples.len().max(1) as f64;
+    let sum = samples.iter().map(|value| f64::from(*value)).sum::<f64>();
+    let average = sum / count;
+    let variance = samples
+        .iter()
+        .map(|value| {
+            let delta = f64::from(*value) - average;
+            delta * delta
+        })
+        .sum::<f64>() / count;
+    let min_dbm = samples.iter().copied().min().unwrap_or(current_power_dbm);
+    let max_dbm = samples.iter().copied().max().unwrap_or(current_power_dbm);
+
+    (average, variance, min_dbm, max_dbm)
+}
+
 fn default_plot_refresh_interval_ms(baseband_health: &BasebandHealthStatus) -> u64 {
     let _ = baseband_health;
     100
@@ -861,6 +976,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     spawn_data_feeder(state.clone());
+    spawn_sweep_feeder(state.clone());
     spawn_runtime_feeder(state.clone());
 
     let app = Router::new()
@@ -2455,6 +2571,237 @@ fn spawn_data_feeder(state: Arc<AppState>) {
             }
             let _ = state.tx.send(snapshot);
             tick = tick.wrapping_add(1);
+        }
+    });
+}
+
+fn spawn_sweep_feeder(state: Arc<AppState>) {
+    tokio::spawn(async move {
+        let mut sequence = 1_u64;
+        let mut ticker = tokio::time::interval(Duration::from_millis(SWEEP_FEED_INTERVAL_MS));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut sweep_initialized = false;
+        let mut last_role: Option<u8> = None;
+
+        loop {
+            ticker.tick().await;
+
+            let control = state.sweep_control.read().await.clone();
+
+            let Some(baseband) = state.baseband.as_ref() else {
+                continue;
+            };
+
+            // Detect current role — use cached snapshot (cheap)
+            let current_role = baseband.get_status_snapshot().map(|s| s.role).ok();
+
+            // Role changed (device switch) → reset initialization and clear stale FSP cache
+            if current_role.is_some() && current_role != last_role {
+                if last_role.is_some() {
+                    info!(
+                        "Sweep feeder: active device role changed {:?} → {:?}, re-initializing",
+                        last_role, current_role
+                    );
+                    ffi::reset_fsp_cache();
+                }
+                last_role = current_role;
+                sweep_initialized = false;
+            }
+
+            // Role-aware initialization: DEV does NOT support BB_SET_FSP_CTRL — calling it (even
+            // when it fails) corrupts SDK state and causes subsequent BB_GET_CHAN_INFO to fail.
+            // Only attempt FSP setup on AP. Wait until role is known before marking initialized.
+            if !sweep_initialized {
+                match current_role {
+                    Some(ffi::BB_ROLE_DEV) => {
+                        // DEV: skip all FSP commands, use BB_GET_CHAN_INFO directly
+                        info!("Sweep feeder: DEV mode — using BB_GET_CHAN_INFO (no FSP)");
+                        sweep_initialized = true;
+                    }
+                    Some(_) => {
+                        // AP (or other): attempt FSP setup — failure is non-fatal
+                        let frequencies: Vec<u32> = if !control.frequencies_khz.is_empty() {
+                            control.frequencies_khz.clone()
+                        } else {
+                            control.target_freq_khz.into_iter().collect()
+                        };
+                        match baseband
+                            .configure_sweep(control.auto_mode, control.bandwidth, &frequencies)
+                            .and_then(|_| baseband.start_sweep())
+                        {
+                            Ok(()) => info!(
+                                "Sweep feeder: FSP initialized for AP (mode={}, bw={})",
+                                control.auto_mode, control.bandwidth
+                            ),
+                            Err(e) => warn!(
+                                "Sweep feeder: FSP init failed for AP (will use channel_info): {}",
+                                e
+                            ),
+                        }
+                        sweep_initialized = true;
+                    }
+                    None => {
+                        // Role not yet known — defer until next tick
+                    }
+                }
+            }
+
+            // AP: BB_FSP_CTRL_START is one-shot. Use callback-driven retrigger:
+            // only send next START after the previous scan completed (FSP event received).
+            // Sending every tick would interrupt in-progress scans and prevent events from firing.
+            if last_role == Some(ffi::BB_ROLE_AP) && ffi::take_fsp_retrigger_pending() {
+                if let Err(e) = baseband.trigger_fsp_scan() {
+                    if sequence % 20 == 1 {
+                        warn!("AP FSP scan retrigger failed: {}", e);
+                    }
+                }
+            }
+
+            let channel_info = match baseband.get_sweep_channel_info() {
+                Ok(value) => value,
+                Err(err) => {
+                    if sequence % 20 == 1 {
+                        warn!("Failed to refresh sweep data: {}", err);
+                    }
+                    continue;
+                }
+            };
+
+            let mut freq_list: Vec<u32> = channel_info.channels.iter().map(|entry| entry.frequency_khz).collect();
+            let mut free_run: Vec<i32> = channel_info.channels.iter().map(|entry| entry.power_dbm).collect();
+            let mut free_run_source = "channel_info";
+
+            // Use FSP cache when available (AP: populated by retriggered scans; DEV: may be empty → channel_info fallback)
+            if let Some((fsp_count, fsp_powers)) = ffi::fsp_cache_snapshot() {
+                let available = usize::min(fsp_count as usize, fsp_powers.len());
+                let aligned = usize::min(available, freq_list.len());
+                if aligned > 0 {
+                    free_run = fsp_powers
+                        .into_iter()
+                        .take(aligned)
+                        .map(i32::from)
+                        .collect();
+                    freq_list.truncate(aligned);
+                    free_run_source = "fsp";
+                }
+            }
+
+            // Diagnostic: log data source and first power value every 4 ticks (~1s)
+            if sequence % 4 == 1 {
+                let first_power = free_run.first().copied().unwrap_or(0);
+                info!(
+                    "Sweep feeder tick {}: role={:?}, source={}, freqs={}, first_power={}, fsp_callbacks={}",
+                    sequence, last_role, free_run_source, freq_list.len(), first_power,
+                    ffi::fsp_event_total()
+                );
+            }
+
+            {
+                let mut cache = state.sweep_chan_cache.write().await;
+                *cache = Some(build_sweep_chan_info_response(&channel_info));
+            }
+
+            let Some(target_freq_khz) = select_sweep_target_freq(&control, &channel_info) else {
+                continue;
+            };
+            let Some((resolved_freq_khz, power_dbm)) = select_sweep_power_dbm(target_freq_khz, &channel_info) else {
+                continue;
+            };
+
+            let existing_points = state.sweep_plot_cache.read().await.clone();
+            let (average_dbm, variance, min_dbm, max_dbm) = compute_sweep_stats(
+                &existing_points,
+                control.variance_window,
+                power_dbm,
+            );
+            let timestamp_ms = control
+                .started_at
+                .map(|started_at| started_at.elapsed().as_millis() as u64)
+                .unwrap_or(0);
+
+            let point = SweepPlotPoint {
+                sequence,
+                timestamp_ms,
+                target_freq_khz: resolved_freq_khz,
+                power_dbm,
+                average_dbm,
+                variance,
+                min_dbm,
+                max_dbm,
+            };
+
+            {
+                let mut cache = state.sweep_plot_cache.write().await;
+                cache.push(point.clone());
+                if cache.len() > SWEEP_PLOT_HISTORY_LIMIT {
+                    let overflow = cache.len() - SWEEP_PLOT_HISTORY_LIMIT;
+                    cache.drain(0..overflow);
+                }
+            }
+
+            // update global max/min/average hold accumulators
+            {
+                let mut max_hold = state.sweep_max_hold.write().await;
+                let mut min_hold = state.sweep_min_hold.write().await;
+                let mut avg_hold = state.sweep_average_hold.write().await;
+                let mut avg_count = state.sweep_average_count.write().await;
+
+                if max_hold.len() != free_run.len() {
+                    *max_hold = free_run.clone();
+                    *min_hold = free_run.clone();
+                    *avg_hold = free_run.iter().map(|&v| v as f64).collect();
+                    *avg_count = 1;
+                } else {
+                    *avg_count += 1;
+                    let n = *avg_count as f64;
+                    for i in 0..free_run.len() {
+                        let v = free_run[i];
+                        if v > max_hold[i] { max_hold[i] = v; }
+                        if v < min_hold[i] { min_hold[i] = v; }
+                        // incremental average: new_avg = old_avg + (v - old_avg) / n
+                        avg_hold[i] += (v as f64 - avg_hold[i]) / n;
+                    }
+                }
+            }
+
+            if control.running {
+                let frame = serde_json::json!({
+                    "sequence": sequence,
+                    "timestamp_ms": timestamp_ms,
+                    "target_freq_khz": resolved_freq_khz,
+                    "auto_mode": control.auto_mode,
+                    "bandwidth": control.bandwidth,
+                    "work_chan": channel_info.work_chan,
+                    "work_frequency_khz": channel_info.work_frequency_khz,
+                    "histogram_enabled": control.histogram,
+                    "variance_window": control.variance_window,
+                    "frequencies_khz": freq_list,
+                    "powers_dbm": channel_info.channels.iter().map(|entry| entry.power_dbm).collect::<Vec<_>>(),
+                    "free_run": free_run,
+                    "free_run_source": free_run_source,
+                });
+
+                {
+                    let mut frames = state.sweep_frame_plot_cache.write().await;
+                    frames.push(frame.clone());
+                    if frames.len() > SWEEP_FRAME_HISTORY_LIMIT {
+                        let overflow = frames.len() - SWEEP_FRAME_HISTORY_LIMIT;
+                        frames.drain(0..overflow);
+                    }
+                }
+
+                let recording_state = state.sweep_recording.read().await.clone();
+                if let Some(recording_state) = recording_state {
+                    let mut recording_frames = state.sweep_recording_data.write().await;
+                    recording_frames.push(frame);
+                    if recording_frames.len() > recording_state.max_frames {
+                        let overflow = recording_frames.len() - recording_state.max_frames;
+                        recording_frames.drain(0..overflow);
+                    }
+                }
+            }
+
+            sequence = sequence.wrapping_add(1);
         }
     });
 }
@@ -5111,7 +5458,11 @@ fn format_mcs(mcs: u8) -> String {
 async fn get_sweep_chan_info(
     State(state): State<Arc<AppState>>,
 ) -> Json<SweepChanInfoResponse> {
-    let Some(_baseband) = state.baseband.as_ref() else {
+    if let Some(cached) = state.sweep_chan_cache.read().await.clone() {
+        return Json(cached);
+    }
+
+    let Some(baseband) = state.baseband.as_ref() else {
         return Json(SweepChanInfoResponse {
             success: false,
             message: "Baseband not available".to_string(),
@@ -5123,17 +5474,18 @@ async fn get_sweep_chan_info(
         });
     };
 
-    // Sweep methods need BasebandApi additions (get_chan_sweep_info, set_sweep_plot, set_frame_plot)
-    // that are not present in the current code base after rollback.
-    Json(SweepChanInfoResponse {
-        success: false,
-        message: "not implemented in current build".to_string(),
-        chan_num: 0,
-        auto_mode: false,
-        work_chan: 0,
-        frequencies_khz: vec![],
-        powers_dbm: vec![],
-    })
+    match baseband.get_sweep_channel_info() {
+        Ok(channel_info) => Json(build_sweep_chan_info_response(&channel_info)),
+        Err(err) => Json(SweepChanInfoResponse {
+            success: false,
+            message: format!("Failed to read sweep channel info: {}", err),
+            chan_num: 0,
+            auto_mode: false,
+            work_chan: 0,
+            frequencies_khz: vec![],
+            powers_dbm: vec![],
+        }),
+    }
 }
 
 async fn get_sweep_plot_data(
@@ -5152,10 +5504,16 @@ async fn get_sweep_frame_plot_data(
     State(state): State<Arc<AppState>>,
 ) -> Json<SweepFramePlotResponse> {
     let cache = state.sweep_frame_plot_cache.read().await.clone();
+    let max_hold = state.sweep_max_hold.read().await.clone();
+    let min_hold = state.sweep_min_hold.read().await.clone();
+    let average = state.sweep_average_hold.read().await.clone();
     Json(SweepFramePlotResponse {
         success: true,
         message: "ok".to_string(),
         frame_plots: cache,
+        max_hold,
+        min_hold,
+        average,
     })
 }
 
@@ -5163,44 +5521,58 @@ async fn post_sweep_plot_start(
     State(state): State<Arc<AppState>>,
     Json(_request): Json<SweepPlotControlRequest>,
 ) -> Json<serde_json::Value> {
-    let Some(_baseband) = state.baseband.as_ref() else {
-        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
-    };
-    // Sweep plot methods need BasebandApi additions (set_sweep_plot, set_frame_plot)
-    // that are not present in the current code base after rollback.
-    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+    {
+        let mut sweep_control = state.sweep_control.write().await;
+        if !sweep_control.running {
+            sweep_control.running = true;
+            sweep_control.started_at = Some(Instant::now());
+            // Clear cache for fresh display
+            state.sweep_plot_cache.write().await.clear();
+            state.sweep_frame_plot_cache.write().await.clear();
+        }
+    }
+    let control_val = state.sweep_control.read().await.clone();
+    let current_config = build_sweep_config_json(&control_val);
+    Json(serde_json::json!({
+        "success": true,
+        "message": "Sweep started",
+        "current": current_config,
+    }))
 }
 
 async fn post_sweep_plot_stop(
     State(state): State<Arc<AppState>>,
     Json(_request): Json<SweepPlotControlRequest>,
 ) -> Json<serde_json::Value> {
-    let Some(_baseband) = state.baseband.as_ref() else {
-        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
-    };
-    // Sweep plot stop — not implemented in current build after rollback
-    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+    let mut control = state.sweep_control.write().await;
+    control.running = false;
+    control.started_at = None;
+    Json(serde_json::json!({
+        "success": true,
+        "message": "Sweep stopped",
+        "current": build_sweep_config_json(&control),
+    }))
 }
 
 async fn post_sweep_frame_plot_start(
     State(state): State<Arc<AppState>>,
     Json(_request): Json<SweepFramePlotControlRequest>,
 ) -> Json<serde_json::Value> {
-    let Some(_baseband) = state.baseband.as_ref() else {
-        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
-    };
-    // Sweep frame plot start — not implemented in current build after rollback
-    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+    let mut sweep_control = state.sweep_control.write().await;
+    if !sweep_control.running {
+        sweep_control.running = true;
+        sweep_control.started_at = Some(Instant::now());
+    }
+    Json(serde_json::json!({"success": true, "message": "Sweep frame capture started"}))
 }
 
 async fn post_sweep_frame_plot_stop(
     State(state): State<Arc<AppState>>,
 ) -> Json<serde_json::Value> {
-    let Some(_baseband) = state.baseband.as_ref() else {
-        return Json(serde_json::json!({"success": false, "message": "Baseband not available"}));
-    };
-    // Sweep frame plot stop — not implemented in current build after rollback
-    Json(serde_json::json!({"success": false, "message": "not implemented in current build"}))
+    let mut control = state.sweep_control.write().await;
+    control.running = false;
+    control.started_at = None;
+    Json(serde_json::json!({"success": true, "message": "Sweep frame capture stopped"}))
 }
 
 async fn post_sweep_config(
@@ -5215,20 +5587,43 @@ async fn post_sweep_config(
         });
     };
 
-    let mut messages = Vec::new();
+    let mut control = state.sweep_control.write().await;
     if let Some(auto_mode) = request.auto_mode {
-        match baseband.set_channel_mode(auto_mode != 0) {
-            Ok(()) => messages.push(format!("Channel auto mode set to {}", if auto_mode != 0 { "auto" } else { "manual" })),
-            Err(e) => messages.push(format!("Failed to set channel mode: {}", e)),
-        }
+        control.auto_mode = if auto_mode == 0 { 0 } else { 1 };
     }
-    // Additional config settings would be applied here
+    if let Some(bandwidth) = request.bandwidth {
+        control.bandwidth = bandwidth;
+    }
+    if let Some(freq_khz) = request.freq_khz {
+        control.target_freq_khz = Some(freq_khz);
+        control.frequencies_khz = vec![freq_khz];
+    } else if control.auto_mode != 0 {
+        control.target_freq_khz = None;
+        control.frequencies_khz.clear();
+    }
+    if let Some(histogram) = request.histogram {
+        control.histogram = histogram;
+    }
+    if let Some(variance_window) = request.variance_window {
+        control.variance_window = clamp_sweep_variance_window(variance_window);
+    }
 
-    Json(SweepConfigResponse {
-        success: true,
-        message: messages.join("; "),
-        current: serde_json::json!({"auto_mode": request.auto_mode, "bandwidth": request.bandwidth, "freq_khz": request.freq_khz}),
-    })
+    let apply_frequencies = control.frequencies_khz.clone();
+    let apply_result = baseband.configure_sweep(control.auto_mode, control.bandwidth, &apply_frequencies);
+    let current = build_sweep_config_json(&control);
+
+    match apply_result {
+        Ok(()) => Json(SweepConfigResponse {
+            success: true,
+            message: "Sweep configuration applied".to_string(),
+            current,
+        }),
+        Err(err) => Json(SweepConfigResponse {
+            success: false,
+            message: format!("Failed to apply sweep configuration: {}", err),
+            current,
+        }),
+    }
 }
 
 async fn post_sweep_recording_start(

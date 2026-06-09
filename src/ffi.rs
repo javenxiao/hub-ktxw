@@ -34,6 +34,9 @@ const MAX_HOST_DEVICE_COUNT: usize = 32;
 static SDK_CONSOLE_REDIRECT_LOCK: Mutex<()> = Mutex::new(());
 
 static PLOT_RAW_LDPC_FRAME_LOGGED: AtomicBool = AtomicBool::new(false);
+static FSP_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+static FSP_EVENT_TOTAL: AtomicUsize = AtomicUsize::new(0);
+static FSP_RETRIGGER_PENDING: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "windows")]
 extern "C" {
@@ -525,6 +528,132 @@ impl Default for bb_event_plot_data_t {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_event_fsp_t {
+    pub type_: u32,
+    pub num: u32,
+    pub data: [u8; 768],
+}
+
+impl Default for bb_event_fsp_t {
+    fn default() -> Self {
+        Self {
+            type_: 0,
+            num: 0,
+            data: [0; 768],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_event_fsp_param_t {
+    pub header: u32,
+}
+
+impl bb_event_fsp_param_t {
+    pub fn sub_event_bmp(&self) -> u32 {
+        self.header & 0xFF
+    }
+
+    pub fn set_sub_event_bmp(&mut self, value: u32) {
+        self.header = (self.header & !0xFF) | (value & 0xFF);
+    }
+}
+
+#[repr(C, align(4))]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_fsp_ctrl_t {
+    pub header: u32,
+    pub data: [u8; BB_CFG_PAGE_SIZE - 4],
+}
+
+impl Default for bb_set_fsp_ctrl_t {
+    fn default() -> Self {
+        Self {
+            header: 0,
+            data: [0; BB_CFG_PAGE_SIZE - 4],
+        }
+    }
+}
+
+impl bb_set_fsp_ctrl_t {
+    pub fn msg_type(&self) -> u32 {
+        self.header & 0x0F
+    }
+
+    pub fn set_msg_type(&mut self, value: u32) {
+        self.header = (self.header & !0x0F) | (value & 0x0F);
+    }
+
+    pub fn seq_id(&self) -> u32 {
+        (self.header >> 4) & 0x0F
+    }
+
+    pub fn set_seq_id(&mut self, value: u32) {
+        self.header = (self.header & !(0x0F << 4)) | ((value & 0x0F) << 4);
+    }
+
+    pub fn len(&self) -> u32 {
+        (self.header >> 8) & 0x07FF
+    }
+
+    pub fn set_len(&mut self, value: u32) {
+        self.header = (self.header & !(0x07FF << 8)) | ((value & 0x07FF) << 8);
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_fsp_param_t {
+    pub header: u32,
+    pub freqs: [u32; BB_FSP_FREQ_LIST_MAX],
+}
+
+impl Default for bb_set_fsp_param_t {
+    fn default() -> Self {
+        Self {
+            header: 0,
+            freqs: [0; BB_FSP_FREQ_LIST_MAX],
+        }
+    }
+}
+
+impl bb_set_fsp_param_t {
+    pub fn mode(&self) -> u32 {
+        self.header & 0x03
+    }
+
+    pub fn set_mode(&mut self, value: u32) {
+        self.header = (self.header & !0x03) | (value & 0x03);
+    }
+
+    pub fn freq_count(&self) -> u32 {
+        (self.header >> 2) & 0x3F
+    }
+
+    pub fn set_freq_count(&mut self, value: u32) {
+        self.header = (self.header & !(0x3F << 2)) | ((value & 0x3F) << 2);
+    }
+
+    pub fn bw(&self) -> u32 {
+        (self.header >> 8) & 0x07
+    }
+
+    pub fn set_bw(&mut self, value: u32) {
+        self.header = (self.header & !(0x07 << 8)) | ((value & 0x07) << 8);
+    }
+
+    pub fn param_bmp(&self) -> u32 {
+        (self.header >> 11) & 0xFF
+    }
+
+    pub fn set_param_bmp(&mut self, value: u32) {
+        self.header = (self.header & !(0xFF << 11)) | ((value & 0xFF) << 11);
+    }
+}
+
+#[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct bb_set_plot_t {
     pub user: u8,
@@ -860,6 +989,13 @@ impl Default for bb_set_prj_dispatch_in_t {
     }
 }
 
+/// 对应 prj_cmd_set_role_t / prj_cmd_get_role_t
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_set_role_t {
+    pub role: u8,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct prj_cmd_set_mac_t {
@@ -1123,6 +1259,7 @@ const MAX_CFG_TEXT_SIZE: usize = 1024 * 1024;
 pub const BB_HOT_UPGRADE_CHUNK_SIZE: usize = 0x300;
 pub const BB_PLOT_POINT_MAX: usize = 10;
 pub const BB_BLACK_LIST_SIZE: usize = 3;
+pub const BB_FSP_FREQ_LIST_MAX: usize = 32;
 pub const BB_CONFIG_MAX_SLOT_CANDIDATE: usize = 5;
 pub const BB_CONFIG_MAX_USER_MCS_NUM: usize = 16;
 pub const BB_RC_FREQ_NUM: usize = 4;
@@ -1232,6 +1369,7 @@ pub const BB_SET_LOCAL_MAC: u32 = bb_request(BB_REQ_SET, 33);
 pub const BB_SET_CFG: u32 = bb_request(BB_REQ_SET, 101);
 pub const BB_SET_SYS_REBOOT: u32 = bb_request(BB_REQ_SET, 14);
 pub const BB_SET_PLOT: u32 = bb_request(BB_REQ_SET, 103);
+pub const BB_SET_FSP_CTRL: u32 = bb_request(BB_REQ_SET, 119);
 pub const BB_RESET_CFG: u32 = bb_request(BB_REQ_SET, 102);
 pub const BB_SET_ORIG_CFG: u32 = bb_request(BB_REQ_SET, 113);
 pub const BB_SET_PRJ_DISPATCH: u32 = bb_request(BB_REQ_SET, 200);
@@ -1242,6 +1380,11 @@ pub const PRJ_CMD_SET_SLOT_MAC: u8 = 2;
 pub const PRJ_CMD_SET_BAND: u8 = 3;
 pub const PRJ_CMD_SET_RESET_DB: u8 = 4;
 pub const PRJ_CMD_SET_PWR: u8 = 5;
+pub const PRJ_CMD_SET_USER_DATA: u8 = 6;
+pub const PRJ_CMD_SET_PSRAM_START: u8 = 7;
+pub const PRJ_CMD_SET_PSRAM_DATA: u8 = 8;
+pub const PRJ_CMD_SET_PSRAM_DONE: u8 = 9;
+pub const PRJ_CMD_SET_PSRAM_UPDATE: u8 = 10;
 pub const PRJ_CMD_SET_MAC: u8 = 11;
 pub const PRJ_CMD_GET_BAND: u8 = 128;
 pub const PRJ_CMD_GET_ROLE: u8 = 129;
@@ -1257,6 +1400,19 @@ const PRJ_BAND_5G_BITMAP: u8 = 0x04;
 const PRJ_BAND_AUTO_BITMAP: u8 = PRJ_BAND_1G_BITMAP | PRJ_BAND_2G_BITMAP | PRJ_BAND_5G_BITMAP;
 
 pub const BB_EVENT_PLOT_DATA: i32 = 3;
+pub const BB_EVENT_FSP: i32 = 15;
+
+pub const BB_FSP_NOTIFY_TYPE_FREQ_LIST: u32 = 0;
+pub const BB_FSP_NOTIFY_TYPE_FS_RESULT: u32 = 1;
+pub const BB_FSP_NOTIFY_TYPE_CANDIDATE: u32 = 2;
+
+pub const BB_FSP_CTRL_START: u32 = 0;
+pub const BB_FSP_CTRL_STOP: u32 = 1;
+pub const BB_FSP_CTRL_PARAM: u32 = 2;
+
+pub const BB_FSP_PARAM_BMP_MODE: u32 = 1 << 0;
+pub const BB_FSP_PARAM_BMP_FREQS: u32 = 1 << 1;
+pub const BB_FSP_PARAM_BMP_BW: u32 = 1 << 2;
 
 // ============ 辅助函数 ============
 #[inline]
@@ -1572,6 +1728,132 @@ unsafe extern "C" fn handle_plot_event(arg: *mut c_void, _user: *mut c_void) {
     log_plot_ldpc_num_frame_once(event);
     if let Ok(mut cache) = plot_cache().lock() {
         cache.append_event(event);
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct FspCache {
+    count: u32,
+    powers: Vec<i16>,
+}
+
+static FSP_CACHE: OnceLock<Mutex<FspCache>> = OnceLock::new();
+
+fn fsp_cache() -> &'static Mutex<FspCache> {
+    FSP_CACHE.get_or_init(|| Mutex::new(FspCache::default()))
+}
+
+pub fn reset_fsp_cache() {
+    if let Ok(mut cache) = fsp_cache().lock() {
+        cache.count = 0;
+        cache.powers.clear();
+    }
+    FSP_RETRIGGER_PENDING.store(false, Ordering::Relaxed);
+}
+
+/// Total number of times the FSP event callback was invoked (any sub-event type).
+/// Use for diagnostics: if this stays 0 on AP, the subscription is not generating events.
+pub fn fsp_event_total() -> usize {
+    FSP_EVENT_TOTAL.load(Ordering::Relaxed)
+}
+
+/// Returns true (and clears the flag) when a FS_RESULT event has been received
+/// and the caller should retrigger the next scan.
+pub fn take_fsp_retrigger_pending() -> bool {
+    FSP_RETRIGGER_PENDING.swap(false, Ordering::Relaxed)
+}
+
+unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
+    // Count every invocation for diagnostics (regardless of type)
+    FSP_EVENT_TOTAL.fetch_add(1, Ordering::Relaxed);
+
+    if arg.is_null() {
+        return;
+    }
+
+    let event = unsafe { &*(arg as *const bb_event_fsp_t) };
+    if event.type_ != BB_FSP_NOTIFY_TYPE_FS_RESULT || event.num == 0 {
+        return;
+    }
+
+    let max_count = event.data.len() / 2;
+    let count = (event.num as usize).min(max_count);
+    if count == 0 {
+        return;
+    }
+
+    let mut powers = Vec::with_capacity(count);
+    for idx in 0..count {
+        let offset = idx * 2;
+        powers.push(i16::from_le_bytes([event.data[offset], event.data[offset + 1]]));
+    }
+
+    if let Ok(mut cache) = fsp_cache().lock() {
+        cache.count = count as u32;
+        cache.powers = powers;
+    }
+
+    // Signal feeder to retrigger next scan (callback-driven loop, not timer-driven)
+    FSP_RETRIGGER_PENDING.store(true, Ordering::Relaxed);
+}
+
+pub fn fsp_cache_snapshot() -> Option<(u32, Vec<i16>)> {
+    let cache = fsp_cache().lock().ok()?;
+    if cache.count == 0 || cache.powers.is_empty() {
+        None
+    } else {
+        Some((cache.count, cache.powers.clone()))
+    }
+}
+
+fn subscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_event_callback_t {
+        event: BB_EVENT_FSP,
+        callback: Some(handle_fsp_event),
+        user: std::ptr::null_mut(),
+    };
+    // Specify which FSP sub-events to receive: bit 1 = BB_FSP_NOTIFY_TYPE_FS_RESULT
+    let mut param = bb_event_fsp_param_t::default();
+    param.set_sub_event_bmp(1 << BB_FSP_NOTIFY_TYPE_FS_RESULT);
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_EVENT_SUBSCRIBE as c_uint,
+            &input as *const bb_set_event_callback_t as *const c_void,
+            &mut param as *mut bb_event_fsp_param_t as *mut c_void,
+        ) {
+            0 => {
+                tracing::info!("FSP event subscribed successfully (sub_event_bmp={})", param.sub_event_bmp());
+                Ok(())
+            },
+            e => Err(format!("bb_ioctl(BB_SET_EVENT_SUBSCRIBE/FSP) failed with code: {}", e)),
+        }
+    }
+}
+
+fn unsubscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_event_callback_t {
+        event: BB_EVENT_FSP,
+        callback: Some(handle_fsp_event),
+        user: std::ptr::null_mut(),
+    };
+
+    unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_EVENT_UNSUBSCRIBE as c_uint,
+            &input as *const bb_set_event_callback_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => {
+                tracing::info!("FSP event unsubscribed successfully");
+                Ok(())
+            },
+            e => Err(format!("bb_ioctl(BB_SET_EVENT_UNSUBSCRIBE/FSP) failed with code: {}", e)),
+        }
     }
 }
 
@@ -2165,6 +2447,100 @@ pub fn get_channel_info(handle: *mut bb_dev_handle_t) -> Result<BbChannelInfoSum
     })
 }
 
+fn next_fsp_sequence_id() -> u32 {
+    (FSP_SEQUENCE.fetch_add(1, Ordering::Relaxed) as u32) & 0x0F
+}
+
+fn send_fsp_control(handle: *mut bb_dev_handle_t, msg_type: u32, payload: &[u8]) -> Result<(), String> {
+    let sdk = sdk()?;
+    if payload.len() > (BB_CFG_PAGE_SIZE - 4) {
+        return Err(format!(
+            "Sweep payload too large: {} bytes exceeds {}",
+            payload.len(),
+            BB_CFG_PAGE_SIZE - 4
+        ));
+    }
+
+    let mut input = bb_set_fsp_ctrl_t::default();
+    input.set_msg_type(msg_type);
+    input.set_seq_id(next_fsp_sequence_id());
+    input.set_len(payload.len() as u32);
+    input.data[..payload.len()].copy_from_slice(payload);
+
+    suppress_sdk_console_output(|| unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_SET_FSP_CTRL as c_uint,
+            &input as *const bb_set_fsp_ctrl_t as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => Ok(()),
+            e => Err(format!("bb_ioctl(BB_SET_FSP_CTRL) failed with code: {}", e)),
+        }
+    })
+}
+
+pub fn start_sweep(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    reset_fsp_cache();
+    match subscribe_fsp_event(handle) {
+        Ok(()) => tracing::info!("FSP event subscribed for sweep"),
+        Err(e) => tracing::warn!("FSP event subscribe failed (sweep will fall back to channel_info): {}", e),
+    }
+    send_fsp_control(handle, BB_FSP_CTRL_START, &[])
+}
+
+/// Retrigger a single FSP scan without resetting cache or resubscribing.
+/// Use on AP to continuously request new one-shot scans each tick.
+pub fn trigger_fsp_scan(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    send_fsp_control(handle, BB_FSP_CTRL_START, &[])
+}
+
+pub fn stop_sweep(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    let result = send_fsp_control(handle, BB_FSP_CTRL_STOP, &[]);
+    match unsubscribe_fsp_event(handle) {
+        Ok(()) => tracing::info!("FSP event unsubscribed for sweep"),
+        Err(e) => tracing::warn!("FSP event unsubscribe failed: {}", e),
+    }
+    reset_fsp_cache();
+    result
+}
+
+pub fn configure_sweep(
+    handle: *mut bb_dev_handle_t,
+    mode: u8,
+    bandwidth: u8,
+    frequencies_khz: &[u32],
+) -> Result<(), String> {
+    if frequencies_khz.len() > BB_FSP_FREQ_LIST_MAX {
+        return Err(format!(
+            "Too many sweep frequencies: {} exceeds {}",
+            frequencies_khz.len(),
+            BB_FSP_FREQ_LIST_MAX
+        ));
+    }
+
+    let mut payload = bb_set_fsp_param_t::default();
+    payload.set_mode(u32::from(mode & 0x03));
+    payload.set_freq_count(frequencies_khz.len() as u32);
+    payload.set_bw(u32::from(bandwidth & 0x07));
+
+    let mut param_bmp = BB_FSP_PARAM_BMP_MODE | BB_FSP_PARAM_BMP_BW;
+    if !frequencies_khz.is_empty() {
+        payload.freqs[..frequencies_khz.len()].copy_from_slice(frequencies_khz);
+        param_bmp |= BB_FSP_PARAM_BMP_FREQS;
+    }
+    payload.set_param_bmp(param_bmp);
+
+    let payload_bytes = unsafe {
+        std::slice::from_raw_parts(
+            (&payload as *const bb_set_fsp_param_t).cast::<u8>(),
+            std::mem::size_of::<bb_set_fsp_param_t>(),
+        )
+    };
+
+    send_fsp_control(handle, BB_FSP_CTRL_PARAM, payload_bytes)
+}
+
 pub fn get_mcs(handle: *mut bb_dev_handle_t, dir: u8, slot: u8) -> Result<BbMcsValueSummary, String> {
     let sdk = sdk()?;
     let input = bb_get_mcs_in_t { dir, slot };
@@ -2433,7 +2809,7 @@ pub fn get_ap_mac(handle: *mut bb_dev_handle_t) -> Result<Option<String>, String
             &mut output as *mut bb_get_ap_mac_out_t as *mut c_void,
         ) {
             0 => {
-                if is_zero_mac(&output.mac.addr) {
+                if is_zero_mac(&output.mac.addr) || is_invalid_partial_mac(&output.mac.addr) {
                     Ok(None)
                 } else {
                     Ok(Some(format_bb_mac(&output.mac)))
@@ -3538,7 +3914,10 @@ fn get_pair_result_summary(
             0 => Ok((0..BB_SLOT_MAX)
                 .map(|slot| {
                     let slot_mask = 1_u8.checked_shl(slot as u32).unwrap_or(0);
-                    let peer_mac_bytes = if (output.slot_bmp & slot_mask) != 0 && !is_zero_mac(&output.peer_mac[slot].addr) {
+                    let peer_mac_bytes = if (output.slot_bmp & slot_mask) != 0
+                        && !is_zero_mac(&output.peer_mac[slot].addr)
+                        && !is_invalid_partial_mac(&output.peer_mac[slot].addr)
+                    {
                         Some(output.peer_mac[slot].addr)
                     } else {
                         None
@@ -3675,7 +4054,7 @@ fn summarize_link_status(
 ) -> Option<BbLinkStatusSummary> {
     let pair_state = decode_pair_state(link.rx_mcs_pair_state);
     let slot_live = link.state != 0 || pair_state;
-    let direct_peer_mac_bytes = if is_zero_mac(&link.peer_mac.addr) {
+    let direct_peer_mac_bytes = if is_zero_mac(&link.peer_mac.addr) || is_invalid_partial_mac(&link.peer_mac.addr) {
         None
     } else {
         Some(link.peer_mac.addr)
@@ -3734,6 +4113,12 @@ fn summarize_link_status(
 
 fn is_zero_mac(mac: &[u8; BB_MAC_LEN]) -> bool {
     mac.iter().all(|value| *value == 0)
+}
+
+/// DEV 侧 SDK 在未配对时可能返回类似 [0x66, 0x00, 0x00, 0x00] 的
+/// 残值，仅第一个字节非零但后三字节全零，也应视为无效 MAC。
+fn is_invalid_partial_mac(mac: &[u8; BB_MAC_LEN]) -> bool {
+    !is_zero_mac(mac) && mac[0] != 0 && mac[1..].iter().all(|value| *value == 0)
 }
 
 pub fn close_device(handle: *mut bb_dev_handle_t) -> Result<(), String> {

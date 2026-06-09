@@ -2400,6 +2400,39 @@ impl BasebandApi {
         Ok(())
     }
 
+    pub fn get_sweep_channel_info(&mut self) -> Result<ffi::BbChannelInfoSummary, String> {
+        let role = self.get_status_summary()?.role;
+        let result = self.read_channel_info_for_active_device(role);
+        if result.is_ok() {
+            // cache updated inside read_channel_info_for_active_device on success
+        }
+        result
+    }
+
+    pub fn configure_sweep(&mut self, mode: u8, bandwidth: u8, frequencies_khz: &[u32]) -> Result<(), String> {
+        self.with_device_operation("configure_sweep", |handle| {
+            ffi::configure_sweep(handle, mode, bandwidth, frequencies_khz)
+        })?;
+        self.clear_cached_channel_info_for_active_device();
+        Ok(())
+    }
+
+    pub fn start_sweep(&mut self) -> Result<(), String> {
+        self.clear_cached_channel_info_for_active_device();
+        self.with_device_operation("start_sweep", |handle| ffi::start_sweep(handle))?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn stop_sweep(&mut self) -> Result<(), String> {
+        self.with_device_operation("stop_sweep", |handle| ffi::stop_sweep(handle))?;
+        Ok(())
+    }
+
+    pub fn trigger_fsp_scan(&mut self) -> Result<(), String> {
+        self.with_device_operation("trigger_fsp_scan", |handle| ffi::trigger_fsp_scan(handle))
+    }
+
     pub fn set_mcs_mode(&mut self, slot: u8, auto_mode: bool) -> Result<(), String> {
         self.with_device_operation("set_mcs_mode", |handle| ffi::set_mcs_mode(handle, slot, auto_mode))
     }
@@ -3356,6 +3389,27 @@ impl BasebandManager {
 
     pub fn set_channel(&self, dir: u8, chan_index: u8) -> Result<(), String> {
         self.with_api("set_channel", |api| api.set_channel(dir, chan_index))
+    }
+
+    pub fn get_sweep_channel_info(&self) -> Result<ffi::BbChannelInfoSummary, String> {
+        self.with_api("get_sweep_channel_info", |api| api.get_sweep_channel_info())
+    }
+
+    pub fn configure_sweep(&self, mode: u8, bandwidth: u8, frequencies_khz: &[u32]) -> Result<(), String> {
+        self.with_api("configure_sweep", |api| api.configure_sweep(mode, bandwidth, frequencies_khz))
+    }
+
+    pub fn start_sweep(&self) -> Result<(), String> {
+        self.with_api("start_sweep", |api| api.start_sweep())
+    }
+
+    #[allow(dead_code)]
+    pub fn stop_sweep(&self) -> Result<(), String> {
+        self.with_api("stop_sweep", |api| api.stop_sweep())
+    }
+
+    pub fn trigger_fsp_scan(&self) -> Result<(), String> {
+        self.with_api("trigger_fsp_scan", |api| api.trigger_fsp_scan())
     }
 
     pub fn set_mcs_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {

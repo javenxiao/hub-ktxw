@@ -2558,6 +2558,27 @@ tbody td {
     margin-top: 0;
 }
 
+/* Sweep 工具栏：字段水平排列，与 RSSI Graph 工具栏风格一致 */
+#sweep-toolbar .configuration-toolbar-field {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-width: auto;
+}
+
+#sweep-toolbar .configuration-toolbar-field span {
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#sweep-toolbar .configuration-toolbar-field .sys-input,
+#sweep-toolbar .configuration-toolbar-field select.sys-input,
+#sweep-toolbar .configuration-toolbar-field input.sys-input {
+    min-width: auto;
+    width: auto;
+}
+
 .configuration-input-unset::placeholder {
     color: #7d8895;
     opacity: 1;
