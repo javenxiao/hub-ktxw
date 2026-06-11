@@ -2741,9 +2741,15 @@ impl BasebandApi {
 
     fn upgrade_raw_firmware(&mut self, firmware: &[u8]) -> Result<FirmwareUpgradeResult, String> {
         let is_remote = self.is_remote_mode();
+        let chunk_count = firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).len();
+        tracing::info!(
+            "[UPGRADE-RAW] Writing {} bytes in {} chunks ({} bytes each)",
+            firmware.len(),
+            chunk_count,
+            ffi::BB_HOT_UPGRADE_CHUNK_SIZE
+        );
 
         let mut addr = 0_u32;
-        let chunk_count = firmware.chunks(ffi::BB_HOT_UPGRADE_CHUNK_SIZE).len();
         let progress_arc = self.upgrade_progress.clone();
         let mut last_progress_update_at = None;
 
@@ -2789,9 +2795,16 @@ impl BasebandApi {
 
         let crc32 = crc32fast::hash(firmware);
         let handle = self.handle_ptr();
+        tracing::info!(
+            "[UPGRADE-RAW] All chunks written, verifying CRC32={:08X} ({} bytes total)",
+            crc32,
+            firmware.len()
+        );
         run_remote_sdk_call_with_gap(is_remote, REMOTE_HOT_UPGRADE_SDK_CALL_GAP, || {
             ffi::hot_upgrade_crc32(handle, HOT_UPGRADE_CRC_SEQ, firmware.len() as u32, 0, crc32)
-        })?;
+        })
+        .map_err(|e| format!("CRC verification failed: {}", e))?;
+        tracing::info!("[UPGRADE-RAW] CRC verified successfully");
 
         Ok(FirmwareUpgradeResult { crc32 })
     }
@@ -3195,9 +3208,10 @@ impl BasebandApi {
 
         let is_remote = self.is_remote_mode();
         tracing::info!(
-            "Firmware upgrade starting: {} bytes, remote_mode={}",
+            "[UPGRADE] Starting: {} bytes, remote_mode={}, handle_valid={}",
             firmware.len(),
-            is_remote
+            is_remote,
+            self.device_handle != 0
         );
 
         // 检测是否为 OTA 格式 (.img) — 检查 magic
@@ -3205,34 +3219,46 @@ impl BasebandApi {
             && u32::from_le_bytes([firmware[0], firmware[1], firmware[2], firmware[3]]) == ffi::OTA_IMG_MAGIC;
 
         if is_ota_image {
-            tracing::info!("Detected OTA firmware image (.img), using partition-based upgrade");
+            tracing::info!("[UPGRADE] OTA image detected, using partition-based upgrade");
             let result = self.upgrade_ota_image(firmware)?;
+            tracing::info!("[UPGRADE] OTA image written successfully, triggering reboot");
 
-            // 触发设备重启以应用新固件
             let handle = self.handle_ptr();
             run_remote_sdk_call(is_remote, || {
                 ffi::reboot_device(handle, 2000)
+            }).map_err(|e| {
+                tracing::error!("[UPGRADE] Reboot after OTA upgrade failed: {}", e);
+                format!("OTA firmware written but reboot failed: {}", e)
             })?;
 
-            tracing::info!("Firmware upgrade complete, device rebooting");
+            tracing::info!("[UPGRADE] Complete, device rebooting");
             Ok(result)
         } else {
-            tracing::info!("Detected raw firmware, using flat binary upgrade");
+            tracing::info!("[UPGRADE] Raw firmware detected, using flat binary upgrade");
             if is_remote {
-                self.ensure_remote_session()?;
+                self.ensure_remote_session().map_err(|e| {
+                    tracing::error!("[UPGRADE] Remote session failed: {}", e);
+                    format!("Remote session error: {}", e)
+                })?;
             } else if !self.initialized {
                 return Err("Baseband API not initialized".to_string());
             }
 
-            let result = self.upgrade_raw_firmware(firmware)?;
+            let result = self.upgrade_raw_firmware(firmware).map_err(|e| {
+                tracing::error!("[UPGRADE] Raw firmware write failed: {}", e);
+                e
+            })?;
+            tracing::info!("[UPGRADE] Raw firmware written and CRC verified, triggering reboot");
 
-            // 触发设备重启以应用新固件
             let handle = self.handle_ptr();
             run_remote_sdk_call(is_remote, || {
                 ffi::reboot_device(handle, 2000)
+            }).map_err(|e| {
+                tracing::error!("[UPGRADE] Reboot after raw upgrade failed: {}", e);
+                format!("Firmware written but reboot failed: {}", e)
             })?;
 
-            tracing::info!("Firmware upgrade complete, device rebooting");
+            tracing::info!("[UPGRADE] Complete, device rebooting");
             Ok(result)
         }
     }

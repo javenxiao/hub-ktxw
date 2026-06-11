@@ -251,6 +251,22 @@
                                         <strong class="maintenance-metric-value" id="maintenance-local-mac-config">--</strong>
                                     </article>
                                     <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Host Name</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-host-name">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Active Device</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-active-device">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Operation Mode</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-operation-mode">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Access Mode</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-access-mode">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
                                         <span class="maintenance-metric-label">Running Time</span>
                                         <strong class="maintenance-metric-value" id="maintenance-uptime">--</strong>
                                     </article>
@@ -259,8 +275,16 @@
                                         <strong class="maintenance-metric-value" id="maintenance-firmware-version">--</strong>
                                     </article>
                                     <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Software Build</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-software-build">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
                                         <span class="maintenance-metric-label">Compile Time</span>
                                         <strong class="maintenance-metric-value" id="maintenance-compile-time">--</strong>
+                                    </article>
+                                    <article class="maintenance-metric-card">
+                                        <span class="maintenance-metric-label">Running System</span>
+                                        <strong class="maintenance-metric-value" id="maintenance-running-system">--</strong>
                                     </article>
                                     <article class="maintenance-metric-card">
                                         <span class="maintenance-metric-label">Boot Reason</span>
@@ -930,126 +954,186 @@
                                 <h2 class="sys-section-title chart-panel-title" id="sweep-chart-title">Sweep Plot</h2>
                             </div>
                             <div class="chart-box">
-                                <div class="plot-toolbar" id="sweep-toolbar">
-                                    <div class="plot-toolbar-main">
-                                        <div class="plot-toolbar-actions">
-                                            <label class="configuration-toolbar-field">
-                                                <span>Mode</span>
-                                                <select id="sweep-mode-select" class="sys-input configuration-mode-select">
-                                                    <option value="1">Auto</option>
-                                                    <option value="0">Manual</option>
-                                                </select>
-                                            </label>
-                                            <label class="configuration-toolbar-field">
-                                                <span>BW</span>
-                                                <select id="sweep-bw-select" class="sys-input configuration-mode-select">
-                                                    <option value="0">1.25M</option>
-                                                    <option value="1">2.5M</option>
-                                                    <option value="2">5M</option>
-                                                    <option value="3">10M</option>
-                                                    <option value="4" selected>20M</option>
-                                                    <option value="5">40M</option>
-                                                </select>
-                                            </label>
-                                            <label class="configuration-toolbar-field" id="sweep-freq-field">
-                                                <span>Freq (kHz)</span>
-                                                <input id="sweep-freq-input" class="sys-input" type="number" min="100000" max="7000000" step="1" placeholder="Auto" style="width:100px">
-                                            </label>
-                                            <button class="sys-button-primary plot-toolbar-button plot-toolbar-button-prominent" id="sweep-start-btn" type="button">Start</button>
-                                            <button class="sys-button-default plot-toolbar-button plot-toolbar-button-prominent" id="sweep-pause-btn" type="button" disabled>Pause</button>
-                                            <button class="sys-button-default plot-toolbar-button plot-toolbar-button-secondary" id="sweep-stop-btn" type="button" disabled>Stop</button>
+                                <div class="sweep-layout">
+                                    <!-- Sweep control sidebar -->
+                                    <aside class="sweep-sidebar">
+                                        <button class="sweep-btn sweep-btn-start" id="sweep-start-btn" type="button">
+                                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"><polygon points="5,3 19,12 5,21" fill="currentColor"/></svg>
+                                            <span class="sweep-btn-label">Start</span>
+                                        </button>
+                                        <button class="sweep-btn sweep-btn-pause" id="sweep-pause-btn" type="button" disabled>
+                                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                            <span class="sweep-btn-label">Pause</span>
+                                        </button>
+                                        <button class="sweep-btn sweep-btn-stop" id="sweep-stop-btn" type="button" disabled>
+                                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+                                            <span class="sweep-btn-label">Stop</span>
+                                        </button>
+                                        <hr class="sweep-sidebar-sep">
+                                        <div class="sweep-sidebar-field">
+                                            <span>Mode</span>
+                                            <select id="sweep-mode-select" class="sweep-sidebar-select">
+                                                <option value="1">Auto</option>
+                                                <option value="0">Manual</option>
+                                            </select>
                                         </div>
-                                        <div class="plot-toolbar-actions" style="margin-left:8px">
-                                            <label class="configuration-toolbar-field">
-                                                <input id="sweep-histogram-check" type="checkbox" style="vertical-align:middle;margin-right:4px">
-                                                <span>Histogram</span>
-                                            </label>
-                                            <label class="configuration-toolbar-field">
-                                                <span>Var Win</span>
-                                                <input id="sweep-variance-input" class="sys-input configuration-mode-select" type="number" min="2" max="512" value="16" step="1" style="width:70px">
-                                            </label>
-                                            <button class="sys-button-default plot-toolbar-button plot-toolbar-button-secondary" id="sweep-record-btn" type="button">Record</button>
-                                            <button class="sys-button-default plot-toolbar-button plot-toolbar-button-secondary" id="sweep-import-btn" type="button">Import</button>
-                                            <input id="sweep-import-file" type="file" accept=".json" style="display:none">
+                                        <div class="sweep-sidebar-field">
+                                            <span>BW</span>
+                                            <select id="sweep-bw-select" class="sweep-sidebar-select">
+                                                <option value="0">1.25M</option>
+                                                <option value="1">2.5M</option>
+                                                <option value="2">5M</option>
+                                                <option value="3">10M</option>
+                                                <option value="4" selected>20M</option>
+                                                <option value="5">40M</option>
+                                            </select>
                                         </div>
-                                        <button class="sys-button-default plot-toolbar-button plot-toolbar-button-tertiary plot-settings-toggle" id="sweep-settings-toggle" type="button" aria-expanded="false" aria-controls="sweep-settings-panel">Axes</button>
-                                    </div>
-                                    <div class="plot-toolbar-state">
-                                        <span class="plot-state-chip" id="sweep-stream-state">Idle</span>
-                                    </div>
-                                </div>
-                                <div class="plot-series-grid" id="sweep-series-grid">
-                                    <!-- Time-domain panel -->
-                                    <div class="plot-panel-block">
-                                        <div class="plot-panel-heading"><span class="sys-section-title">Sweep Time Domain</span><span class="plot-sample-count-badge" id="sweep-time-badge">--</span></div>
-                                        <div class="plot-workbench is-dense">
-                                            <div class="plot-stage">
-                                                <div class="plot-surface" data-plot-surface="sweep-time">
-                                                    <svg class="plot-composite-svg" id="sweep-time-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
-                                                    <div class="plot-hover-panel" data-plot-hover="sweep-time" hidden></div>
-                                                    <div class="plot-crosshair" data-plot-crosshair="sweep-time" hidden></div>
-                                                </div>
-                                                <div class="plot-settings-dock" id="sweep-settings-dock" hidden>
-                                                    <section class="plot-settings-panel" id="sweep-settings-panel" aria-label="Sweep time axis controls">
-                                                        <div class="plot-settings-panel-header">
-                                                            <div class="plot-settings-panel-title">Axis Settings</div>
-                                                            <div class="plot-settings-panel-actions">
-                                                                <button class="plot-settings-mini-button" id="sweep-settings-reset" type="button">Default</button>
-                                                                <button class="plot-settings-mini-button" id="sweep-settings-close" type="button">Close</button>
+                                        <div class="sweep-sidebar-field" id="sweep-freq-field">
+                                            <span>Freq (kHz)</span>
+                                            <input id="sweep-freq-input" class="sweep-sidebar-input" type="number" min="100000" max="7000000" step="1" placeholder="Auto">
+                                        </div>
+                                        <hr class="sweep-sidebar-sep">
+                                        <label class="sweep-sidebar-check">
+                                            <input id="sweep-histogram-check" type="checkbox">
+                                            Histogram
+                                        </label>
+                                        <div class="sweep-sidebar-field">
+                                            <span>Var Win</span>
+                                            <input id="sweep-variance-input" class="sweep-sidebar-input" type="number" min="2" max="512" value="16" step="1">
+                                        </div>
+                                        <button class="sweep-btn sweep-btn-record" id="sweep-record-btn" type="button">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="4"/></svg>
+                                            <span class="sweep-btn-label">Record</span>
+                                        </button>
+                                        <button class="sweep-btn sweep-btn-import" id="sweep-import-btn" type="button">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                            <span class="sweep-btn-label">Import</span>
+                                        </button>
+                                        <input id="sweep-import-file" type="file" accept=".json" style="display:none">
+                                        <button class="sweep-btn sweep-btn-axes" id="sweep-settings-toggle" type="button" aria-expanded="false" aria-controls="sweep-settings-panel">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+                                            Axes
+                                        </button>
+                                        <div class="sweep-sidebar-status">
+                                            <span class="sweep-state-chip idle" id="sweep-stream-state">Idle</span>
+                                        </div>
+                                    </aside>
+                                    <!-- Sweep plot area -->
+                                    <div class="sweep-plot-area">
+                                        <div class="plot-series-grid" id="sweep-series-grid">
+                                            <!-- Time-domain panel -->
+                                            <div class="plot-panel-block">
+                                                <div class="plot-panel-heading"><span class="sys-section-title">Sweep Time Domain</span><span class="plot-sample-count-badge" id="sweep-time-badge"></span></div>
+                                                <div class="plot-workbench is-dense">
+                                                    <div class="plot-stage">
+                                                        <div class="plot-surface" data-plot-surface="sweep-time">
+                                                            <svg class="plot-composite-svg" id="sweep-time-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
+                                                            <div class="plot-hover-panel" data-plot-hover="sweep-time" hidden></div>
+                                                            <div class="plot-crosshair" data-plot-crosshair="sweep-time" hidden></div>
+                                                        </div>
+                                                        <!-- Axes Settings overlay (centered modal) -->
+                                                        <div class="plot-settings-overlay" id="sweep-settings-overlay" hidden>
+                                                            <div class="plot-settings-backdrop" id="sweep-settings-backdrop"></div>
+                                                            <div class="plot-settings-dialog" role="dialog" aria-modal="true" aria-label="Sweep axis settings">
+                                                                <div class="plot-settings-header">
+                                                                    <div class="plot-settings-title">Axis Settings</div>
+                                                                    <button class="plot-settings-mini-button plot-settings-close-btn" id="sweep-settings-close" type="button" aria-label="Close">&times;</button>
+                                                                </div>
+                                                                <div class="plot-settings-tabs" role="tablist">
+                                                                    <button class="plot-settings-tab is-active" data-sweep-tab="time" role="tab" aria-selected="true">Sweep Time Domain</button>
+                                                                    <button class="plot-settings-tab" data-sweep-tab="freq" role="tab" aria-selected="false">Sweep Frequency Domain</button>
+                                                                </div>
+                                                                <!-- Time Domain settings -->
+                                                                <div class="plot-settings-tab-panel" data-sweep-panel="time" role="tabpanel">
+                                                                    <div class="plot-settings-grid">
+                                                                        <label class="plot-settings-field">
+                                                                            <span>X Min</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="xMin" type="number" min="0" step="1" value="0">
+                                                                        </label>
+                                                                        <label class="plot-settings-field">
+                                                                            <span>Y Min</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="yMin" type="number" step="1" value="-110">
+                                                                        </label>
+                                                                        <label class="plot-settings-field">
+                                                                            <span>X Max</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="xMax" type="number" min="1" step="1" value="30">
+                                                                        </label>
+                                                                        <label class="plot-settings-field">
+                                                                            <span>Y Max</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="yMax" type="number" step="1" value="0">
+                                                                        </label>
+                                                                    </div>
+                                                                    <div class="plot-settings-group">
+                                                                        <div class="plot-settings-group-title">Chart Title</div>
+                                                                        <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="chartTitle" type="text" value="Sweep Time Domain">
+                                                                    </div>
+                                                                    <div class="plot-settings-group">
+                                                                        <div class="plot-settings-group-title">X Axis Title</div>
+                                                                        <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="xAxisTitle" type="text" value="Elapsed Time (s)">
+                                                                    </div>
+                                                                    <div class="plot-settings-group">
+                                                                        <div class="plot-settings-group-title">X Display Window</div>
+                                                                        <div class="plot-settings-select-row">
+                                                                            <select class="plot-settings-select" data-sweep-setting="xWindowSecs">
+                                                                                <option value="auto" selected>Auto (full)</option>
+                                                                                <option value="5">5 s</option>
+                                                                                <option value="10" selected>10 s</option>
+                                                                                <option value="15">15 s</option>
+                                                                                <option value="30">30 s</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div class="plot-settings-hint">Scroll Scope — shows recent N seconds</div>
+                                                                    </div>
+                                                                    <div class="plot-settings-group">
+                                                                        <div class="plot-settings-group-title">Y Axis Title</div>
+                                                                        <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="yAxisTitle" type="text" value="Power (dBm)">
+                                                                    </div>
+                                                                </div>
+                                                                <!-- Frequency Domain settings -->
+                                                                <div class="plot-settings-tab-panel" data-sweep-panel="freq" role="tabpanel" hidden>
+                                                                    <div class="plot-settings-grid">
+                                                                        <label class="plot-settings-field">
+                                                                            <span>X Min (kHz)</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqXMin" type="number" min="0" step="1" value="0">
+                                                                        </label>
+                                                                        <label class="plot-settings-field">
+                                                                            <span>Y Min (dBm)</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqYMin" type="number" step="1" value="-110">
+                                                                        </label>
+                                                                        <label class="plot-settings-field">
+                                                                            <span>X Max (kHz)</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqXMax" type="number" min="1" step="1" value="8000000">
+                                                                        </label>
+                                                                        <label class="plot-settings-field">
+                                                                            <span>Y Max (dBm)</span>
+                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqYMax" type="number" step="1" value="0">
+                                                                        </label>
+                                                                    </div>
+                                                                    <div class="plot-settings-group">
+                                                                        <div class="plot-settings-group-title">Chart Title</div>
+                                                                        <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="freqChartTitle" type="text" value="Sweep Frequency Domain">
+                                                                    </div>
+                                                                    <div class="plot-settings-group">
+                                                                        <div class="plot-settings-group-title">X Axis Title</div>
+                                                                        <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="freqXAxisTitle" type="text" value="Frequency (kHz)">
+                                                                    </div>
+                                                                    <div class="plot-settings-group">
+                                                                        <div class="plot-settings-group-title">Y Axis Title</div>
+                                                                        <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="freqYAxisTitle" type="text" value="Power (dBm)">
+                                                                    </div>
+                                                                </div>
+                                                                <div class="plot-settings-actions">
+                                                                    <button class="plot-settings-mini-button" id="sweep-settings-reset" type="button">Default</button>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        <div class="plot-settings-grid">
-                                                            <label class="plot-settings-field">
-                                                                <span>X Min</span>
-                                                                <input class="sys-input plot-settings-input" data-sweep-setting="xMin" type="number" min="0" step="1" value="0">
-                                                            </label>
-                                                            <label class="plot-settings-field">
-                                                                <span>Y Min</span>
-                                                                <input class="sys-input plot-settings-input" data-sweep-setting="yMin" type="number" step="1" value="-110">
-                                                            </label>
-                                                            <label class="plot-settings-field">
-                                                                <span>X Max</span>
-                                                                <input class="sys-input plot-settings-input" data-sweep-setting="xMax" type="number" min="1" step="1" value="30">
-                                                            </label>
-                                                            <label class="plot-settings-field">
-                                                                <span>Y Max</span>
-                                                                <input class="sys-input plot-settings-input" data-sweep-setting="yMax" type="number" step="1" value="0">
-                                                            </label>
-                                                        </div>
-                                                        <div class="plot-settings-group">
-                                                            <div class="plot-settings-group-title">Chart Title</div>
-                                                            <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="chartTitle" type="text" value="Sweep Time Domain">
-                                                        </div>
-                                                        <div class="plot-settings-group">
-                                                            <div class="plot-settings-group-title">X Axis Title</div>
-                                                            <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="xAxisTitle" type="text" value="Elapsed Time (s)">
-                                                        </div>
-                                                        <div class="plot-settings-group">
-                                                            <div class="plot-settings-group-title">X Display Window</div>
-                                                            <div class="plot-settings-select-row">
-                                                                <select class="plot-settings-select" data-sweep-setting="xWindowSecs">
-                                                                    <option value="auto" selected>Auto (full)</option>
-                                                                    <option value="5">5 s</option>
-                                                                    <option value="10" selected>10 s</option>
-                                                                    <option value="15">15 s</option>
-                                                                    <option value="30">30 s</option>
-                                                                </select>
-                                                            </div>
-                                                            <div class="plot-settings-hint">Scroll Scope — shows recent N seconds</div>
-                                                        </div>
-                                                        <div class="plot-settings-group">
-                                                            <div class="plot-settings-group-title">Y Axis Title</div>
-                                                            <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="yAxisTitle" type="text" value="Power (dBm)">
-                                                        </div>
-                                                    </section>
-                                                </div>
                                             </div>
                                             <div class="plot-legend-sidebar"><div class="plot-legend-list is-dense" id="sweep-time-legend"></div></div>
                                         </div>
                                     </div>
                                     <!-- Freq-domain panel -->
                                     <div class="plot-panel-block">
-                                        <div class="plot-panel-heading"><span class="sys-section-title">Sweep Frequency Domain</span><span class="plot-sample-count-badge" id="sweep-freq-badge">--</span></div>
+                                        <div class="plot-panel-heading"><span class="sys-section-title">Sweep Frequency Domain</span><span class="plot-sample-count-badge" id="sweep-freq-badge"></span></div>
                                         <div class="plot-workbench is-dense">
                                             <div class="plot-stage">
                                                 <div class="plot-surface" data-plot-surface="sweep-freq">
@@ -1062,7 +1146,9 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                                    </div><!-- close sweep-plot-area -->
+                                </div><!-- close sweep-layout -->
+                            </div><!-- close chart-box -->
                             <p class="wireless-control-status configuration-control-status" id="sweep-control-status" data-state="idle" hidden></p>
                         </section>
                     </div>
@@ -3056,11 +3142,20 @@
                     method: 'POST',
                     body: formData,
                 });
-                const payload = await response.json();
+                console.log('[UPGRADE] HTTP response status:', response.status, response.statusText);
+
+                let payload;
+                try {
+                    payload = await response.json();
+                } catch (jsonError) {
+                    const responseText = await response.clone().text().catch(() => '(unable to read response)');
+                    console.error('[UPGRADE] Server returned non-JSON response:', response.status, responseText?.substring(0, 500));
+                    throw new Error(`HTTP ${response.status}: ${responseText?.substring(0, 200) || 'Unknown error'}`);
+                }
 
                 if (!response.ok || payload.success === false) {
                     const errorMsg = payload.message || `HTTP ${response.status}`;
-                    console.error('Firmware upgrade rejected by server:', errorMsg, payload);
+                    console.error('[UPGRADE] Firmware upgrade rejected by server:', errorMsg, payload);
                     throw new Error(errorMsg);
                 }
 
@@ -7116,35 +7211,79 @@
             const freqField = document.getElementById('sweep-freq-field');
             if (freqField && modeSel) freqField.style.display = modeSel.value === '0' ? '' : 'none';
 
-            // Axes toggle
+            // Axes toggle — overlay modal
             const axesToggle = document.getElementById('sweep-settings-toggle');
-            const axesDock = document.getElementById('sweep-settings-dock');
+            const axesOverlay = document.getElementById('sweep-settings-overlay');
+            const axesBackdrop = document.getElementById('sweep-settings-backdrop');
             const axesClose = document.getElementById('sweep-settings-close');
             const axesReset = document.getElementById('sweep-settings-reset');
-            if (axesToggle && axesDock) {
-                axesToggle.addEventListener('click', () => {
-                    sweepState.axesOpen = !sweepState.axesOpen;
-                    axesDock.hidden = !sweepState.axesOpen;
-                    axesToggle.classList.toggle('is-open', sweepState.axesOpen);
-                    axesToggle.setAttribute('aria-expanded', String(sweepState.axesOpen));
+            const axesTabButtons = document.querySelectorAll('[data-sweep-tab]');
+            const axesTabPanels = document.querySelectorAll('[data-sweep-panel]');
+
+            function openAxesOverlay() {
+                if (!axesOverlay) return;
+                sweepState.axesOpen = true;
+                axesOverlay.hidden = false;
+                if (axesToggle) {
+                    axesToggle.classList.add('is-open');
+                    axesToggle.setAttribute('aria-expanded', 'true');
+                }
+                // Sync tab with current settings
+                const activeTab = axesOverlay.querySelector('.plot-settings-tab.is-active');
+                const activeKey = activeTab ? activeTab.getAttribute('data-sweep-tab') : 'time';
+                axesOverlay.querySelectorAll('[data-sweep-panel]').forEach(p => {
+                    p.hidden = p.getAttribute('data-sweep-panel') !== activeKey;
                 });
             }
-            if (axesClose && axesDock) {
-                axesClose.addEventListener('pointerdown', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    sweepState.axesOpen = false;
-                    axesDock.hidden = true;
-                    if (axesToggle) {
-                        axesToggle.classList.remove('is-open');
-                        axesToggle.setAttribute('aria-expanded', 'false');
+
+            function closeAxesOverlay() {
+                if (!axesOverlay) return;
+                sweepState.axesOpen = false;
+                axesOverlay.hidden = true;
+                if (axesToggle) {
+                    axesToggle.classList.remove('is-open');
+                    axesToggle.setAttribute('aria-expanded', 'false');
+                }
+            }
+
+            if (axesToggle) {
+                axesToggle.addEventListener('click', () => {
+                    if (axesOverlay && !axesOverlay.hidden) {
+                        closeAxesOverlay();
+                    } else {
+                        openAxesOverlay();
                     }
                 });
             }
-            if (axesReset && axesDock) {
-                axesReset.addEventListener('pointerdown', (e) => {
+            if (axesClose) {
+                axesClose.addEventListener('click', (e) => {
                     e.preventDefault();
-                    e.stopPropagation();
+                    closeAxesOverlay();
+                });
+            }
+            if (axesBackdrop) {
+                axesBackdrop.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    closeAxesOverlay();
+                });
+            }
+            // Tab switching
+            axesTabButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tabKey = btn.getAttribute('data-sweep-tab');
+                    axesTabButtons.forEach(b => {
+                        b.classList.toggle('is-active', b === btn);
+                        b.setAttribute('aria-selected', String(b === btn));
+                    });
+                    axesTabPanels.forEach(p => {
+                        p.hidden = p.getAttribute('data-sweep-panel') !== tabKey;
+                    });
+                });
+            });
+            // Reset button
+            if (axesReset) {
+                axesReset.addEventListener('click', (e) => {
+                    e.preventDefault();
                     sweepTimeSettings.xMin = '0';
                     sweepTimeSettings.yMin = '-110';
                     sweepTimeSettings.xMax = '30';
@@ -7165,6 +7304,12 @@
                     if (sweepState.running) sweepPollTimeDomain();
                 });
             }
+            // Close on Escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && axesOverlay && !axesOverlay.hidden) {
+                    closeAxesOverlay();
+                }
+            });
 
             // Axes input binding
             document.querySelectorAll('[data-sweep-setting]').forEach(inp => {
@@ -7211,11 +7356,13 @@
             if (pauseBtn) {
                 pauseBtn.disabled = !sweepState.running;
                 pauseBtn.classList.toggle('is-working', sweepState.paused);
-                pauseBtn.textContent = sweepState.paused ? 'Resume' : 'Pause';
+                const pauseLabel = pauseBtn.querySelector('.sweep-btn-label');
+                if (pauseLabel) pauseLabel.textContent = sweepState.paused ? 'Resume' : 'Pause';
             }
             if (stopBtn) stopBtn.disabled = !sweepState.running;
             if (recBtn) {
-                recBtn.textContent = sweepState.recording ? 'Stop Recording' : 'Record';
+                const recLabel = recBtn.querySelector('.sweep-btn-label');
+                if (recLabel) recLabel.textContent = sweepState.recording ? 'Stop Recording' : 'Record';
                 recBtn.classList.toggle('is-working', sweepState.recording);
             }
             if (stateChip) {
@@ -7495,7 +7642,7 @@
                 return { freq_khz: freq, label, points, skipped };
             }).filter(curve => curve.points.length >= 2);
 
-            badge.textContent = `Freqs: ${freqCurves.length}  |  Frames: ${frames.length}  |  Src: ${sourceLabel}`;
+            badge.textContent = '';
 
             if (freqCurves.length === 0) {
                 svg.innerHTML = `<text x="400" y="170" text-anchor="middle" fill="#888" font-size="14">Waiting for sweep data…</text>`;
@@ -7652,9 +7799,7 @@
             const minHold = Array.isArray(payload?.min_hold) ? payload.min_hold : [];
             const avgHold = Array.isArray(payload?.average) ? payload.average : [];
             const sourceLabel = typeof last?.free_run_source === 'string' ? last.free_run_source : 'channel_info';
-            badge.textContent = last
-                ? `Freq: ${(last.target_freq_khz/1000).toFixed(3)} MHz  |  Frames: ${frames.length}  |  Src: ${sourceLabel}`
-                : '--';
+            badge.textContent = '';
 
             const visibleSeries = sweepState.visibility; // { free_run, max_hold, min_hold, average }
             if (!last || freqs.length < 2 || freeRun.length < 2 || freqs.length !== freeRun.length) {

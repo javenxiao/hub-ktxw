@@ -1924,10 +1924,7 @@ tbody td {
     pointer-events: none;
 }
 
-.plot-sample-count-badge strong {
-    color: #0b5ed7;
-    font-size: 13px;
-}
+.plot-sample-count-badge:empty { display: none; }
 
 .plot-multi-line {
     fill: none;
@@ -2121,16 +2118,7 @@ tbody td {
     align-self: start;
 }
 
-.plot-settings-dock {
-    position: absolute;
-    top: 12px;
-    right: 14px;
-    z-index: 4;
-    display: flex;
-    justify-content: flex-end;
-    width: auto;
-    max-width: calc(100% - 28px);
-}
+/* old sidebar dock — removed, superseded by overlay */
 
 .plot-settings-toggle {
     min-width: 62px;
@@ -4274,3 +4262,110 @@ tbody td {
         grid-template-columns: 1fr;
     }
 }
+
+/* ���� Sweep layout: sidebar + plot area ���� */
+.sweep-layout {
+    display: flex; gap: 0; align-items: stretch; min-height: 0;
+}
+.sweep-sidebar {
+    width: 150px; min-width: 150px; padding: 12px 10px;
+    background: #f8fafc; border-right: 1px solid #e2e8f0;
+    display: flex; flex-direction: column; gap: 8px; overflow-y: auto; position: relative;
+}
+.sweep-sidebar-sep {
+    border: none; border-top: 1px solid #d4dce6; margin: 4px 0;
+}
+.sweep-plot-area {
+    flex: 1; min-width: 0; padding: 8px 12px 8px 12px; overflow-y: auto; position: relative;
+}
+.sweep-btn {
+    display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+    padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+    background: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+    color: #334155; transition: background 0.15s, border-color 0.15s;
+}
+.sweep-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+.sweep-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.sweep-btn-start { border-color: #16a34a; color: #16a34a; }
+.sweep-btn-start:hover:not(:disabled) { background: #dcfce7; }
+.sweep-btn-pause { border-color: #f97316; color: #f97316; }
+.sweep-btn-pause:hover:not(:disabled) { background: #fff7ed; }
+.sweep-btn-stop { border-color: #dc2626; color: #dc2626; }
+.sweep-btn-stop:hover:not(:disabled) { background: #fef2f2; }
+.sweep-btn-axes, .sweep-btn-record, .sweep-btn-import {
+    border-color: #9ca3af; color: #4b5563; font-size: 12px; padding: 6px 10px;
+}
+.sweep-sidebar-field {
+    display: flex; flex-direction: column; gap: 2px;
+    font-size: 11px; font-weight: 600; color: #64748b;
+}
+.sweep-sidebar-select, .sweep-sidebar-input {
+    padding: 5px 6px; font-size: 12px; border-radius: 5px; border: 1px solid #cbd5e1;
+}
+.sweep-sidebar-check {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; margin-top: 2px;
+}
+.sweep-sidebar-status { margin-top: auto; text-align: center; }
+.sweep-state-chip {
+    display: inline-block; padding: 4px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; background: #e2e8f0; color: #475569;
+}
+.sweep-state-chip.running { background: #dcfce7; color: #16a34a; }
+.sweep-state-chip.idle { background: #e2e8f0; color: #64748b; }
+.sweep-layout .plot-toolbar { display: none !important; }
+/* Axes Settings overlay (centered modal, without sidebar prefix for plot-area usage) */
+.plot-settings-overlay { position: fixed; inset: 0; z-index: 999; display: flex; align-items: center; justify-content: center; }
+.plot-settings-overlay[hidden] { display: none !important; }
+.plot-settings-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.3); backdrop-filter: blur(3px); z-index: 998; }
+.plot-settings-dialog {
+    position: relative; width: 420px; max-width: 92%; max-height: 85%; overflow-y: auto;
+    background: #fff; border-radius: 14px; box-shadow: 0 12px 48px rgba(15,23,42,0.25);
+    padding: 20px 22px 14px; z-index: 1000;
+}
+.plot-settings-tabs { display: flex; gap: 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 14px; }
+.plot-settings-tab {
+    flex: 1; padding: 8px 0; border: none; background: none; font-size: 13px; font-weight: 600;
+    color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+}
+.plot-settings-tab.is-active { color: #2563eb; border-bottom-color: #2563eb; }
+.plot-settings-tab:hover { color: #334155; }
+.plot-settings-tab-panel[hidden] { display: none; }
+.plot-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.plot-settings-field { display: flex; flex-direction: column; gap: 3px; }
+.plot-settings-field span { font-size: 12px; font-weight: 600; color: #4a6177; }
+.plot-settings-field input { width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; }
+.plot-settings-group { margin-bottom: 12px; }
+.plot-settings-group-title { font-size: 12px; font-weight: 600; color: #4a6177; display: block; margin-bottom: 4px; }
+.plot-settings-select { width:100%; padding:7px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; background:white; }
+.plot-settings-actions { text-align: right; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+.plot-settings-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.plot-settings-title { font-size: 15px; font-weight: 800; color: #0f172a; }
+.plot-settings-close-btn { font-size: 22px; color: #4a6177; background: transparent; border: none; cursor: pointer; }
+/* ===== Sweep Sidebar Layout ===== */
+/* ===== Sweep Sidebar Layout ===== */
+.sweep-layout{display:flex;gap:0;align-items:stretch;min-height:0}
+.sweep-sidebar{width:150px;min-width:150px;padding:12px 10px;background:#f8fafc;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;position:relative}
+.sweep-sidebar-sep{border:none;border-top:1px solid #d4dce6;margin:4px 0}
+.sweep-plot-area{flex:1;min-width:0;padding:8px 12px;overflow-y:auto;position:relative}
+.sweep-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:4px;background:#fafbfc;font-size:12px;font-weight:600;cursor:pointer;color:#334155;transition:background 0.15s,border-color 0.15s}
+.sweep-btn:hover{background:#f1f5f9;border-color:#94a3b8}
+.sweep-btn:disabled{opacity:.45;cursor:not-allowed}
+.sweep-btn-start{border-color:#16a34a;color:#16a34a}
+.sweep-btn-start:hover:not(:disabled){background:#dcfce7}
+.sweep-btn-pause{border-color:#ea580c;color:#ea580c}
+.sweep-btn-pause:hover:not(:disabled){background:#fff7ed}
+.sweep-btn-stop{border-color:#dc2626;color:#dc2626}
+.sweep-btn-stop:hover:not(:disabled){background:#fef2f2}
+.sweep-btn-axes,.sweep-btn-record,.sweep-btn-import{border-color:#9ca3af;color:#4b5563;font-size:12px;padding:6px 10px}
+.sweep-sidebar-field{display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:600;color:#64748b}
+.sweep-sidebar-select,.sweep-sidebar-input{padding:5px 6px;font-size:12px;border-radius:5px;border:1px solid #cbd5e1}
+.sweep-sidebar-check{display:flex;align-items:center;gap:6px;font-size:12px;color:#475569;margin-top:2px}
+.sweep-sidebar-status{margin-top:auto;text-align:center}
+.sweep-state-chip{display:inline-block;padding:4px 14px;border-radius:999px;font-size:12px;font-weight:700;background:#e2e8f0;color:#475569}
+.sweep-state-chip.running{background:#dcfce7;color:#16a34a}
+.sweep-state-chip.idle{background:#e2e8f0;color:#64748b}
+.sweep-layout .plot-toolbar{display:none!important}
+.sweep-sidebar .plot-settings-overlay{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center}
+.sweep-sidebar .plot-settings-overlay[hidden]{display:none!important}
+.sweep-sidebar .plot-settings-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.3);backdrop-filter:blur(3px);z-index:998}
+.sweep-sidebar .plot-settings-dialog{position:relative;width:380px;max-width:90%;max-height:80%;overflow-y:auto;background:#fff;border-radius:14px;box-shadow:0 12px 48px rgba(15,23,42,.25);padding:20px 22px 14px;z-index:1000}
