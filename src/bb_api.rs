@@ -583,7 +583,9 @@ impl BasebandApi {
         self.started = false;
         self.host_devices_cache.borrow_mut().clear();
         self.remote_device_handles.clear();
-        self.device_sync_role_cache.clear();
+        // Note: device_sync_role_cache is intentionally NOT cleared here.
+        // It persists across session resets to preserve M/S labels in the
+        // Active Device dropdown even after FSP failures trigger reconnects.
         self.status_summary_cache.clear();
         self.channel_info_cache.clear();
         self.band_selection_bitmap_cache.clear();
@@ -601,7 +603,7 @@ impl BasebandApi {
         self.host_handle = 0;
         self.host_devices_cache.borrow_mut().clear();
         self.remote_device_handles.clear();
-        self.device_sync_role_cache.clear();
+        // Note: device_sync_role_cache is intentionally NOT cleared here.
         self.status_summary_cache.clear();
         self.channel_info_cache.clear();
         self.band_selection_bitmap_cache.clear();
@@ -1041,7 +1043,19 @@ impl BasebandApi {
     fn should_retry_remote_operation(label: &str) -> bool {
         // BB_SET_BANDWIDTH failures can leave the remote SDK in a state where
         // immediate handle teardown/reconnect is not safe.
-        !matches!(label, "set_bandwidth")
+        // Sweep/FSP operations (configure_sweep, start_sweep, trigger_fsp_scan)
+        // are expected to fail on DEV devices — retrying with session reset just
+        // makes the UI freeze with no benefit.
+        // BB_CFG_CHANNEL (trigger_slave_channel_scan) may not be supported
+        // on all firmware versions and also should never retry.
+        !matches!(
+            label,
+            "set_bandwidth"
+                | "configure_sweep"
+                | "start_sweep"
+                | "trigger_fsp_scan"
+                | "trigger_slave_channel_scan"
+        )
     }
 
     fn should_invalidate_remote_operation_without_cleanup(label: &str) -> bool {
@@ -2086,9 +2100,6 @@ impl BasebandApi {
                 };
             }
 
-            // Do not probe peer status here. Runtime/device-list refresh happens in
-            // the Active Device switch readback path, and extra remote get_status
-            // calls on non-active devices make the page appear hung.
             if let Some((sync_mode, sync_master)) = self.cached_sync_role_for_mac(&normalized_mac) {
                 device.sync_mode = Some(sync_mode);
                 device.sync_master = Some(sync_master);
@@ -2096,6 +2107,96 @@ impl BasebandApi {
         }
 
         Ok(devices)
+    }
+
+    /// Refresh role/sync cache for all remote devices by briefly opening each one.
+    /// Called once during startup after the initial session is established.
+    pub fn refresh_all_device_status_caches(&mut self) {
+        tracing::info!("refresh_all_device_status_caches: starting (remote={})", self.is_remote_mode());
+        if !self.is_remote_mode() {
+            tracing::info!("refresh_all_device_status_caches: skipped (not remote)");
+            return;
+        }
+        // 首先填充 host 设备列表缓存
+        if let Err(e) = self.refresh_host_devices_cache() {
+            tracing::warn!("Failed to refresh host devices cache for status probe: {}", e);
+            return;
+        }
+        let devices = self.host_devices_cache.borrow().clone();
+        if devices.is_empty() {
+            tracing::info!("No remote devices found to probe");
+            return;
+        }
+
+        tracing::info!("Probing {} remote device(s) for role/sync info", devices.len());
+
+        // Save current active device handle so we can restore it after scanning
+        let saved_active_handle = self.device_handle;
+        let saved_active_mac = self.active_device_mac.clone();
+
+        for device in &devices {
+            let mac = &device.mac_address;
+            let normalized_mac = Self::normalize_mac(mac);
+
+            // Skip if already cached
+            if self.cached_role_for_mac(&normalized_mac).is_some()
+                && self.cached_sync_role_for_mac(&normalized_mac).is_some()
+            {
+                continue;
+            }
+
+            tracing::info!("Probing device {} for role/sync info", mac);
+
+            // Open the device temporarily (with a timeout-like fast fail)
+            let open_result = match run_remote_sdk_call(true, || {
+                ffi::open_host_device_by_mac(self.host_ptr(), mac)
+            }) {
+                Ok(result) => result,
+                Err(e) => {
+                    tracing::info!(
+                        "Cannot open device {} for probe (will retry on Active Device switch): {}",
+                        mac, e
+                    );
+                    continue;
+                }
+            };
+
+            let (dev_handle, _) = open_result;
+            if dev_handle.is_null() {
+                tracing::info!("Probe got null handle for device {}. Skipping.", mac);
+                continue;
+            }
+
+            // Get status
+            match ffi::get_status(dev_handle, ffi::BB_ALL_DATA_USER_BMP, None) {
+                Ok(status) => {
+                    let role = status.role;
+                    if matches!(role, ffi::BB_ROLE_AP | ffi::BB_ROLE_DEV) {
+                        self.cache_role_for_mac(&normalized_mac, role);
+                    }
+                    self.cache_sync_role_for_mac(
+                        &normalized_mac,
+                        status.sync_mode,
+                        status.sync_master,
+                    );
+                    tracing::info!(
+                        "Probed device {}: role={}, sync_mode={}, sync_master={}",
+                        mac, role, status.sync_mode, status.sync_master
+                    );
+                }
+                Err(e) => {
+                    tracing::info!("Failed to get status for device {}: {}", mac, e);
+                }
+            }
+
+            // Close the temporary handle silently (best effort)
+            let _ = ffi::close_device(dev_handle);
+        }
+
+        // Restore active device connection if we switched away
+        self.device_handle = saved_active_handle;
+        self.active_device_mac = saved_active_mac;
+        tracing::info!("Device status probe completed");
     }
 
     fn load_wireless_configuration_details(&mut self, mode: u8) -> Result<WirelessConfigurationDetails, String> {
@@ -2431,6 +2532,20 @@ impl BasebandApi {
 
     pub fn trigger_fsp_scan(&mut self) -> Result<(), String> {
         self.with_device_operation("trigger_fsp_scan", |handle| ffi::trigger_fsp_scan(handle))
+    }
+
+    /// Trigger a real channel scan on slave devices using BB_CFG_CHANNEL.
+    /// This is needed because slave devices lack FSP event subscriptions,
+    /// so BB_GET_CHAN_INFO returns stale/zero power values unless we
+    /// explicitly trigger a scan via the channel configuration command.
+    pub fn trigger_slave_channel_scan(
+        &mut self,
+        bandwidth: u8,
+        frequencies_khz: &[u32],
+    ) -> Result<(), String> {
+        self.with_device_operation("trigger_slave_channel_scan", |handle| {
+            ffi::trigger_slave_channel_scan(handle, bandwidth, frequencies_khz)
+        })
     }
 
     pub fn set_mcs_mode(&mut self, slot: u8, auto_mode: bool) -> Result<(), String> {
@@ -3262,6 +3377,14 @@ impl BasebandManager {
                 );
                 let mut api = poisoned.into_inner();
                 api.clear_remote_session_state();
+                // Immediately attempt to re-establish a valid session so that
+                // the caller doesn't operate on an uninitialized (handle=0) API.
+                if let Err(e) = api.ensure_remote_session() {
+                    tracing::error!(
+                        "Failed to re-establish remote session after mutex poison recovery: {}",
+                        e
+                    );
+                }
                 api
             }
         }
@@ -3410,6 +3533,20 @@ impl BasebandManager {
 
     pub fn trigger_fsp_scan(&self) -> Result<(), String> {
         self.with_api("trigger_fsp_scan", |api| api.trigger_fsp_scan())
+    }
+
+    /// Trigger a real channel scan on slave devices using BB_CFG_CHANNEL.
+    /// See BasebandApi::trigger_slave_channel_scan for details.
+    pub fn trigger_slave_channel_scan(&self, bandwidth: u8, frequencies_khz: &[u32]) -> Result<(), String> {
+        self.with_api("trigger_slave_channel_scan", |api| api.trigger_slave_channel_scan(bandwidth, frequencies_khz))
+    }
+
+    /// Probe all remote devices for role/sync info and populate caches.
+    /// Call this once after the initial session is established so the
+    /// Active Device dropdown shows proper labels immediately.
+    pub fn refresh_all_device_status_caches(&self) {
+        let mut api = self.api.lock().unwrap();
+        api.refresh_all_device_status_caches();
     }
 
     pub fn set_mcs_mode(&self, slot: u8, auto_mode: bool) -> Result<(), String> {

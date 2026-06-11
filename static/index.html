@@ -1025,6 +1025,19 @@
                                                             <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="xAxisTitle" type="text" value="Elapsed Time (s)">
                                                         </div>
                                                         <div class="plot-settings-group">
+                                                            <div class="plot-settings-group-title">X Display Window</div>
+                                                            <div class="plot-settings-select-row">
+                                                                <select class="plot-settings-select" data-sweep-setting="xWindowSecs">
+                                                                    <option value="auto" selected>Auto (full)</option>
+                                                                    <option value="5">5 s</option>
+                                                                    <option value="10" selected>10 s</option>
+                                                                    <option value="15">15 s</option>
+                                                                    <option value="30">30 s</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="plot-settings-hint">Scroll Scope — shows recent N seconds</div>
+                                                        </div>
+                                                        <div class="plot-settings-group">
                                                             <div class="plot-settings-group-title">Y Axis Title</div>
                                                             <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="yAxisTitle" type="text" value="Power (dBm)">
                                                         </div>
@@ -2528,6 +2541,12 @@
                     successMessage: `Active Device 已切换到 ${targetLabel}。`,
                 });
                 await refreshMaintenanceInfoForActiveDeviceChange();
+                // 切换 Active Device 后，重新初始化 sweep 以使 Y 轴自适应新设备的
+                // 数据范围（sweep 默认 yMinAuto/yMaxAuto=true，restart 会触发 re-range）。
+                if (sweepState.running) {
+                    sweepStop();
+                    sweepStart();
+                }
             }
 
             return targetLabel;
@@ -7055,6 +7074,10 @@
             xMaxAuto: true,
             yMinAuto: true,
             yMaxAuto: true,
+            yAutoTickStep: true,
+            yTickStep: '5',
+            xWindowSecs: 'auto',       // 滑动窗口宽度（秒）；'auto' = 使用X Min/Max自适应
+            xWindowSecsOptions: ['auto', '5', '10', '15', '30'],
             chartTitle: 'Sweep Time Domain',
             xAxisTitle: 'Elapsed Time (s)',
             yAxisTitle: 'Power (dBm)',
@@ -7130,6 +7153,9 @@
                     sweepTimeSettings.xMaxAuto = true;
                     sweepTimeSettings.yMinAuto = true;
                     sweepTimeSettings.yMaxAuto = true;
+                    sweepTimeSettings.yAutoTickStep = true;
+                    sweepTimeSettings.yTickStep = '5';
+                    sweepTimeSettings.xWindowSecs = 'auto';
                     document.querySelectorAll('[data-sweep-setting]').forEach(inp => {
                         const key = inp.getAttribute('data-sweep-setting');
                         if (key && key in sweepTimeSettings) {
@@ -7485,21 +7511,46 @@
 
             const allX = freqCurves.flatMap(curve => curve.points.map(p => p.t));
             const allY = freqCurves.flatMap(curve => curve.points.map(p => p.y));
-            let xMin = settings.xMinAuto ? Math.min(...allX) : Number(settings.xMin) || 0;
-            let xMax = settings.xMaxAuto ? Math.max(...allX) : Number(settings.xMax) || 30;
+            const dataXMin = Math.min(...allX);
+            const dataXMax = Math.max(...allX);
+
+            // Sliding window: when xWindowSecs is a fixed number, scroll the viewport
+            // to show the last N seconds, like an oscilloscope "roll" mode.
+            // When 'auto', fall back to X Min / X Max manual or auto settings.
+            let xMin, xMax;
+            const win = settings.xWindowSecs || 'auto';
+            const useWindow = win !== 'auto' && win !== '' && !isNaN(Number(win));
+            if (useWindow) {
+                const winSecs = parseFloat(win);
+                xMax = dataXMax;                              // anchor right edge at latest data
+                xMin = Math.max(dataXMin, xMax - winSecs);    // left edge trails by window width
+                // If paused or early in sweep, still show at least winSecs span
+                if (xMax - xMin < 1) { xMax = xMin + winSecs; }
+            } else {
+                xMin = settings.xMinAuto ? dataXMin : Number(settings.xMin) || 0;
+                xMax = settings.xMaxAuto ? dataXMax : Number(settings.xMax) || 30;
+            }
+            if (xMax <= xMin) xMax = xMin + 1;
+
             let yMin = settings.yMinAuto ? Math.floor(Math.min(...allY)) - 5 : Number(settings.yMin) || -110;
             let yMax = settings.yMaxAuto ? Math.ceil(Math.max(...allY)) + 5 : Number(settings.yMax) || 0;
-            if (xMax <= xMin) xMax = xMin + 1;
             if (yMax <= yMin) yMax = yMin + 10;
+
+            // ── Adaptive Y-axis tick step ──
+            // When the value span is large, use a larger tick step to avoid
+            // label crowding. Steps: 5→10→20→50 dB
+            const ySpan = yMax - yMin;
+            const autoTickStep = ySpan > 200 ? 50 : ySpan > 100 ? 20 : ySpan > 50 ? 10 : 5;
+            const yTickStep = settings.yAutoTickStep ? autoTickStep : Number(settings.yTickStep) || 5;
 
             const xScale = (v) => margin.left + ((v - xMin) / (xMax - xMin || 1)) * pw;
             const yScale = (v) => margin.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
 
-            // Grid — Y ticks at multiples of 5
+            // Grid — Y ticks at adaptive steps (5/10/20/50 dB)
             const gridLines = [];
             const yTickLabels = [];
-            const yTickStart = Math.ceil(yMin / 5) * 5;
-            for (let g = yTickStart; g <= yMax; g += 5) {
+            const yTickStart = Math.ceil(yMin / yTickStep) * yTickStep;
+            for (let g = yTickStart; g <= yMax; g += yTickStep) {
                 const y = yScale(g);
                 gridLines.push(`<line class="plot-grid-line" x1="${margin.left}" x2="${W-margin.right}" y1="${y}" y2="${y}"/>`);
                 yTickLabels.push(`<text class="plot-axis-value plot-axis-value-y" text-anchor="end" x="44" y="${y + 4}">${formatPlotAxisValue(g)}</text>`);
@@ -7627,6 +7678,10 @@
             let yMax = Math.max(...allValues) + 5;
             if (yMax - yMin < 10) { const mid = (yMin + yMax) / 2; yMin = mid - 5; yMax = mid + 5; }
 
+            // Adaptive Y-axis tick step (same as time-domain)
+            const ySpan = yMax - yMin;
+            const freqTickStep = ySpan > 200 ? 50 : ySpan > 100 ? 20 : ySpan > 50 ? 10 : 5;
+
             // X axis: evenly spaced by index, not by frequency value
             const xScale = (idx) => margin.left + (idx / Math.max(1, freqs.length - 1)) * pw;
             const yScale = (v) => margin.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
@@ -7651,8 +7706,8 @@
             /* ── grid: Y ticks at multiples of 5 ── */
             const gridLines = [];
             const yTickLabels = [];
-            const yTickStart = Math.ceil(yMin / 5) * 5;
-            for (let g = yTickStart; g <= yMax; g += 5) {
+            const yTickStart = Math.ceil(yMin / freqTickStep) * freqTickStep;
+            for (let g = yTickStart; g <= yMax; g += freqTickStep) {
                 const y = yScale(g);
                 gridLines.push(`<line class="plot-grid-line" x1="${margin.left}" x2="${W-margin.right}" y1="${y}" y2="${y}"/>`);
                 yTickLabels.push(`<text class="plot-axis-value plot-axis-value-y" text-anchor="end" x="44" y="${y + 4}">${formatPlotAxisValue(g)}</text>`);

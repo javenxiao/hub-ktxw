@@ -1258,6 +1258,7 @@ const MAX_CFG_TEXT_SIZE: usize = 1024 * 1024;
 /// 固件热升级单次传输 chunk 上限（≤ BB_HOT_UPGRADE_DATA_SIZE）
 pub const BB_HOT_UPGRADE_CHUNK_SIZE: usize = 0x300;
 pub const BB_PLOT_POINT_MAX: usize = 10;
+const BB_CONFIG_MAX_CHAN_NUM: usize = 32;
 pub const BB_BLACK_LIST_SIZE: usize = 3;
 pub const BB_FSP_FREQ_LIST_MAX: usize = 32;
 pub const BB_CONFIG_MAX_SLOT_CANDIDATE: usize = 5;
@@ -1405,6 +1406,10 @@ pub const BB_EVENT_FSP: i32 = 15;
 pub const BB_FSP_NOTIFY_TYPE_FREQ_LIST: u32 = 0;
 pub const BB_FSP_NOTIFY_TYPE_FS_RESULT: u32 = 1;
 pub const BB_FSP_NOTIFY_TYPE_CANDIDATE: u32 = 2;
+/// 平方差模式 — added in SDK update, may be supported on slave devices
+pub const BB_FSP_NOTIFY_TYPE_DIFF: u32 = 3;
+/// 直方图模式 — added in SDK update, may be supported on slave devices
+pub const BB_FSP_NOTIFY_TYPE_HIST: u32 = 4;
 
 pub const BB_FSP_CTRL_START: u32 = 0;
 pub const BB_FSP_CTRL_STOP: u32 = 1;
@@ -1813,9 +1818,19 @@ fn subscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
         callback: Some(handle_fsp_event),
         user: std::ptr::null_mut(),
     };
-    // Specify which FSP sub-events to receive: bit 1 = BB_FSP_NOTIFY_TYPE_FS_RESULT
+    // Subscribe to ALL known FSP sub-event types:
+    //   bit0 = BB_FSP_NOTIFY_TYPE_FREQ_LIST (0)
+    //   bit1 = BB_FSP_NOTIFY_TYPE_FS_RESULT (1)
+    //   bit2 = BB_FSP_NOTIFY_TYPE_CANDIDATE (2)
+    //   bit3 = BB_FSP_NOTIFY_TYPE_DIFF (3) — added in SDK update
+    //   bit4 = BB_FSP_NOTIFY_TYPE_HIST (4) — added in SDK update
+    let sub_bmp = (1u32 << BB_FSP_NOTIFY_TYPE_FREQ_LIST)
+        | (1u32 << BB_FSP_NOTIFY_TYPE_FS_RESULT)
+        | (1u32 << BB_FSP_NOTIFY_TYPE_CANDIDATE)
+        | (1u32 << BB_FSP_NOTIFY_TYPE_DIFF)
+        | (1u32 << BB_FSP_NOTIFY_TYPE_HIST);
     let mut param = bb_event_fsp_param_t::default();
-    param.set_sub_event_bmp(1 << BB_FSP_NOTIFY_TYPE_FS_RESULT);
+    param.set_sub_event_bmp(sub_bmp);
 
     unsafe {
         match (sdk.bb_ioctl)(
@@ -1825,12 +1840,92 @@ fn subscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
             &mut param as *mut bb_event_fsp_param_t as *mut c_void,
         ) {
             0 => {
-                tracing::info!("FSP event subscribed successfully (sub_event_bmp={})", param.sub_event_bmp());
+                tracing::info!("FSP event subscribed (sub_event_bmp=0x{:X})", sub_bmp);
                 Ok(())
             },
             e => Err(format!("bb_ioctl(BB_SET_EVENT_SUBSCRIBE/FSP) failed with code: {}", e)),
         }
     }
+}
+
+/// Try to subscribe FSP for DEV devices — DEV may reject certain sub-event types.
+/// Falls back through several bmp masks: full → FS_RESULT only → FREQ_LIST only → notify failure.
+pub fn subscribe_fsp_event_dev(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    let sdk = sdk()?;
+    let input = bb_set_event_callback_t {
+        event: BB_EVENT_FSP,
+        callback: Some(handle_fsp_event),
+        user: std::ptr::null_mut(),
+    };
+
+    // Try full bitmap first: FREQ_LIST(bit0) | FS_RESULT(bit1) | CANDIDATE(bit2) | DIFF(bit3) | HIST(bit4)
+    let masks: &[(u32, &str)] = &[
+        (
+            (1u32 << BB_FSP_NOTIFY_TYPE_FREQ_LIST)
+                | (1u32 << BB_FSP_NOTIFY_TYPE_FS_RESULT)
+                | (1u32 << BB_FSP_NOTIFY_TYPE_CANDIDATE)
+                | (1u32 << BB_FSP_NOTIFY_TYPE_DIFF)
+                | (1u32 << BB_FSP_NOTIFY_TYPE_HIST),
+            "FREQ_LIST|FS_RESULT|CANDIDATE|DIFF|HIST",
+        ),
+        (
+            (1u32 << BB_FSP_NOTIFY_TYPE_FREQ_LIST)
+                | (1u32 << BB_FSP_NOTIFY_TYPE_FS_RESULT)
+                | (1u32 << BB_FSP_NOTIFY_TYPE_CANDIDATE),
+            "FREQ_LIST|FS_RESULT|CANDIDATE",
+        ),
+        (
+            (1u32 << BB_FSP_NOTIFY_TYPE_DIFF),
+            "DIFF only",
+        ),
+        (
+            (1u32 << BB_FSP_NOTIFY_TYPE_HIST),
+            "HIST only",
+        ),
+        (
+            (1u32 << BB_FSP_NOTIFY_TYPE_FS_RESULT),
+            "FS_RESULT only",
+        ),
+        (
+            (1u32 << BB_FSP_NOTIFY_TYPE_FREQ_LIST),
+            "FREQ_LIST only",
+        ),
+        (
+            (1u32 << BB_FSP_NOTIFY_TYPE_CANDIDATE),
+            "CANDIDATE only",
+        ),
+    ];
+
+    for &(sub_bmp, label) in masks {
+        let mut param = bb_event_fsp_param_t::default();
+        param.set_sub_event_bmp(sub_bmp);
+        unsafe {
+            match (sdk.bb_ioctl)(
+                handle,
+                BB_SET_EVENT_SUBSCRIBE as c_uint,
+                &input as *const bb_set_event_callback_t as *const c_void,
+                &mut param as *mut bb_event_fsp_param_t as *mut c_void,
+            ) {
+                0 => {
+                    tracing::info!(
+                        "FSP event subscribed for DEV (mask={}, bmp=0x{:X})",
+                        label,
+                        sub_bmp
+                    );
+                    return Ok(());
+                }
+                e => {
+                    tracing::debug!(
+                        "FSP subscribe attempt mask={} returned code {}",
+                        label,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    Err("All FSP subscribe masks failed for DEV — FSP not supported on this device".to_string())
 }
 
 fn unsubscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
@@ -2418,6 +2513,16 @@ pub fn get_channel_info(handle: *mut bb_dev_handle_t) -> Result<BbChannelInfoSum
                         power_dbm: output.power[index],
                     })
                     .collect::<Vec<_>>();
+                // Diagnostic: dump raw power[] values on every call to detect
+                // whether slave returns stale zeros or actual scan data.
+                let first_powers: Vec<String> = output.power.iter().take(channel_count).map(|p| format!("{}", p)).collect();
+                tracing::info!(
+                    "BB_GET_CHAN_INFO raw: chan_num={} auto_mode={} work_chan={} first_powers=[{}]",
+                    output.chan_num,
+                    output.auto_mode,
+                    output.work_chan,
+                    first_powers.join(", ")
+                );
                 let filtered_channels = raw_channels
                     .iter()
                     .filter(|entry| (100_000..=7_000_000).contains(&entry.frequency_khz))
@@ -2443,6 +2548,72 @@ pub fn get_channel_info(handle: *mut bb_dev_handle_t) -> Result<BbChannelInfoSum
                 })
             }
             e => Err(format!("bb_ioctl(BB_GET_CHAN_INFO) failed with code: {}", e)),
+        }
+    })
+}
+
+/// Trigger a real channel scan on slave devices by sending BB_CFG_CHANNEL
+/// with minimal parameters. This causes the SDK to perform a spectrum scan
+/// and update its internal power[] table, which BB_GET_CHAN_INFO will then
+/// return. Without this, slave devices return stale/zero power values
+/// because they lack FSP event subscriptions.
+pub fn trigger_slave_channel_scan(
+    handle: *mut bb_dev_handle_t,
+    bandwidth: u8,
+    frequencies_khz: &[u32],
+) -> Result<(), String> {
+    if frequencies_khz.len() > BB_CONFIG_MAX_CHAN_NUM {
+        return Err(format!(
+            "Too many channel frequencies for slave scan: {} exceeds {}",
+            frequencies_khz.len(),
+            BB_CONFIG_MAX_CHAN_NUM
+        ));
+    }
+    let sdk = sdk()?;
+    // Build a minimal bb_conf_chan_t: the C struct is large (contains
+    // sub-structs for hop/auto-band parameters), but BB_CFG_CHANNEL
+    // reads it by reference — only the fields we set matter.
+    // Field order (packed):
+    //   band_mode:1 init_band:1 init_chan:1 bonus_low_band:1 bonus_edge_chan:1
+    //   flags:1 fs_bw:1 chan_num:1
+    //   chan_freq[32×4] = 128B
+    //   chan_freq_slave[32×4] = 128B
+    //   subchan(12B) + optional subband + hop_para(88B?) + hop_para_multi(??) + auto_band_para(??)
+    // Total struct is ~ 1KB+. We only zero-init the critical prefix.
+    let mut payload = vec![0u8; 1024];
+    // offset 0: band_mode (u8) — 0 = auto band mode
+    payload[0] = 0;
+    // offset 1: init_band (u8) — BB_BAND_MAX means auto select
+    payload[1] = 0xFF; // BB_BAND_MAX
+    // offset 2: init_chan (i8) — <0 triggers ACS (auto channel selection)
+    payload[2] = 0xFFu8; // -1 as i8 → triggers ACS
+    // offset 6: fs_bw (u8) — scan bandwidth
+    payload[6] = bandwidth & 0x07;
+    // offset 7: chan_num (u8) — number of freq points
+    payload[7] = frequencies_khz.len() as u8;
+    // offset 8-135: chan_freq[32] — master freq list
+    for (i, &freq) in frequencies_khz.iter().enumerate() {
+        let off = 8 + i * 4;
+        payload[off..off + 4].copy_from_slice(&freq.to_le_bytes());
+    }
+    // offset 136-263: chan_freq_slave[32] — slave freq list (same as master for sweep)
+    for (i, &freq) in frequencies_khz.iter().enumerate() {
+        let off = 136 + i * 4;
+        payload[off..off + 4].copy_from_slice(&freq.to_le_bytes());
+    }
+
+    suppress_sdk_console_output(|| unsafe {
+        match (sdk.bb_ioctl)(
+            handle,
+            BB_CFG_CHANNEL as c_uint,
+            payload.as_ptr() as *const c_void,
+            std::ptr::null_mut(),
+        ) {
+            0 => {
+                tracing::info!("Slave channel scan triggered (bw={}, {} freqs)", bandwidth, frequencies_khz.len());
+                Ok(())
+            }
+            e => Err(format!("bb_ioctl(BB_CFG_CHANNEL) failed with code: {}", e)),
         }
     })
 }
@@ -2482,9 +2653,25 @@ fn send_fsp_control(handle: *mut bb_dev_handle_t, msg_type: u32, payload: &[u8])
 
 pub fn start_sweep(handle: *mut bb_dev_handle_t) -> Result<(), String> {
     reset_fsp_cache();
+    // Try standard (AP) subscription first; on DEV, fall back to DEV-specific masks
     match subscribe_fsp_event(handle) {
-        Ok(()) => tracing::info!("FSP event subscribed for sweep"),
-        Err(e) => tracing::warn!("FSP event subscribe failed (sweep will fall back to channel_info): {}", e),
+        Ok(()) => {
+            tracing::info!("FSP event subscribed for sweep (standard masks)");
+        }
+        Err(e) => {
+            tracing::warn!("Standard FSP subscribe failed: {}", e);
+            match subscribe_fsp_event_dev(handle) {
+                Ok(()) => {
+                    tracing::info!("FSP event subscribed for DEV sweep (fallback masks)");
+                }
+                Err(dev_e) => {
+                    tracing::warn!(
+                        "FSP subscribe also failed for DEV (sweep will fall back to channel_info): {}",
+                        dev_e
+                    );
+                }
+            }
+        }
     }
     send_fsp_control(handle, BB_FSP_CTRL_START, &[])
 }

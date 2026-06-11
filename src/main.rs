@@ -891,6 +891,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if health.effective_mode == "hardware-remote-bb-host" {
                 if health.host.connected {
                     info!("[ok] Remote bb_host session initialized successfully");
+                    // 启动时主动探测所有远程设备的 role 和 sync 信息，
+                    // 确保 Active Device 下拉框从首次加载就显示完整标签。
+                    bb.refresh_all_device_status_caches();
                 } else {
                     warn!(
                         "Remote bb_host manager initialized without an active daemon session: {}",
@@ -2582,6 +2585,11 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut sweep_initialized = false;
         let mut last_role: Option<u8> = None;
+        // Track whether we've ever done FSP init. After the first init
+        // (success or failure), subsequent role-switch re-initializations
+        // MUST NOT touch FSP — FSP failures on unsupported devices can
+        // corrupt the SDK session and cause daemon exit / device hang.
+        let mut fsp_attempted = false;
 
         loop {
             ticker.tick().await;
@@ -2595,7 +2603,7 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
             // Detect current role — use cached snapshot (cheap)
             let current_role = baseband.get_status_snapshot().map(|s| s.role).ok();
 
-            // Role changed (device switch) → reset initialization and clear stale FSP cache
+            // Role changed (device switch) → reset initialization and clear stale caches
             if current_role.is_some() && current_role != last_role {
                 if last_role.is_some() {
                     info!(
@@ -2603,23 +2611,33 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                         last_role, current_role
                     );
                     ffi::reset_fsp_cache();
+                    // Clear all sweep data caches so the frontend sees fresh data
+                    // for the new device, not mixed with previous device's data.
+                    state.sweep_plot_cache.write().await.clear();
+                    state.sweep_frame_plot_cache.write().await.clear();
+                    state.sweep_max_hold.write().await.clear();
+                    state.sweep_min_hold.write().await.clear();
+                    state.sweep_average_hold.write().await.clear();
+                    *state.sweep_average_count.write().await = 0;
+                    info!("Sweep feeder: all sweep caches cleared for device switch");
                 }
                 last_role = current_role;
                 sweep_initialized = false;
             }
 
-            // Role-aware initialization: DEV does NOT support BB_SET_FSP_CTRL — calling it (even
-            // when it fails) corrupts SDK state and causes subsequent BB_GET_CHAN_INFO to fail.
-            // Only attempt FSP setup on AP. Wait until role is known before marking initialized.
+            // Role-aware initialization: DEV does NOT support BB_SET_FSP_CTRL — calling it
+            // (even when it fails) corrupts SDK state and causes subsequent BB_GET_CHAN_INFO
+            // to fail. Only attempt FSP setup on the very first initialization for AP;
+            // all subsequent re-inits (after role switch) skip FSP entirely.
             if !sweep_initialized {
                 match current_role {
                     Some(ffi::BB_ROLE_DEV) => {
-                        // DEV: skip all FSP commands, use BB_GET_CHAN_INFO directly
                         info!("Sweep feeder: DEV mode — using BB_GET_CHAN_INFO (no FSP)");
                         sweep_initialized = true;
                     }
-                    Some(_) => {
-                        // AP (or other): attempt FSP setup — failure is non-fatal
+                    Some(_) if !fsp_attempted => {
+                        // First AP init: try FSP
+                        fsp_attempted = true;
                         let frequencies: Vec<u32> = if !control.frequencies_khz.is_empty() {
                             control.frequencies_khz.clone()
                         } else {
@@ -2640,6 +2658,11 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                         }
                         sweep_initialized = true;
                     }
+                    Some(_) => {
+                        // Subsequent AP init (after role switch): skip FSP to protect SDK session
+                        info!("Sweep feeder: AP mode — using BB_GET_CHAN_INFO (FSP already attempted, skipping re-init)");
+                        sweep_initialized = true;
+                    }
                     None => {
                         // Role not yet known — defer until next tick
                     }
@@ -2656,6 +2679,26 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                     }
                 }
             }
+            // Slave devices (sync_master=0) may not support FSP events — use
+            // BB_CFG_CHANNEL to trigger a real spectrum scan instead. The SDK
+            // will update its internal power[] table, which BB_GET_CHAN_INFO
+            // then returns fresh values matching the "chan" command output.
+            let is_slave = current_role == Some(ffi::BB_ROLE_AP)
+                && baseband.get_status_snapshot().map(|s| s.sync_master).ok() == Some(0);
+            if is_slave && sequence % 8 == 0 {
+                let freqs_for_scan: Vec<u32> = if !control.frequencies_khz.is_empty() {
+                    control.frequencies_khz.clone()
+                } else {
+                    control.target_freq_khz.into_iter().collect()
+                };
+                if let Err(e) = baseband.trigger_slave_channel_scan(control.bandwidth, &freqs_for_scan) {
+                    if sequence % 40 == 1 {
+                        warn!("Slave channel scan trigger failed: {}", e);
+                    }
+                } else {
+                    tokio::time::sleep(Duration::from_millis(150)).await;
+                }
+            }
 
             let channel_info = match baseband.get_sweep_channel_info() {
                 Ok(value) => value,
@@ -2667,24 +2710,17 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 }
             };
 
-            let mut freq_list: Vec<u32> = channel_info.channels.iter().map(|entry| entry.frequency_khz).collect();
-            let mut free_run: Vec<i32> = channel_info.channels.iter().map(|entry| entry.power_dbm).collect();
-            let mut free_run_source = "channel_info";
+            let freq_list: Vec<u32> = channel_info.channels.iter().map(|entry| entry.frequency_khz).collect();
+            let free_run: Vec<i32> = channel_info.channels.iter().map(|entry| entry.power_dbm).collect();
+            let free_run_source = "channel_info";
 
-            // Use FSP cache when available (AP: populated by retriggered scans; DEV: may be empty → channel_info fallback)
-            if let Some((fsp_count, fsp_powers)) = ffi::fsp_cache_snapshot() {
-                let available = usize::min(fsp_count as usize, fsp_powers.len());
-                let aligned = usize::min(available, freq_list.len());
-                if aligned > 0 {
-                    free_run = fsp_powers
-                        .into_iter()
-                        .take(aligned)
-                        .map(i32::from)
-                        .collect();
-                    freq_list.truncate(aligned);
-                    free_run_source = "fsp";
-                }
-            }
+            // SKIP FSP cache: SDK R&D confirmed both master and slave use
+            // BB_GET_CHAN_INFO as the sole sweep data source. The FSP path
+            // was producing different values (positive i16) compared to the
+            // direct channel_info path (int32_t). To align with the "chan"
+            // console command, always use channel_info.power_dbm directly.
+            // (Previous FSP cache logic kept as comment for reference.)
+            // if let Some((fsp_count, fsp_powers)) = ffi::fsp_cache_snapshot() { ... }
 
             // Diagnostic: log data source and first power value every 4 ticks (~1s)
             if sequence % 4 == 1 {
@@ -5992,8 +6028,11 @@ mod tests {
     #[test]
     fn resolve_connection_mac_address_prefers_dev_ap_target_for_matching_runtime() {
         let status = sample_dev_status(Some("66:00:00:00"));
-        let link = sample_link_status(1, true, Some("66:00:00:00"));
-        let runtime = sample_runtime_view("A5:54:F6:2C", Some("66:00:00:00"));
+        // peer_mac_hex is None, so the function must fall through to the
+        // DEV runtime branch and use dev_pair_target_mac.
+        let link = sample_link_status(1, true, None);
+        let mut runtime = sample_runtime_view("A5:54:F6:2C", Some("A5:68:B0:33"));
+        runtime.operation_mode = "DEV (Async)".to_string();
 
         let resolved = resolve_connection_mac_address(&status, &link, Some(&runtime));
 
