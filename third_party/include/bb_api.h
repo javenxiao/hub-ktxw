@@ -664,6 +664,8 @@ typedef enum {
     BB_FSP_NOTIFY_TYPE_FREQ_LIST,                            /**扫频频点列表*/
     BB_FSP_NOTIFY_TYPE_FS_RESULT,                            /**扫频结果*/
     BB_FSP_NOTIFY_TYPE_CANDIDATE,                            /**候选频点*/
+    BB_FSP_NOTIFY_TYPE_DIFF,                                  /**平方差模式*/
+    BB_FSP_NOTIFY_TYPE_HIST,                                  /**直方图模式*/
     BB_FSP_NOTIFY_TYPE_MAX
 } bb_fsp_notify_type_e;
 

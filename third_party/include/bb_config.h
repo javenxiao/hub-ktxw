@@ -256,6 +256,7 @@ extern "C" {
 #define BB_CONFIG_ENABLE_XDS_UDF            (0)         /**<@note 透传模块UDF匹配功能*/
 #define BB_CONFIG_XDS_UDF_LENGTH            (32)        /**<@note 透传模块UDF最大匹配长度*/
 #define BB_CONFIG_FS_PRO                    1           /**<@note 扫频pro版*/
+#define BB_CONFIG_FSP_DUMP                  1           /**<@note dump fsp result */
 #define BB_CONFIG_ANT_PROBE                 0           /**<@note 1V1多天线探测*/
 #define BB_CONFIG_MBLK_PKT_DEBUG            1           /**<@note 使能MBLK调试*/
 

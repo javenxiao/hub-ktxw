@@ -122,9 +122,6 @@
                             <h3 class="sys-section-title">WAN Status</h3>
                             <table class="sys-table">
                                 <tr><td>MAC Address</td><td id="wan-mac">--</td><td>Connection Type</td><td id="wan-conn-type">--</td></tr>
-                                <tr><td>IP Address</td><td id="wan-ip">--</td><td>Gateway</td><td id="wan-gateway">--</td></tr>
-                                <tr><td>Subnet Mask</td><td id="wan-mask">--</td><td>Primary DNS</td><td id="wan-dns">--</td></tr>
-                                <tr><td></td><td></td><td>Secondary DNS</td><td id="wan-dns2">--</td></tr>
                             </table>
                         </div>
                     </div>
@@ -957,18 +954,20 @@
                                 <div class="sweep-layout">
                                     <!-- Sweep control sidebar -->
                                     <aside class="sweep-sidebar">
-                                        <button class="sweep-btn sweep-btn-start" id="sweep-start-btn" type="button">
-                                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"><polygon points="5,3 19,12 5,21" fill="currentColor"/></svg>
-                                            <span class="sweep-btn-label">Start</span>
-                                        </button>
-                                        <button class="sweep-btn sweep-btn-pause" id="sweep-pause-btn" type="button" disabled>
-                                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                                            <span class="sweep-btn-label">Pause</span>
-                                        </button>
-                                        <button class="sweep-btn sweep-btn-stop" id="sweep-stop-btn" type="button" disabled>
-                                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
-                                            <span class="sweep-btn-label">Stop</span>
-                                        </button>
+                                        <div class="sweep-sidebar-group sweep-sidebar-group-primary">
+                                            <button class="sweep-btn sweep-btn-start" id="sweep-start-btn" type="button">
+                                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"><polygon points="5,3 19,12 5,21" fill="currentColor"/></svg>
+                                                <span class="sweep-btn-label">Start</span>
+                                            </button>
+                                            <button class="sweep-btn sweep-btn-pause" id="sweep-pause-btn" type="button" disabled>
+                                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                                <span class="sweep-btn-label">Pause</span>
+                                            </button>
+                                            <button class="sweep-btn sweep-btn-stop" id="sweep-stop-btn" type="button" disabled>
+                                                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+                                                <span class="sweep-btn-label">Stop</span>
+                                            </button>
+                                        </div>
                                         <hr class="sweep-sidebar-sep">
                                         <div class="sweep-sidebar-field">
                                             <span>Mode</span>
@@ -1001,19 +1000,21 @@
                                             <span>Var Win</span>
                                             <input id="sweep-variance-input" class="sweep-sidebar-input" type="number" min="2" max="512" value="16" step="1">
                                         </div>
-                                        <button class="sweep-btn sweep-btn-record" id="sweep-record-btn" type="button">
-                                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="4"/></svg>
-                                            <span class="sweep-btn-label">Record</span>
-                                        </button>
-                                        <button class="sweep-btn sweep-btn-import" id="sweep-import-btn" type="button">
-                                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                            <span class="sweep-btn-label">Import</span>
-                                        </button>
-                                        <input id="sweep-import-file" type="file" accept=".json" style="display:none">
-                                        <button class="sweep-btn sweep-btn-axes" id="sweep-settings-toggle" type="button" aria-expanded="false" aria-controls="sweep-settings-panel">
-                                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
-                                            Axes
-                                        </button>
+                                        <div class="sweep-sidebar-group sweep-sidebar-group-secondary">
+                                            <button class="sweep-btn sweep-btn-record" id="sweep-record-btn" type="button">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="currentColor"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="12" r="4"/></svg>
+                                                <span class="sweep-btn-label">Record</span>
+                                            </button>
+                                            <button class="sweep-btn sweep-btn-import" id="sweep-import-btn" type="button">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                                <span class="sweep-btn-label">Import</span>
+                                            </button>
+                                            <input id="sweep-import-file" type="file" accept=".json" style="display:none">
+                                            <button class="sweep-btn sweep-btn-axes" id="sweep-settings-toggle" type="button" aria-expanded="false" aria-controls="sweep-settings-panel">
+                                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+                                                <span class="sweep-btn-label">Axes</span>
+                                            </button>
+                                        </div>
                                         <div class="sweep-sidebar-status">
                                             <span class="sweep-state-chip idle" id="sweep-stream-state">Idle</span>
                                         </div>
@@ -1023,14 +1024,14 @@
                                         <div class="plot-series-grid" id="sweep-series-grid">
                                             <!-- Time-domain panel -->
                                             <div class="plot-panel-block">
-                                                <div class="plot-panel-heading"><span class="sys-section-title">Sweep Time Domain</span><span class="plot-sample-count-badge" id="sweep-time-badge"></span></div>
+                                                <div class="plot-panel-heading"><span class="sys-section-title">Sweep Time Domain</span><span class="plot-time-window-pills" id="sweep-time-window-pills"><button class="time-window-pill" data-win="5">5s</button><button class="time-window-pill" data-win="10">10s</button><button class="time-window-pill" data-win="30">30s</button><button class="time-window-pill is-active" data-win="auto">Auto</button></span><span class="plot-sample-count-badge" id="sweep-time-badge"></span></div>
                                                 <div class="plot-workbench is-dense">
                                                     <div class="plot-stage">
                                                         <div class="plot-surface" data-plot-surface="sweep-time">
                                                             <svg class="plot-composite-svg" id="sweep-time-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
-                                                            <div class="plot-hover-panel" data-plot-hover="sweep-time" hidden></div>
-                                                            <div class="plot-crosshair" data-plot-crosshair="sweep-time" hidden></div>
                                                         </div>
+                                                        <div class="plot-hover-panel" data-plot-hover="sweep-time" hidden></div>
+                                                        <div class="plot-crosshair" data-plot-crosshair="sweep-time" hidden></div>
                                                         <!-- Axes Settings overlay (centered modal) -->
                                                         <div class="plot-settings-overlay" id="sweep-settings-overlay" hidden>
                                                             <div class="plot-settings-backdrop" id="sweep-settings-backdrop"></div>
@@ -1040,85 +1041,47 @@
                                                                     <button class="plot-settings-mini-button plot-settings-close-btn" id="sweep-settings-close" type="button" aria-label="Close">&times;</button>
                                                                 </div>
                                                                 <div class="plot-settings-tabs" role="tablist">
-                                                                    <button class="plot-settings-tab is-active" data-sweep-tab="time" role="tab" aria-selected="true">Sweep Time Domain</button>
-                                                                    <button class="plot-settings-tab" data-sweep-tab="freq" role="tab" aria-selected="false">Sweep Frequency Domain</button>
+                                                                    <button class="plot-settings-tab is-active" data-sweep-tab="time" role="tab" aria-selected="true">Time</button>
+                                                                    <button class="plot-settings-tab" data-sweep-tab="freq" role="tab" aria-selected="false">Freq</button>
                                                                 </div>
                                                                 <!-- Time Domain settings -->
                                                                 <div class="plot-settings-tab-panel" data-sweep-panel="time" role="tabpanel">
-                                                                    <div class="plot-settings-grid">
-                                                                        <label class="plot-settings-field">
-                                                                            <span>X Min</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="xMin" type="number" min="0" step="1" value="0">
-                                                                        </label>
-                                                                        <label class="plot-settings-field">
-                                                                            <span>Y Min</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="yMin" type="number" step="1" value="-110">
-                                                                        </label>
-                                                                        <label class="plot-settings-field">
-                                                                            <span>X Max</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="xMax" type="number" min="1" step="1" value="30">
-                                                                        </label>
-                                                                        <label class="plot-settings-field">
-                                                                            <span>Y Max</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="yMax" type="number" step="1" value="0">
-                                                                        </label>
-                                                                    </div>
-                                                                    <div class="plot-settings-group">
-                                                                        <div class="plot-settings-group-title">Chart Title</div>
+                                                                    <div class="plot-settings-field">
+                                                                        <span>Chart Title</span>
                                                                         <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="chartTitle" type="text" value="Sweep Time Domain">
                                                                     </div>
-                                                                    <div class="plot-settings-group">
-                                                                        <div class="plot-settings-group-title">X Axis Title</div>
+                                                                    <div class="plot-settings-field" style="margin-top:10px">
+                                                                        <span>X Axis Title</span>
                                                                         <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="xAxisTitle" type="text" value="Elapsed Time (s)">
                                                                     </div>
-                                                                    <div class="plot-settings-group">
-                                                                        <div class="plot-settings-group-title">X Display Window</div>
-                                                                        <div class="plot-settings-select-row">
-                                                                            <select class="plot-settings-select" data-sweep-setting="xWindowSecs">
-                                                                                <option value="auto" selected>Auto (full)</option>
-                                                                                <option value="5">5 s</option>
-                                                                                <option value="10" selected>10 s</option>
-                                                                                <option value="15">15 s</option>
-                                                                                <option value="30">30 s</option>
-                                                                            </select>
-                                                                        </div>
-                                                                        <div class="plot-settings-hint">Scroll Scope — shows recent N seconds</div>
-                                                                    </div>
-                                                                    <div class="plot-settings-group">
-                                                                        <div class="plot-settings-group-title">Y Axis Title</div>
+                                                                    <div class="plot-settings-field" style="margin-top:10px">
+                                                                        <span>Y Axis Title</span>
                                                                         <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="yAxisTitle" type="text" value="Power (dBm)">
+                                                                    </div>
+                                                                    <div class="plot-settings-field" style="margin-top:10px">
+                                                                        <span>X Display Window</span>
+                                                                        <select class="plot-settings-select" data-sweep-setting="xWindowSecs" style="margin-top:2px">
+                                                                            <option value="auto" selected>Auto (full)</option>
+                                                                            <option value="5">5 s</option>
+                                                                            <option value="10" selected>10 s</option>
+                                                                            <option value="15">15 s</option>
+                                                                            <option value="30">30 s</option>
+                                                                        </select>
+                                                                        <div class="plot-settings-hint">Scroll Scope — shows recent N seconds</div>
                                                                     </div>
                                                                 </div>
                                                                 <!-- Frequency Domain settings -->
                                                                 <div class="plot-settings-tab-panel" data-sweep-panel="freq" role="tabpanel" hidden>
-                                                                    <div class="plot-settings-grid">
-                                                                        <label class="plot-settings-field">
-                                                                            <span>X Min (kHz)</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqXMin" type="number" min="0" step="1" value="0">
-                                                                        </label>
-                                                                        <label class="plot-settings-field">
-                                                                            <span>Y Min (dBm)</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqYMin" type="number" step="1" value="-110">
-                                                                        </label>
-                                                                        <label class="plot-settings-field">
-                                                                            <span>X Max (kHz)</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqXMax" type="number" min="1" step="1" value="8000000">
-                                                                        </label>
-                                                                        <label class="plot-settings-field">
-                                                                            <span>Y Max (dBm)</span>
-                                                                            <input class="sys-input plot-settings-input" data-sweep-setting="freqYMax" type="number" step="1" value="0">
-                                                                        </label>
-                                                                    </div>
-                                                                    <div class="plot-settings-group">
-                                                                        <div class="plot-settings-group-title">Chart Title</div>
+                                                                    <div class="plot-settings-field">
+                                                                        <span>Chart Title</span>
                                                                         <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="freqChartTitle" type="text" value="Sweep Frequency Domain">
                                                                     </div>
-                                                                    <div class="plot-settings-group">
-                                                                        <div class="plot-settings-group-title">X Axis Title</div>
+                                                                    <div class="plot-settings-field" style="margin-top:10px">
+                                                                        <span>X Axis Title</span>
                                                                         <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="freqXAxisTitle" type="text" value="Frequency (kHz)">
                                                                     </div>
-                                                                    <div class="plot-settings-group">
-                                                                        <div class="plot-settings-group-title">Y Axis Title</div>
+                                                                    <div class="plot-settings-field" style="margin-top:10px">
+                                                                        <span>Y Axis Title</span>
                                                                         <input class="sys-input plot-settings-input plot-settings-text" data-sweep-setting="freqYAxisTitle" type="text" value="Power (dBm)">
                                                                     </div>
                                                                 </div>
@@ -1128,7 +1091,13 @@
                                                             </div>
                                                         </div>
                                             </div>
-                                            <div class="plot-legend-sidebar"><div class="plot-legend-list is-dense" id="sweep-time-legend"></div></div>
+                                            <div class="plot-legend-sidebar">
+                                                <div class="plot-legend-controls" aria-label="Time-domain legend controls">
+                                                    <button class="plot-legend-control-btn" id="sweep-time-show-all" type="button">Show All</button>
+                                                    <button class="plot-legend-control-btn" id="sweep-time-hide-all" type="button">Hide All</button>
+                                                </div>
+                                                <div class="plot-legend-list is-dense" id="sweep-time-legend"></div>
+                                            </div>
                                         </div>
                                     </div>
                                     <!-- Freq-domain panel -->
@@ -1138,9 +1107,9 @@
                                             <div class="plot-stage">
                                                 <div class="plot-surface" data-plot-surface="sweep-freq">
                                                     <svg class="plot-composite-svg" id="sweep-freq-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
-                                                    <div class="plot-hover-panel" data-plot-hover="sweep-freq" hidden></div>
-                                                    <div class="plot-crosshair" data-plot-crosshair="sweep-freq" hidden></div>
                                                 </div>
+                                                <div class="plot-hover-panel" data-plot-hover="sweep-freq" hidden></div>
+                                                <div class="plot-crosshair" data-plot-crosshair="sweep-freq" hidden></div>
                                             </div>
                                             <div class="plot-legend-sidebar"><div class="plot-legend-list is-dense" id="sweep-freq-legend"></div></div>
                                         </div>
@@ -4110,6 +4079,19 @@
             return value.toFixed(2).replace(/\.?0+$/, '');
         }
 
+        function formatSweepTimeXValue(value) {
+            if (!Number.isFinite(value)) return '--';
+            const totalSec = Math.abs(value);
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            const hh = h > 0 ? `${h}:` : '';
+            const mm = (h > 0 ? String(m).padStart(2,'0') : m) + ':';
+            const ss = String(Math.floor(s)).padStart(2,'0');
+            const sign = value < 0 ? '-' : '';
+            return `${sign}${hh}${mm}${ss}`;
+        }
+
         function normalizePlotAxisRange(minValue, maxValue, fallbackMin, fallbackMax) {
             let start = Number.isFinite(minValue) ? minValue : fallbackMin;
             let end = Number.isFinite(maxValue) ? maxValue : fallbackMax;
@@ -4208,6 +4190,85 @@
 
         function clamp(value, minValue, maxValue) {
             return Math.min(maxValue, Math.max(minValue, value));
+        }
+
+        function formatSweepLegendValue(value, unit = 'dBm') {
+            if (!Number.isFinite(value)) {
+                return '--';
+            }
+
+            return formatChartValue(value, unit);
+        }
+
+        const sweepTimePalette24g = [
+            '#e6194b',
+            '#3cb44b',
+            '#ffe119',
+            '#4363d8',
+            '#f58231',
+            '#911eb4',
+            '#42d4f4',
+            '#f032e6',
+            '#bfef45',
+            '#fabed4',
+        ];
+
+        const sweepTimePalette5g = [
+            '#469990',
+            '#dcbeff',
+            '#9A6324',
+            '#800000',
+            '#aaffc3',
+            '#808000',
+            '#ffd8b1',
+            '#000075',
+            '#a9a9a9',
+            '#000000',
+        ];
+
+        function assignSweepTimeCurveColors(curves) {
+            let band24gIndex = 0;
+            let band5gIndex = 0;
+
+            return curves.map((curve, index) => {
+                const is24g = Number(curve.freq_khz) < 3000000;
+                const palette = is24g ? sweepTimePalette24g : sweepTimePalette5g;
+                const paletteIndex = is24g ? band24gIndex++ : band5gIndex++;
+
+                return {
+                    ...curve,
+                    key: `sweep-time-${index}`,
+                    color: palette[paletteIndex % palette.length],
+                };
+            });
+        }
+
+        function getLastFiniteSweepPointValue(points) {
+            if (!Array.isArray(points)) {
+                return null;
+            }
+
+            for (let index = points.length - 1; index >= 0; index -= 1) {
+                const point = points[index];
+                if (point && Number.isFinite(point.y)) {
+                    return point.y;
+                }
+            }
+
+            return null;
+        }
+
+        function getPeakSweepSeriesValue(values) {
+            if (!Array.isArray(values)) {
+                return null;
+            }
+
+            const finiteValues = values.filter((value) => Number.isFinite(value));
+            if (finiteValues.length === 0) {
+                return null;
+            }
+
+            return Math.max(...finiteValues);
         }
 
         function buildPlotLegendItem(series, index, isVisible) {
@@ -7158,6 +7219,7 @@
             axesOpen: false,
             lastTimePayload: null,
             lastFreqPayload: null,
+            timeAutoYRange: null,
         };
 
         const sweepTimeSettings = {
@@ -7178,6 +7240,10 @@
             yAxisTitle: 'Power (dBm)',
         };
 
+        function resetSweepTimeAutoYRange() {
+            sweepState.timeAutoYRange = null;
+        }
+
         function initSweepPanel() {
             const startBtn = document.getElementById('sweep-start-btn');
             const pauseBtn = document.getElementById('sweep-pause-btn');
@@ -7190,6 +7256,31 @@
             const recBtn = document.getElementById('sweep-record-btn');
             const impBtn = document.getElementById('sweep-import-btn');
             const impFile = document.getElementById('sweep-import-file');
+            const timeLegend = document.getElementById('sweep-time-legend');
+            const timeShowAllBtn = document.getElementById('sweep-time-show-all');
+            const timeHideAllBtn = document.getElementById('sweep-time-hide-all');
+
+            function setAllTimeLegendVisibility(isVisible) {
+                if (!timeLegend) {
+                    return;
+                }
+
+                const legendButtons = Array.from(timeLegend.querySelectorAll('[data-sweep-legend]'));
+                if (legendButtons.length === 0) {
+                    return;
+                }
+
+                legendButtons.forEach((button) => {
+                    const key = button.getAttribute('data-sweep-legend');
+                    if (key) {
+                        sweepState.visibility.set(key, isVisible);
+                    }
+                });
+
+                if (sweepState.lastTimePayload) {
+                    renderSweepTimeDomain(sweepState.lastTimePayload);
+                }
+            }
 
             if (startBtn) startBtn.addEventListener('click', () => sweepStart());
             if (pauseBtn) pauseBtn.addEventListener('click', () => sweepPause());
@@ -7207,6 +7298,8 @@
             if (recBtn) recBtn.addEventListener('click', () => sweepToggleRecording());
             if (impBtn) impBtn.addEventListener('click', () => { if (impFile) impFile.click(); });
             if (impFile) impFile.addEventListener('change', () => sweepImportFile(impFile));
+            if (timeShowAllBtn) timeShowAllBtn.addEventListener('click', () => setAllTimeLegendVisibility(true));
+            if (timeHideAllBtn) timeHideAllBtn.addEventListener('click', () => setAllTimeLegendVisibility(false));
             // initial mode UI sync
             const freqField = document.getElementById('sweep-freq-field');
             if (freqField && modeSel) freqField.style.display = modeSel.value === '0' ? '' : 'none';
@@ -7218,6 +7311,22 @@
             const axesClose = document.getElementById('sweep-settings-close');
             const axesReset = document.getElementById('sweep-settings-reset');
             const axesTabButtons = document.querySelectorAll('[data-sweep-tab]');
+
+            // Time window pills
+            const timeWindowPills = document.querySelectorAll('#sweep-time-window-pills .time-window-pill');
+            timeWindowPills.forEach(pill => {
+                pill.addEventListener('click', () => {
+                    timeWindowPills.forEach(p => p.classList.remove('is-active'));
+                    pill.classList.add('is-active');
+                    const win = pill.getAttribute('data-win');
+                    sweepTimeSettings.xWindowSecs = win;
+                    // Update overlay select to match
+                    const overlaySelect = document.querySelector('[data-sweep-setting="xWindowSecs"]');
+                    if (overlaySelect) overlaySelect.value = win;
+                    // Re-render if data available
+                    if (sweepState.lastTimePayload) renderSweepTimeDomain(sweepState.lastTimePayload);
+                });
+            });
             const axesTabPanels = document.querySelectorAll('[data-sweep-panel]');
 
             function openAxesOverlay() {
@@ -7284,6 +7393,7 @@
             if (axesReset) {
                 axesReset.addEventListener('click', (e) => {
                     e.preventDefault();
+                    resetSweepTimeAutoYRange();
                     sweepTimeSettings.xMin = '0';
                     sweepTimeSettings.yMin = '-110';
                     sweepTimeSettings.xMax = '30';
@@ -7410,6 +7520,7 @@
                 return;
             }
             try {
+                resetSweepTimeAutoYRange();
                 const res = await fetch('/api/wireless/sweep/plot/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -7445,6 +7556,7 @@
 
         async function sweepStop() {
             try {
+                resetSweepTimeAutoYRange();
                 const res = await fetch('/api/wireless/sweep/plot/stop', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -7551,11 +7663,9 @@
                             bestIdx = i;
                         }
                     }
-                    const palette = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
-                    const idx = parseInt(curve.key?.replace('sweep-time-',''),10) || 0;
                     return {
                         label: curve.label,
-                        color: palette[idx % palette.length],
+                        color: curve.color || '#3b82f6',
                         value: pts[bestIdx]?.y,
                     };
                 }).filter(h => h.value != null);
@@ -7623,7 +7733,7 @@
             }
 
             // Build per-frequency time series from frame history
-            const freqCurves = freqList.map((freq, freqIdx) => {
+            const freqCurves = assignSweepTimeCurveColors(freqList.map((freq, freqIdx) => {
                 const points = [];
                 let skipped = 0;
                 for (const frame of frames) {
@@ -7640,7 +7750,7 @@
                     ? `${(freq / 1e6).toFixed(2)} GHz`
                     : `${(freq / 1e3).toFixed(1)} MHz`;
                 return { freq_khz: freq, label, points, skipped };
-            }).filter(curve => curve.points.length >= 2);
+            }).filter(curve => curve.points.length >= 2));
 
             badge.textContent = '';
 
@@ -7657,7 +7767,6 @@
             const ph = H - margin.top - margin.bottom;
 
             const allX = freqCurves.flatMap(curve => curve.points.map(p => p.t));
-            const allY = freqCurves.flatMap(curve => curve.points.map(p => p.y));
             const dataXMin = Math.min(...allX);
             const dataXMax = Math.max(...allX);
 
@@ -7679,8 +7788,48 @@
             }
             if (xMax <= xMin) xMax = xMin + 1;
 
-            let yMin = settings.yMinAuto ? Math.floor(Math.min(...allY)) - 5 : Number(settings.yMin) || -110;
-            let yMax = settings.yMaxAuto ? Math.ceil(Math.max(...allY)) + 5 : Number(settings.yMax) || 0;
+            // Filter curves to visible X range in window mode
+            const visibleCurves = useWindow
+                ? freqCurves.map(curve => ({
+                    ...curve,
+                    points: curve.points.filter(p => p.t >= xMin - 0.5 && p.t <= xMax + 0.5)
+                })).filter(curve => curve.points.length >= 2)
+                : freqCurves;
+            const visibleKeys = sweepState.visibility;
+            const renderedCurves = visibleCurves.filter((curve) => visibleKeys.get(curve.key) !== false);
+
+            // Recompute Y range from VISIBLE points only (window or auto)
+            const visibleYSource = renderedCurves.length > 0 ? renderedCurves : visibleCurves;
+            const visibleY = visibleYSource.flatMap(curve => curve.points.map(p => p.y));
+            const visYMin = visibleY.length > 0 ? Math.min(...visibleY) : -110;
+            const visYMax = visibleY.length > 0 ? Math.max(...visibleY) : 0;
+
+            const candidateYMin = Math.floor(visYMin) - 5;
+            const candidateYMax = Math.ceil(visYMax) + 5;
+
+            let yMin = settings.yMinAuto ? candidateYMin : Number(settings.yMin) || -110;
+            let yMax = settings.yMaxAuto ? candidateYMax : Number(settings.yMax) || 0;
+
+            if (settings.yMinAuto || settings.yMaxAuto) {
+                const cachedYRange = sweepState.timeAutoYRange;
+
+                if (cachedYRange) {
+                    if (settings.yMinAuto) {
+                        yMin = Math.min(cachedYRange.yMin, candidateYMin);
+                    }
+                    if (settings.yMaxAuto) {
+                        yMax = Math.max(cachedYRange.yMax, candidateYMax);
+                    }
+                }
+
+                sweepState.timeAutoYRange = {
+                    yMin: settings.yMinAuto ? yMin : (cachedYRange?.yMin ?? candidateYMin),
+                    yMax: settings.yMaxAuto ? yMax : (cachedYRange?.yMax ?? candidateYMax),
+                };
+            } else {
+                resetSweepTimeAutoYRange();
+            }
+
             if (yMax <= yMin) yMax = yMin + 10;
 
             // ── Adaptive Y-axis tick step ──
@@ -7696,50 +7845,61 @@
             // Grid — Y ticks at adaptive steps (5/10/20/50 dB)
             const gridLines = [];
             const yTickLabels = [];
+            const xTickLabels = [];
             const yTickStart = Math.ceil(yMin / yTickStep) * yTickStep;
             for (let g = yTickStart; g <= yMax; g += yTickStep) {
                 const y = yScale(g);
                 gridLines.push(`<line class="plot-grid-line" x1="${margin.left}" x2="${W-margin.right}" y1="${y}" y2="${y}"/>`);
                 yTickLabels.push(`<text class="plot-axis-value plot-axis-value-y" text-anchor="end" x="44" y="${y + 4}">${formatPlotAxisValue(g)}</text>`);
             }
+            // X ticks — same approach as Y but with sweep-appropriate precision (one decimal)
+            const xTickStart = Math.ceil(xMin / yTickStep) * yTickStep;
+            for (let g = xTickStart; g <= xMax; g += yTickStep) {
+                const x = xScale(g);
+                xTickLabels.push(`<text class="plot-axis-value plot-axis-value-x" text-anchor="middle" x="${x}" y="${H-margin.bottom+15}">${formatSweepTimeXValue(g)}</text>`);
+            }
+            if (xTickLabels.length === 0) {
+                xTickLabels.push(
+                    `<text class="plot-axis-value plot-axis-value-x" x="${margin.left}" y="${H-margin.bottom+15}">${formatSweepTimeXValue(xMin)}</text>`,
+                    `<text class="plot-axis-value plot-axis-value-x" text-anchor="end" x="${W-margin.right}" y="${H-margin.bottom+15}">${formatSweepTimeXValue(xMax)}</text>`
+                );
+            }
             const yMaxTick = Math.floor(yMax / 5) * 5;
             const yMinTick = Math.ceil(yMin / 5) * 5;
 
-            // Series colors (rotate palette)
-            const palette = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
-            const visibleKeys = sweepState.visibility;
-
-            // Paths
+            // Paths — use visibleCurves (filtered by window when useWindow is true)
             let pathsMarkup = '';
-            freqCurves.forEach((curve, idx) => {
-                const key = `sweep-time-${idx}`;
-                const visible = visibleKeys.get(key) !== false;
-                const color = palette[idx % palette.length];
-                const alpha = visible ? 1 : 0.25;
+            renderedCurves.forEach((curve) => {
+                const key = curve.key;
+                const color = curve.color;
                 const d = curve.points.map((p, i) =>
                     `${i===0?'M':'L'}${xScale(p.t)},${yScale(p.y)}`
                 ).join(' ');
-                pathsMarkup += `<path class="plot-multi-line" data-sweep-series="${key}" style="stroke:${color};fill:none;stroke-width:1.5" d="${d}" opacity="${alpha}"/>`;
+                pathsMarkup += `<path class="plot-multi-line" data-sweep-series="${key}" style="stroke:${color};fill:none;stroke-width:1.5" d="${d}"/>`;
             });
 
-            // Legend
+            // Legend — use visibleCurves
             if (legend) {
-                legend.innerHTML = freqCurves.map((curve, idx) => {
-                    const key = `sweep-time-${idx}`;
+                legend.innerHTML = visibleCurves.map((curve) => {
+                    const key = curve.key;
                     const visible = visibleKeys.get(key) !== false;
                     const mutedClass = visible ? '' : 'is-muted';
-                    const color = palette[idx % palette.length];
+                    const color = curve.color;
+                    const currentValue = formatSweepLegendValue(getLastFiniteSweepPointValue(curve.points));
                     return `
                         <button class="plot-legend-item ${mutedClass}" type="button" data-sweep-legend="${key}" tabindex="0">
                             <span class="plot-legend-swatch" style="background:${color}"></span>
-                            <span class="plot-legend-label">${curve.label}</span>
+                            <span class="plot-legend-copy">
+                                <span class="plot-legend-label">${curve.label}</span>
+                            </span>
+                            <span class="plot-legend-value">${escapeHtml(currentValue)}</span>
                         </button>`;
                 }).join('');
             }
 
             // Store metadata for hover
-            svg.setAttribute('data-sweep-curves', JSON.stringify(freqCurves.map(c => ({
-                label: c.label, key: `sweep-time-${freqCurves.indexOf(c)}`, points: c.points
+            svg.setAttribute('data-sweep-curves', JSON.stringify(renderedCurves.map(c => ({
+                label: c.label, key: c.key, color: c.color, points: c.points
             }))));
             svg.setAttribute('data-sweep-xmin', xMin);
             svg.setAttribute('data-sweep-xmax', xMax);
@@ -7752,17 +7912,23 @@
             const chartTitle = settings.chartTitle || 'Sweep Time Domain';
 
             svg.innerHTML = `
+                <defs>
+                    <clipPath id="sweep-time-clip">
+                        <rect x="${margin.left}" y="${margin.top}" width="${pw}" height="${ph}"/>
+                    </clipPath>
+                </defs>
                 <rect class="plot-frame-bg" x="0" y="0" width="${W}" height="${H}"/>
                 ${gridLines.join('')}
                 <line class="plot-axis-line" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H-margin.bottom}"/>
                 <line class="plot-axis-line" x1="${margin.left}" y1="${H-margin.bottom}" x2="${W-margin.right}" y2="${H-margin.bottom}"/>
-                ${pathsMarkup}
+                <g clip-path="url(#sweep-time-clip)">
+                    ${pathsMarkup}
+                </g>
                 <text class="plot-chart-title" x="${W/2}" y="18">${escapeHtml(chartTitle)}</text>
                 <text class="plot-axis-title plot-axis-title-y" x="18" y="${margin.top + ph/2}">${escapeHtml(yTitle)}</text>
                 <text class="plot-axis-title plot-axis-title-x" x="${W/2}" y="${H-2}">${escapeHtml(xTitle)}</text>
                 ${yTickLabels.join('')}
-                <text class="plot-axis-value plot-axis-value-x" x="${margin.left}" y="${H-margin.bottom+15}">${formatPlotAxisValue(xMin)}</text>
-                <text class="plot-axis-value plot-axis-value-x" text-anchor="end" x="${W-margin.right}" y="${H-margin.bottom+15}">${formatPlotAxisValue(xMax)}</text>
+                ${xTickLabels.join('')}
             `;
 
             // Legend click binding
@@ -7798,6 +7964,9 @@
             const maxHold = Array.isArray(payload?.max_hold) ? payload.max_hold : [];
             const minHold = Array.isArray(payload?.min_hold) ? payload.min_hold : [];
             const avgHold = Array.isArray(payload?.average) ? payload.average : [];
+            const avgHoldRounded = avgHold.length === freeRun.length
+                ? avgHold.map((value) => Number.isFinite(value) ? Math.round(value) : value)
+                : [];
             const sourceLabel = typeof last?.free_run_source === 'string' ? last.free_run_source : 'channel_info';
             badge.textContent = '';
 
@@ -7813,12 +7982,27 @@
             const ph = H - margin.top - margin.bottom;
 
             /* ── compute axis ── */
-            const allValues = [
-                ...freeRun,
-                ...(maxHold.length === freeRun.length ? maxHold : []),
-                ...(minHold.length === freeRun.length ? minHold : []),
-                ...(avgHold.length === freeRun.length ? avgHold.map(v => Math.round(v)) : []),
-            ];
+            const enabledSeriesData = [];
+            if (visibleSeries.get('free_run') !== false) {
+                enabledSeriesData.push(...freeRun);
+            }
+            if (visibleSeries.get('max_hold') !== false && maxHold.length === freeRun.length) {
+                enabledSeriesData.push(...maxHold);
+            }
+            if (visibleSeries.get('min_hold') !== false && minHold.length === freeRun.length) {
+                enabledSeriesData.push(...minHold);
+            }
+            if (visibleSeries.get('average') !== false) {
+                enabledSeriesData.push(...avgHoldRounded);
+            }
+            const allValues = enabledSeriesData.length > 0
+                ? enabledSeriesData
+                : [
+                    ...freeRun,
+                    ...(maxHold.length === freeRun.length ? maxHold : []),
+                    ...(minHold.length === freeRun.length ? minHold : []),
+                    ...avgHoldRounded,
+                ];
             let yMin = Math.min(...allValues) - 5;
             let yMax = Math.max(...allValues) + 5;
             if (yMax - yMin < 10) { const mid = (yMin + yMax) / 2; yMin = mid - 5; yMax = mid + 5; }
@@ -7873,24 +8057,23 @@
                 free_run: freeRun,
                 max_hold: maxHold.length === freeRun.length ? maxHold : null,
                 min_hold: minHold.length === freeRun.length ? minHold : null,
-                average: avgHold.length === freeRun.length ? avgHold : null,
+                average: avgHoldRounded.length === freeRun.length ? avgHoldRounded : null,
             };
 
             for (const def of seriesDefs) {
                 const data = seriesData[def.key];
                 if (!data) continue;
+                if (visibleSeries.get(def.key) === false) continue;
                 if (def.type === 'bar') {
                     barsMarkup += freqs.map((f, i) => barRect(i, data[i], def.color, def.opacity)).join('');
                 } else {
-                    const visible = visibleSeries.get(def.key) !== false;
-                    const alpha = visible ? 1 : 0.25;
                     const d = freqs.map((f, i) => {
                         const v = data[i];
                         if (v == null || !Number.isFinite(v)) return '';
                         return `${i===0?'M':'L'}${xScale(i)},${yScale(v)}`;
                     }).join(' ');
                     overlayMarkup += d
-                        ? `<path class="plot-multi-line" data-sweep-series="${def.key}" style="stroke:${def.color};fill:none;stroke-width:1.8" d="${d}" opacity="${alpha}"/>`
+                        ? `<path class="plot-multi-line" data-sweep-series="${def.key}" style="stroke:${def.color};fill:none;stroke-width:1.8" d="${d}"/>`
                         : '';
                 }
             }
@@ -7900,10 +8083,14 @@
                 legend.innerHTML = seriesDefs.map((def, idx) => {
                     const visible = visibleSeries.get(def.key) !== false;
                     const mutedClass = visible ? '' : 'is-muted';
+                    const currentValue = formatSweepLegendValue(getPeakSweepSeriesValue(seriesData[def.key]));
                     return `
                         <button class="plot-legend-item ${mutedClass}" type="button" data-sweep-legend="${def.key}" tabindex="0">
                             <span class="plot-legend-swatch" style="background:${def.color}"></span>
-                            <span class="plot-legend-label">${def.label}</span>
+                            <span class="plot-legend-copy">
+                                <span class="plot-legend-label">${def.label}</span>
+                            </span>
+                            <span class="plot-legend-value">${escapeHtml(currentValue)}</span>
                         </button>`;
                 }).join('');
             }
@@ -7917,10 +8104,10 @@
 
             // crosshair: freqs are in kHz, convert to MHz for display
             svg.setAttribute('data-sweep-freqs', JSON.stringify(freqs.map(f => f / 1000)));
-            svg.setAttribute('data-sweep-free-run', JSON.stringify(freeRun));
-            svg.setAttribute('data-sweep-max', JSON.stringify(maxHold.length === freeRun.length ? maxHold : []));
-            svg.setAttribute('data-sweep-min', JSON.stringify(minHold.length === freeRun.length ? minHold : []));
-            svg.setAttribute('data-sweep-avg', JSON.stringify(avgHold.length === freeRun.length ? avgHold : []));
+            svg.setAttribute('data-sweep-free-run', JSON.stringify(visibleSeries.get('free_run') !== false ? freeRun : []));
+            svg.setAttribute('data-sweep-max', JSON.stringify(visibleSeries.get('max_hold') !== false && maxHold.length === freeRun.length ? maxHold : []));
+            svg.setAttribute('data-sweep-min', JSON.stringify(visibleSeries.get('min_hold') !== false && minHold.length === freeRun.length ? minHold : []));
+            svg.setAttribute('data-sweep-avg', JSON.stringify(visibleSeries.get('average') !== false ? avgHoldRounded : []));
             svg.setAttribute('data-sweep-xmin', xMin);
             svg.setAttribute('data-sweep-xmax', xMax);
             svg.setAttribute('data-sweep-ymin', yMin);
@@ -7929,6 +8116,7 @@
 
             svg.innerHTML = `
                 <rect class="plot-frame-bg" x="0" y="0" width="${W}" height="${H}"/>
+                <text class="plot-chart-title" x="${W/2}" y="18">Sweep Frequency Domain</text>
                 ${gridLines.join('')}
                 <line class="plot-axis-line" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H-margin.bottom}"/>
                 <line class="plot-axis-line" x1="${margin.left}" y1="${H-margin.bottom}" x2="${W-margin.right}" y2="${H-margin.bottom}"/>
@@ -8024,7 +8212,7 @@
                     { label: 'Free Run', value: freeRun[idx], color: '#10b981' },
                     { label: 'Max Hold', value: maxH[idx], color: '#ef4444' },
                     { label: 'Min Hold', value: minH[idx], color: '#3b82f6' },
-                    { label: 'Average', value: avgH[idx] != null ? avgH[idx].toFixed(1) : null, color: '#f59e0b' },
+                    { label: 'Average', value: avgH[idx] != null ? Math.round(avgH[idx]) : null, color: '#f59e0b' },
                 ].filter(it => it.value != null);
 
                 crosshair.hidden = false;
