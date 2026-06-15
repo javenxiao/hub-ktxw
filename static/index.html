@@ -8083,14 +8083,12 @@
                 legend.innerHTML = seriesDefs.map((def, idx) => {
                     const visible = visibleSeries.get(def.key) !== false;
                     const mutedClass = visible ? '' : 'is-muted';
-                    const currentValue = formatSweepLegendValue(getPeakSweepSeriesValue(seriesData[def.key]));
                     return `
                         <button class="plot-legend-item ${mutedClass}" type="button" data-sweep-legend="${def.key}" tabindex="0">
                             <span class="plot-legend-swatch" style="background:${def.color}"></span>
                             <span class="plot-legend-copy">
                                 <span class="plot-legend-label">${def.label}</span>
                             </span>
-                            <span class="plot-legend-value">${escapeHtml(currentValue)}</span>
                         </button>`;
                 }).join('');
             }
@@ -8199,9 +8197,10 @@
                 const freqs = JSON.parse(svg.getAttribute('data-sweep-freqs') || '[]');
 
                 const ratio = (localX - plotLeft) / (plotRight - plotLeft);
-                const targetFreq = xMin + ratio * (xMax - xMin);
+                const targetIndex = xMin + ratio * (xMax - xMin);
                 const idx = freqs.reduce((best, f, i) =>
-                    Math.abs(f - targetFreq) < Math.abs(freqs[best] - targetFreq) ? i : best, 0);
+                    Math.abs(i - targetIndex) < Math.abs(best - targetIndex) ? i : best, 0);
+                const snappedFreq = Number.isFinite(freqs[idx]) ? freqs[idx] : null;
 
                 const freeRun = JSON.parse(svg.getAttribute('data-sweep-free-run') || '[]');
                 const maxH = JSON.parse(svg.getAttribute('data-sweep-max') || '[]');
@@ -8222,7 +8221,7 @@
 
                 hoverPanel.hidden = false;
                 hoverPanel.innerHTML = `
-                    <div class="plot-hover-title">${escapeHtml((targetFreq).toFixed(3))} MHz</div>
+                    <div class="plot-hover-title">${escapeHtml(snappedFreq != null ? snappedFreq.toFixed(3) : '--')} MHz</div>
                     ${items.map(it => `
                         <div class="plot-hover-line">
                             <span class="plot-hover-swatch" style="background:${it.color}"></span>
@@ -8230,8 +8229,19 @@
                         </div>
                     `).join('')}
                 `;
-                hoverPanel.style.left = `${Math.min(localX + 16, rect.width - 220)}px`;
-                hoverPanel.style.top  = `${Math.max(plotTop, localY - 15)}px`;
+                const hoverWidth = hoverPanel.offsetWidth || 220;
+                const hoverHeight = hoverPanel.offsetHeight || 96;
+                const preferredLeft = localX + 16;
+                const fallbackLeft = localX - hoverWidth - 16;
+                const clampedLeft = preferredLeft + hoverWidth <= rect.width - 8
+                    ? preferredLeft
+                    : Math.max(8, fallbackLeft);
+                const clampedTop = Math.min(
+                    Math.max(plotTop, localY - 15),
+                    Math.max(plotTop, plotBottom - hoverHeight - 8)
+                );
+                hoverPanel.style.left = `${clampedLeft}px`;
+                hoverPanel.style.top  = `${clampedTop}px`;
             }, { signal });
         }
 
