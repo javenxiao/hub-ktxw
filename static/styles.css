@@ -954,6 +954,178 @@ body {
     display: block;
 }
 
+/* ---------- Serial Debug Panel ---------- */
+.serial-debug-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.serial-debug-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.serial-config-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.serial-config-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.serial-config-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted, #5f7185);
+    white-space: nowrap;
+}
+
+.serial-config-select {
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid #d0d8e0;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: var(--text, #2d3a4a);
+    min-width: 100px;
+}
+
+.serial-config-select:focus {
+    outline: none;
+    border-color: var(--brand, #4a90d9);
+    box-shadow: 0 0 0 2px rgba(74,144,217,0.18);
+}
+
+.serial-conn-status {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-left: 4px;
+}
+
+.serial-conn-status[data-state="connected"] {
+    background: #e6f4e6;
+    color: #1a7a1a;
+}
+
+.serial-conn-status[data-state="disconnected"] {
+    background: #f0f0f0;
+    color: #888;
+}
+
+.serial-conn-status[data-state="error"] {
+    background: #fde8e8;
+    color: #c62828;
+}
+
+.serial-action-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.serial-autoscroll-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-muted, #5f7185);
+    cursor: pointer;
+}
+
+.serial-autoscroll-label input {
+    margin: 0;
+}
+
+.serial-byte-count {
+    font-size: 12px;
+    color: var(--text-muted, #8899aa);
+    margin-left: auto;
+    font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+}
+
+.serial-output-area {
+    flex: 1;
+    min-height: 300px;
+    max-height: 460px;
+    overflow-y: auto;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: 'Fira Code', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    white-space: pre-wrap;
+    word-break: break-all;
+    outline: none;
+}
+
+.serial-output-area:focus {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 2px rgba(88,166,255,0.25);
+}
+
+.serial-output-placeholder {
+    color: #6e7681;
+    font-style: italic;
+}
+
+.serial-output-line {
+    margin: 0;
+}
+
+.serial-output-line[data-dir="tx"] {
+    color: #7ee787;
+}
+
+.serial-output-line[data-dir="rx"] {
+    color: #c9d1d9;
+}
+
+.serial-output-line[data-dir="sys"] {
+    color: #8b949e;
+    font-style: italic;
+}
+
+.serial-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.serial-command-input {
+    flex: 1;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid #d0d8e0;
+    border-radius: 8px;
+    font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px;
+    background: #fff;
+    color: var(--text, #2d3a4a);
+}
+
+.serial-command-input:focus {
+    outline: none;
+    border-color: var(--brand, #4a90d9);
+    box-shadow: 0 0 0 2px rgba(74,144,217,0.18);
+}
+
+.serial-command-input:disabled {
+    background: #f0f2f5;
+    cursor: not-allowed;
+}
+
 #sidebar-collapsed:checked ~ .console-shell .console-layout {
     grid-template-columns: 1fr;
 }

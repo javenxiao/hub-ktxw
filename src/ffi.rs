@@ -1832,19 +1832,20 @@ fn subscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
     let mut param = bb_event_fsp_param_t::default();
     param.set_sub_event_bmp(sub_bmp);
 
-    unsafe {
-        match (sdk.bb_ioctl)(
+    let result = suppress_sdk_console_output(|| unsafe {
+        (sdk.bb_ioctl)(
             handle,
             BB_SET_EVENT_SUBSCRIBE as c_uint,
             &input as *const bb_set_event_callback_t as *const c_void,
             &mut param as *mut bb_event_fsp_param_t as *mut c_void,
-        ) {
-            0 => {
-                tracing::info!("FSP event subscribed (sub_event_bmp=0x{:X})", sub_bmp);
-                Ok(())
-            },
-            e => Err(format!("bb_ioctl(BB_SET_EVENT_SUBSCRIBE/FSP) failed with code: {}", e)),
-        }
+        )
+    });
+    match result {
+        0 => {
+            tracing::info!("FSP event subscribed (sub_event_bmp=0x{:X})", sub_bmp);
+            Ok(())
+        },
+        e => Err(format!("bb_ioctl(BB_SET_EVENT_SUBSCRIBE/FSP) failed with code: {}", e)),
     }
 }
 
@@ -1899,28 +1900,29 @@ pub fn subscribe_fsp_event_dev(handle: *mut bb_dev_handle_t) -> Result<(), Strin
     for &(sub_bmp, label) in masks {
         let mut param = bb_event_fsp_param_t::default();
         param.set_sub_event_bmp(sub_bmp);
-        unsafe {
-            match (sdk.bb_ioctl)(
+        let result = suppress_sdk_console_output(|| unsafe {
+            (sdk.bb_ioctl)(
                 handle,
                 BB_SET_EVENT_SUBSCRIBE as c_uint,
                 &input as *const bb_set_event_callback_t as *const c_void,
                 &mut param as *mut bb_event_fsp_param_t as *mut c_void,
-            ) {
-                0 => {
-                    tracing::info!(
-                        "FSP event subscribed for DEV (mask={}, bmp=0x{:X})",
-                        label,
-                        sub_bmp
-                    );
-                    return Ok(());
-                }
-                e => {
-                    tracing::debug!(
-                        "FSP subscribe attempt mask={} returned code {}",
-                        label,
-                        e
-                    );
-                }
+            )
+        });
+        match result {
+            0 => {
+                tracing::info!(
+                    "FSP event subscribed for DEV (mask={}, bmp=0x{:X})",
+                    label,
+                    sub_bmp
+                );
+                return Ok(());
+            }
+            e => {
+                tracing::debug!(
+                    "FSP subscribe attempt mask={} returned code {}",
+                    label,
+                    e
+                );
             }
         }
     }
@@ -2653,19 +2655,21 @@ fn send_fsp_control(handle: *mut bb_dev_handle_t, msg_type: u32, payload: &[u8])
 
 pub fn start_sweep(handle: *mut bb_dev_handle_t) -> Result<(), String> {
     reset_fsp_cache();
-    // Try standard (AP) subscription first; on DEV, fall back to DEV-specific masks
+    // Try standard (AP) subscription first; on DEV, fall back to DEV-specific masks.
+    // FSP subscription failures are expected on DEV or unsupported firmware —
+    // sweep automatically falls back to channel_info when FSP is unavailable.
     match subscribe_fsp_event(handle) {
         Ok(()) => {
             tracing::info!("FSP event subscribed for sweep (standard masks)");
         }
         Err(e) => {
-            tracing::warn!("Standard FSP subscribe failed: {}", e);
+            tracing::debug!("Standard FSP subscribe failed (expected on DEV): {}", e);
             match subscribe_fsp_event_dev(handle) {
                 Ok(()) => {
                     tracing::info!("FSP event subscribed for DEV sweep (fallback masks)");
                 }
                 Err(dev_e) => {
-                    tracing::warn!(
+                    tracing::debug!(
                         "FSP subscribe also failed for DEV (sweep will fall back to channel_info): {}",
                         dev_e
                     );

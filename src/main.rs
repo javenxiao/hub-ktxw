@@ -1,5 +1,6 @@
 mod ffi;
 mod bb_api;
+mod serial_port;
 
 use std::{net::SocketAddr, sync::Arc, time::{Duration, Instant}};
 
@@ -604,6 +605,7 @@ struct AppState {
     sweep_min_hold: RwLock<Vec<i32>>,
     sweep_average_hold: RwLock<Vec<f64>>,
     sweep_average_count: RwLock<u64>,
+    serial_manager: Arc<serial_port::SerialPortManager>,
 }
 
 #[derive(Debug, Clone)]
@@ -650,6 +652,7 @@ impl AppState {
             sweep_min_hold: RwLock::new(Vec::new()),
             sweep_average_hold: RwLock::new(Vec::new()),
             sweep_average_count: RwLock::new(0),
+            serial_manager: Arc::new(serial_port::SerialPortManager::new()),
         }
     }
 
@@ -1016,7 +1019,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/baseband/health", get(get_baseband_health))
         .route("/api/baseband/test", get(test_baseband_communication))
         .route("/api/baseband/link/exercise", post(exercise_baseband_link))
+        .route("/api/serial/ports", get(list_serial_ports_handler))
+        .route("/api/serial/connect", post(serial_connect_handler))
+        .route("/api/serial/disconnect", post(serial_disconnect_handler))
         .route("/ws", get(ws_handler))
+        .route("/ws/serial", get(serial_ws_handler))
         .nest_service("/", ServeDir::new("static").append_index_html_on_directories(true))
         .layer(SetResponseHeaderLayer::overriding(
             CACHE_CONTROL,
@@ -2590,6 +2597,9 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
         // MUST NOT touch FSP — FSP failures on unsupported devices can
         // corrupt the SDK session and cause daemon exit / device hang.
         let mut fsp_attempted = false;
+        // Slave channel scan backoff (BB_CFG_CHANNEL -5 is expected on some firmware)
+        let mut slave_scan_backoff_until: Option<Instant> = None;
+        let mut slave_scan_backoff_delay: Duration = Duration::from_secs(4);
 
         loop {
             ticker.tick().await;
@@ -2623,6 +2633,8 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 }
                 last_role = current_role;
                 sweep_initialized = false;
+                // Allow fresh FSP init on the new device (even if previously attempted on old device)
+                fsp_attempted = false;
             }
 
             // Role-aware initialization: DEV does NOT support BB_SET_FSP_CTRL — calling it
@@ -2683,20 +2695,39 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
             // BB_CFG_CHANNEL to trigger a real spectrum scan instead. The SDK
             // will update its internal power[] table, which BB_GET_CHAN_INFO
             // then returns fresh values matching the "chan" command output.
+            //
+            // BB_CFG_CHANNEL may return -5 on some firmware/role combinations,
+            // which is expected. Suppress the error with exponential backoff
+            // to avoid polluting the log and the remote SDK.
             let is_slave = current_role == Some(ffi::BB_ROLE_AP)
                 && baseband.get_status_snapshot().map(|s| s.sync_master).ok() == Some(0);
             if is_slave && sequence % 8 == 0 {
-                let freqs_for_scan: Vec<u32> = if !control.frequencies_khz.is_empty() {
-                    control.frequencies_khz.clone()
-                } else {
-                    control.target_freq_khz.into_iter().collect()
-                };
-                if let Err(e) = baseband.trigger_slave_channel_scan(control.bandwidth, &freqs_for_scan) {
-                    if sequence % 40 == 1 {
-                        warn!("Slave channel scan trigger failed: {}", e);
+                let skip_scan = slave_scan_backoff_until
+                    .map(|next_scan| Instant::now() < next_scan)
+                    .unwrap_or(false);
+                if !skip_scan {
+                    let freqs_for_scan: Vec<u32> = if !control.frequencies_khz.is_empty() {
+                        control.frequencies_khz.clone()
+                    } else {
+                        control.target_freq_khz.into_iter().collect()
+                    };
+                    if let Err(_e) = baseband.trigger_slave_channel_scan(control.bandwidth, &freqs_for_scan) {
+                        // Exponential backoff: start at 4s, max 60s, double on each failure
+                        let delay = slave_scan_backoff_delay.max(Duration::from_secs(4));
+                        slave_scan_backoff_until = Some(Instant::now() + delay);
+                        slave_scan_backoff_delay = (delay * 2).min(Duration::from_secs(60));
+                        if slave_scan_backoff_delay <= Duration::from_secs(8) {
+                            tracing::debug!(
+                                "Slave channel scan failed (expected on some firmware), backing off for {:?}",
+                                delay,
+                            );
+                        }
+                    } else {
+                        // Success: reset backoff
+                        slave_scan_backoff_until = None;
+                        slave_scan_backoff_delay = Duration::from_secs(4);
+                        tokio::time::sleep(Duration::from_millis(150)).await;
                     }
-                } else {
-                    tokio::time::sleep(Duration::from_millis(150)).await;
                 }
             }
 
@@ -2723,14 +2754,14 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
             // if let Some((fsp_count, fsp_powers)) = ffi::fsp_cache_snapshot() { ... }
 
             // Diagnostic: log data source and first power value every 4 ticks (~1s)
-            if sequence % 4 == 1 {
+            /*if sequence % 4 == 1 {
                 let first_power = free_run.first().copied().unwrap_or(0);
                 info!(
                     "Sweep feeder tick {}: role={:?}, source={}, freqs={}, first_power={}, fsp_callbacks={}",
                     sequence, last_role, free_run_source, freq_list.len(), first_power,
                     ffi::fsp_event_total()
                 );
-            }
+            }*/
 
             {
                 let mut cache = state.sweep_chan_cache.write().await;
@@ -2864,6 +2895,142 @@ fn spawn_runtime_feeder(state: Arc<AppState>) {
             refresh_runtime_from_baseband(&state, baseband).await;
         }
     });
+}
+
+// ============================================================
+// Serial Debug API handlers
+// ============================================================
+
+#[derive(Serialize)]
+struct SerialPortsResponse {
+    ports: Vec<serial_port::SerialPortMeta>,
+    connected: bool,
+    current_port: Option<String>,
+}
+
+async fn list_serial_ports_handler(
+    State(state): State<Arc<AppState>>,
+) -> Json<SerialPortsResponse> {
+    let ports = serial_port::list_serial_ports();
+    let connected = state.serial_manager.is_connected();
+    let current_port = state.serial_manager.port_name();
+    Json(SerialPortsResponse {
+        ports,
+        connected,
+        current_port,
+    })
+}
+
+#[derive(Deserialize)]
+struct SerialConnectRequest {
+    port: String,
+    baud: u32,
+}
+
+#[derive(Serialize)]
+struct SerialActionResult {
+    success: bool,
+    message: String,
+}
+
+async fn serial_connect_handler(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SerialConnectRequest>,
+) -> Json<SerialActionResult> {
+    match state.serial_manager.connect(&req.port, req.baud) {
+        Ok(()) => {
+            // 启动后台读取线程
+            serial_port::spawn_reader(Arc::clone(&state.serial_manager));
+            Json(SerialActionResult {
+                success: true,
+                message: format!("Connected to {}", req.port),
+            })
+        }
+        Err(e) => Json(SerialActionResult {
+            success: false,
+            message: e,
+        }),
+    }
+}
+
+async fn serial_disconnect_handler(
+    State(state): State<Arc<AppState>>,
+) -> Json<SerialActionResult> {
+    state.serial_manager.disconnect();
+    Json(SerialActionResult {
+        success: true,
+        message: "Disconnected".to_string(),
+    })
+}
+
+// Serial WebSocket — 将串口接收数据实时推送到前端
+async fn serial_ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_serial_socket(socket, state))
+}
+
+async fn handle_serial_socket(socket: WebSocket, state: Arc<AppState>) {
+    let (mut ws_tx, mut ws_rx) = socket.split();
+    let mut serial_rx = state.serial_manager.subscribe_rx();
+
+    // 发送端：将串口数据转发给 WebSocket
+    let send_handle = tokio::spawn(async move {
+        loop {
+            match serial_rx.recv().await {
+                Ok(line) => {
+                    let payload = serde_json::json!({
+                        "type": "rx",
+                        "data": line.data,
+                        "ts": line.timestamp_ms,
+                    });
+                    if ws_tx
+                        .send(Message::Text(serde_json::to_string(&payload).unwrap_or_default()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    warn!("Serial WS client lagged by {} messages", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    // 接收端：处理前端发来的命令
+    let recv_handle = tokio::spawn(async move {
+        while let Some(Ok(msg)) = ws_rx.next().await {
+            match msg {
+                Message::Text(text) => {
+                    let text = text.trim().to_string();
+                    if text.is_empty() {
+                        continue;
+                    }
+                    // 支持发送换行符（\n 或 \r\n）
+                    let send_data = if text.ends_with('\n') || text.ends_with("\r\n") {
+                        text
+                    } else {
+                        format!("{}\r\n", text)
+                    };
+
+                    if let Err(e) = state.serial_manager.send(send_data.as_bytes()) {
+                        warn!("Serial send failed: {}", e);
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+    });
+
+    tokio::select! {
+        _ = send_handle => {},
+        _ = recv_handle => {},
+    }
 }
 
 fn build_simulated_snapshot(sequence: u64, plot_sample_count: usize) -> WirelessSnapshot {

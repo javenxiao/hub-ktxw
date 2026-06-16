@@ -1142,9 +1142,47 @@
 
             <section class="content-panel panel-serial">
                 <div class="section-strip"></div>
-                <div class="panel-body placeholder-panel">
-                    <h2>Serial</h2>
-                    <p>串口设置区域预留，后续可以补波特率、数据位和串口透传设置。</p>
+                <div class="panel-body serial-debug-panel">
+                    <div class="serial-debug-toolbar">
+                        <div class="serial-config-row">
+                            <div class="serial-config-group">
+                                <label class="serial-config-label" for="serial-port-select">Port</label>
+                                <select id="serial-port-select" class="serial-config-select">
+                                    <option value="">-- select port --</option>
+                                </select>
+                            </div>
+                            <div class="serial-config-group">
+                                <label class="serial-config-label" for="serial-baud-select">Baud</label>
+                                <select id="serial-baud-select" class="serial-config-select">
+                                    <option value="9600">9600</option>
+                                    <option value="19200">19200</option>
+                                    <option value="38400">38400</option>
+                                    <option value="57600">57600</option>
+                                    <option value="115200" selected>115200</option>
+                                    <option value="230400">230400</option>
+                                    <option value="460800">460800</option>
+                                    <option value="921600">921600</option>
+                                </select>
+                            </div>
+                            <button id="serial-connect-btn" class="btn btn-sm btn-primary" type="button">Connect</button>
+                            <button id="serial-disconnect-btn" class="btn btn-sm btn-secondary" type="button" disabled>Disconnect</button>
+                            <span id="serial-conn-status" class="serial-conn-status"></span>
+                        </div>
+                        <div class="serial-action-row">
+                            <button id="serial-clear-btn" class="btn btn-sm btn-ghost" type="button" title="Clear output">Clear</button>
+                            <label class="serial-autoscroll-label" title="Auto-scroll on new output">
+                                <input id="serial-autoscroll-cb" type="checkbox" checked> Auto-scroll
+                            </label>
+                            <span id="serial-byte-count" class="serial-byte-count">Rx: 0 / Tx: 0</span>
+                        </div>
+                    </div>
+                    <div id="serial-output-area" class="serial-output-area" tabindex="0">
+                        <div class="serial-output-placeholder">Serial port not connected. Select a port and click Connect to begin.</div>
+                    </div>
+                    <div class="serial-input-row">
+                        <input id="serial-command-input" class="serial-command-input" type="text" placeholder="Type command and press Enter to send…" disabled autocomplete="off" spellcheck="false">
+                        <button id="serial-send-btn" class="btn btn-sm btn-primary" type="button" disabled>Send</button>
+                    </div>
                 </div>
             </section>
 
@@ -8281,6 +8319,272 @@
             reader.readAsText(file);
             input.value = '';
         }
+
+        // ============================================================
+        // Serial Debug Console
+        // ============================================================
+        (function () {
+            const E = {
+                portSelect:    document.getElementById('serial-port-select'),
+                baudSelect:    document.getElementById('serial-baud-select'),
+                connectBtn:    document.getElementById('serial-connect-btn'),
+                disconnectBtn: document.getElementById('serial-disconnect-btn'),
+                connStatus:    document.getElementById('serial-conn-status'),
+                clearBtn:      document.getElementById('serial-clear-btn'),
+                autoScrollCb:  document.getElementById('serial-autoscroll-cb'),
+                byteCount:     document.getElementById('serial-byte-count'),
+                outputArea:    document.getElementById('serial-output-area'),
+                cmdInput:      document.getElementById('serial-command-input'),
+                sendBtn:       document.getElementById('serial-send-btn'),
+            };
+
+            let serialSocket = null;
+            let rxTotal = 0;
+            let txTotal = 0;
+            let reconnectTimer = null;
+
+            function updateByteCount() {
+                if (E.byteCount) {
+                    E.byteCount.textContent = `Rx: ${rxTotal} / Tx: ${txTotal}`;
+                }
+            }
+
+            function appendOutput(text, dir) {
+                if (!E.outputArea) return;
+                // remove placeholder
+                const placeholder = E.outputArea.querySelector('.serial-output-placeholder');
+                if (placeholder) placeholder.remove();
+
+                const line = document.createElement('div');
+                line.className = 'serial-output-line';
+                line.setAttribute('data-dir', dir || 'rx');
+                line.textContent = text;
+                E.outputArea.appendChild(line);
+
+                if (dir === 'rx') { rxTotal += text.length; }
+                if (dir === 'tx') { txTotal += text.length; }
+                updateByteCount();
+
+                // auto-scroll
+                if (E.autoScrollCb && E.autoScrollCb.checked) {
+                    E.outputArea.scrollTop = E.outputArea.scrollHeight;
+                }
+
+                // prune old lines (keep max ~1000)
+                while (E.outputArea.children.length > 1000) {
+                    const first = E.outputArea.firstElementChild;
+                    if (first && first.classList.contains('serial-output-line')) {
+                        first.remove();
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            function setConnectedUI(connected, port) {
+                const connectedState = connected && port;
+                if (E.portSelect) E.portSelect.disabled = connectedState;
+                if (E.baudSelect) E.baudSelect.disabled = connectedState;
+                if (E.connectBtn) E.connectBtn.disabled = connectedState;
+                if (E.disconnectBtn) E.disconnectBtn.disabled = !connectedState;
+                if (E.cmdInput) E.cmdInput.disabled = !connectedState;
+                if (E.sendBtn) E.sendBtn.disabled = !connectedState;
+
+                if (E.connStatus) {
+                    if (connectedState) {
+                        E.connStatus.textContent = `Connected: ${port}`;
+                        E.connStatus.setAttribute('data-state', 'connected');
+                    } else if (connected && !port) {
+                        E.connStatus.textContent = 'Error';
+                        E.connStatus.setAttribute('data-state', 'error');
+                    } else {
+                        E.connStatus.textContent = 'Disconnected';
+                        E.connStatus.setAttribute('data-state', 'disconnected');
+                    }
+                }
+
+                if (!connectedState && E.outputArea) {
+                    const hasPlaceholder = E.outputArea.querySelector('.serial-output-placeholder');
+                    if (!hasPlaceholder && E.outputArea.children.length === 0) {
+                        const ph = document.createElement('div');
+                        ph.className = 'serial-output-placeholder';
+                        ph.textContent = 'Serial port not connected. Select a port and click Connect to begin.';
+                        E.outputArea.appendChild(ph);
+                    }
+                }
+            }
+
+            async function fetchPortList() {
+                try {
+                    const resp = await fetch('/api/serial/ports', { cache: 'no-store' });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const payload = await resp.json();
+                    if (E.portSelect) {
+                        const currentVal = E.portSelect.value;
+                        E.portSelect.innerHTML = '<option value="">-- select port --</option>';
+                        (payload.ports || []).forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p.name;
+                            opt.textContent = p.hardware_id
+                                ? `${p.name} (${p.hardware_id})`
+                                : p.name;
+                            E.portSelect.appendChild(opt);
+                        });
+                        if (currentVal) E.portSelect.value = currentVal;
+                    }
+                    if (payload.connected && payload.current_port) {
+                        setConnectedUI(true, payload.current_port);
+                        // resume WebSocket
+                        connectSerialSocket();
+                    }
+                } catch (err) {
+                    console.error('Failed to list serial ports:', err);
+                }
+            }
+
+            function connectSerialSocket() {
+                if (serialSocket && (serialSocket.readyState === WebSocket.OPEN || serialSocket.readyState === WebSocket.CONNECTING)) {
+                    return;
+                }
+
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/serial`;
+                serialSocket = new WebSocket(wsUrl);
+
+                serialSocket.onopen = () => {
+                    appendOutput('[System] WebSocket connected', 'sys');
+                };
+
+                serialSocket.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg.type === 'rx' && msg.data) {
+                            appendOutput(msg.data, 'rx');
+                        }
+                    } catch (e) {
+                        // non-JSON treated as raw text
+                        appendOutput(event.data, 'rx');
+                    }
+                };
+
+                serialSocket.onclose = () => {
+                    appendOutput('[System] WebSocket closed', 'sys');
+                    serialSocket = null;
+                    if (reconnectTimer) clearTimeout(reconnectTimer);
+                    reconnectTimer = setTimeout(() => {
+                        reconnectTimer = null;
+                        connectSerialSocket();
+                    }, 2000);
+                };
+
+                serialSocket.onerror = () => {
+                    appendOutput('[System] WebSocket error', 'sys');
+                };
+            }
+
+            function disconnectSerialSocket() {
+                if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+                if (serialSocket) {
+                    serialSocket.onclose = null; // prevent reconnect
+                    serialSocket.close();
+                    serialSocket = null;
+                }
+            }
+
+            async function doConnect() {
+                const port = E.portSelect ? E.portSelect.value : '';
+                const baud = E.baudSelect ? parseInt(E.baudSelect.value, 10) : 115200;
+                if (!port) {
+                    appendOutput('[System] Please select a port first', 'sys');
+                    return;
+                }
+                try {
+                    const resp = await fetch('/api/serial/connect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ port, baud }),
+                    });
+                    const payload = await resp.json();
+                    if (payload.success) {
+                        appendOutput(`[System] Connected to ${port} at ${baud} baud`, 'sys');
+                        setConnectedUI(true, port);
+                        connectSerialSocket();
+                    } else {
+                        appendOutput(`[System] Connect failed: ${payload.message}`, 'sys');
+                        setConnectedUI(false, port);
+                    }
+                } catch (err) {
+                    appendOutput(`[System] Connect error: ${err.message}`, 'sys');
+                }
+            }
+
+            async function doDisconnect() {
+                disconnectSerialSocket();
+                try {
+                    const resp = await fetch('/api/serial/disconnect', { method: 'POST' });
+                    const payload = await resp.json();
+                    appendOutput(`[System] ${payload.message || 'Disconnected'}`, 'sys');
+                } catch (err) {
+                    appendOutput(`[System] Disconnect error: ${err.message}`, 'sys');
+                }
+                setConnectedUI(false, null);
+            }
+
+            function doSend() {
+                if (!E.cmdInput) return;
+                const text = E.cmdInput.value;
+                if (!text) return;
+                if (!serialSocket || serialSocket.readyState !== WebSocket.OPEN) {
+                    appendOutput('[System] Not connected', 'sys');
+                    return;
+                }
+                serialSocket.send(text);
+                appendOutput(`${text}`, 'tx');
+                E.cmdInput.value = '';
+                if (E.autoScrollCb && E.autoScrollCb.checked) {
+                    E.outputArea.scrollTop = E.outputArea.scrollHeight;
+                }
+            }
+
+            function doClear() {
+                if (!E.outputArea) return;
+                E.outputArea.innerHTML = '';
+                rxTotal = 0;
+                txTotal = 0;
+                updateByteCount();
+                const ph = document.createElement('div');
+                ph.className = 'serial-output-placeholder';
+                ph.textContent = 'Cleared.';
+                E.outputArea.appendChild(ph);
+            }
+
+            // ---- Event bindings ----
+            if (E.connectBtn) E.connectBtn.addEventListener('click', doConnect);
+            if (E.disconnectBtn) E.disconnectBtn.addEventListener('click', doDisconnect);
+            if (E.sendBtn) E.sendBtn.addEventListener('click', doSend);
+            if (E.clearBtn) E.clearBtn.addEventListener('click', doClear);
+
+            if (E.cmdInput) {
+                E.cmdInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        doSend();
+                    }
+                });
+            }
+
+            // Load port list when Serial tab becomes visible
+            const serialTabLabel = document.querySelector('label.tab-label[for="tab-serial"]');
+            if (serialTabLabel) {
+                serialTabLabel.addEventListener('click', () => {
+                    fetchPortList();
+                });
+            }
+
+            // Initial fetch (if Serial tab is active on load... unlikely since default is System)
+            // But we fetch anyway so ports are ready
+            fetchPortList();
+        })();
     </script>
 </body>
 </html>

@@ -9,6 +9,132 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "cargo check rshtml",
+			"type": "shell",
+			"command": "cargo check",
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo check rshtml",
+			"type": "shell",
+			"command": "cargo check 2>&1; if ($LASTEXITCODE -eq 0) { Write-Output '=== BUILD SUCCESS ===' } else { Write-Output '=== BUILD FAILED ===' }",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo check fsp fix",
+			"type": "shell",
+			"command": "cargo check 2>&1; echo EXIT_CODE=$LASTEXITCODE",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo build rshtml",
+			"type": "shell",
+			"command": "cargo build 2>&1; if ($LASTEXITCODE -eq 0) { Write-Output '=== BUILD SUCCESS ===' } else { Write-Output '=== BUILD FAILED ===' }",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "kill and rebuild",
+			"type": "shell",
+			"command": "taskkill /f /im wireless_status_server.exe 2>$null; cargo build 2>&1",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo build clean",
+			"type": "shell",
+			"command": "cargo build 2>&1 | Select-String -Pattern 'warning|error|Finished'",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo check rshtml",
+			"type": "shell",
+			"command": "cargo check 2>&1; if ($LASTEXITCODE -eq 0) { Write-Output '=== CHECK SUCCESS ===' } else { Write-Output '=== CHECK FAILED ===' }",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo build rshtml",
+			"type": "shell",
+			"command": "cargo build 2>&1; if ($LASTEXITCODE -eq 0) { Write-Output 'BUILD SUCCESS' } else { Write-Output 'BUILD FAILED' }",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git diff name-only",
+			"type": "shell",
+			"command": "git diff --name-only",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git status",
+			"type": "shell",
+			"command": "git status",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git add and commit",
+			"type": "shell",
+			"command": "git add .vscode/tasks.json; git diff --cached --name-only; echo \"---\"; git log --oneline -3",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git commit",
+			"type": "shell",
+			"command": "git commit -m \"feat(serial,ui): 新增串口命令调试工具 + 优化 sweep 数据稳定性\n\n- 新增 Serial 面板串口调试工具（端口枚举/连接/收发/WebSocket 实时日志）\n- 新增 src/serial_port.rs 串口管理模块\n- 新增 /api/serial/ports, /api/serial/connect, /api/serial/disconnect, /ws/serial 路由\n- 消除 cargo build 全部 warning\n- 修复 AP FSP 订阅失败 WARN 日志刷屏 → 降为 DEBUG + suppress_sdk_console_output\n- 修复切换 Active Device 后 sweep 数据卡顿（退避 continue 跳过数据采集）\n- 修复切换设备后 FSP 不再重新初始化问题\n- Serial 面板深色终端风格 CSS\n\nSigned-off-by: xiaojian <jian.xiao@artosyn.cn>\"",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git commit single line",
+			"type": "shell",
+			"command": "git commit -m \"feat(serial,sweep): add serial debug console, fix sweep data stutter after device switch, suppress FSP warn noise\"",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git log oneline",
+			"type": "shell",
+			"command": "git log --oneline -3",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git log check",
+			"type": "shell",
+			"command": "git log --oneline -3",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "git log after ssh",
+			"type": "shell",
+			"command": "git -C \"E:\\Artosyn\\10_project\\rshtml\" log --oneline -3",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo check full",
+			"type": "shell",
+			"command": "cargo check 2>&1",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo check fix",
+			"type": "shell",
+			"command": "cargo check 2>&1 | Select-String -Pattern \"^error|^warning|Finished\"",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

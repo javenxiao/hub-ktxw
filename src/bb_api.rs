@@ -15,6 +15,48 @@ const HOT_UPGRADE_CRC_SEQ: u16 = 3673;
 const BB_USER_0: u8 = 0;
 static REMOTE_SDK_LAST_CALL_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
+// ============================================================
+// OTA upgrade image format (matching PC Tool ar8030_upgrade_ota.cpp)
+// ============================================================
+// These constants document the .img file layout and are referenced
+// by upgrade_ota_image() calculations below.
+#[allow(dead_code)]
+const OTA_HDR_SIZE: usize = 256;
+#[allow(dead_code)]
+const OTA_HASH_SIZE: usize = 32;
+#[allow(dead_code)]
+const OTA_SIG_SIZE: usize = 256;
+#[allow(dead_code)]
+const GPT_FLASH_OFFSET: u64 = 0x8000;
+#[allow(dead_code)]
+const GPT_FLASH_SIZE: u64 = 0x1000;
+#[allow(dead_code)]
+const HDR_MAGIC: usize = 0;
+#[allow(dead_code)]
+const HDR_HEADER_EXT_SIZE: usize = 16;
+#[allow(dead_code)]
+const HDR_HASH_SIZE_OFF: usize = 20;
+#[allow(dead_code)]
+const HDR_SIG_SIZE_OFF: usize = 24;
+#[allow(dead_code)]
+const HDR_IMG_SIZE: usize = 32;
+#[allow(dead_code)]
+const HDR_ROM_SIZE: usize = 40;
+#[allow(dead_code)]
+const HDR_LOADER_SIZE: usize = 44;
+#[allow(dead_code)]
+const HDR_PARTITIONS: usize = 48;
+#[allow(dead_code)]
+const HDR_SEGMENTS: usize = 52;
+#[allow(dead_code)]
+const HDR_IMAGE_TYPE: usize = 128;
+#[allow(dead_code)]
+const HDR_PART_STATUS: usize = 136;
+#[allow(dead_code)]
+const PART_INFO_SIZE: usize = 32;
+#[allow(dead_code)]
+const SEGMENT_INFO_SIZE: usize = 32;
+
 pub(crate) fn resolve_plot_user(status: &ffi::BbGetStatusSummary) -> u8 {
     status.active_user.or(status.detected_active_user).unwrap_or(BB_USER_0)
 }
@@ -1090,8 +1132,10 @@ impl BasebandApi {
                 }
 
                 if !Self::should_retry_remote_operation(label) {
-                    tracing::warn!(
-                        "Remote operation '{}' failed: {}. Returning the error without reconnect because this SDK call is not retry-safe.",
+                    // trigger_slave_channel_scan / FSP ops 在某些固件版本/角色组合下必然失败，
+                    // 失败是预期行为，不应产生 warn 噪声。仅 debug 级别记录。
+                    tracing::debug!(
+                        "Remote operation '{}' failed (non-retryable): {}. Error is expected for this device/firmware combination.",
                         label,
                         first_err
                     );
@@ -2991,24 +3035,10 @@ impl BasebandApi {
             ));
         }
 
-        // 读取 upgrade_hdr 头部关键字段（256 字节）
+        // 读取 upgrade_hdr 头部（256 字节），按 PC Tool ar8030_upgrade_ota.cpp 布局解析
         let hdr = &image[..ffi::UPGRADE_HDR_SIZE];
 
-        // 根据 PC Tool 实际镜像头布局解析：
-        // 0x00 u32 magic
-        // 0x04 u8  hdr_version
-        // 0x05 u8  compressed
-        // 0x06 u8  flashtype
-        // 0x07 u8  reserved/part_status
-        // 0x08 u16 header_ext_size
-        // 0x0A u16 hash_size
-        // 0x0C u16 sig_size
-        // 0x0E u16 sig_realsize
-        // 0x10 u64 img_size
-        // 0x18 u32 rom_size
-        // 0x1C u32 loader_size
-        // 0x20 u16 partitions
-        // 0x22 u16 segments
+        // 先打印前 64 个 u32 帮助诊断
         let mut hdr_dump = String::new();
         for i in 0..(ffi::UPGRADE_HDR_SIZE / 4).min(64) {
             let val = u32::from_le_bytes([hdr[i * 4], hdr[i * 4 + 1], hdr[i * 4 + 2], hdr[i * 4 + 3]]);
@@ -3018,30 +3048,42 @@ impl BasebandApi {
             }
             let _ = write!(hdr_dump, " {:02X}:{:08X}", i * 4, val);
         }
-        tracing::info!("OTA header scan:\n  {}", hdr_dump);
+        tracing::info!("OTA header scan (u32 LE, offset:value):\n  {}", hdr_dump);
 
-        let magic = u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
-        let hdr_version = hdr[4];
-        let compressed = hdr[5];
-        let flashtype = hdr[6];
-        let part_status = hdr[7];
-        let header_ext_size = u16::from_le_bytes([hdr[8], hdr[9]]) as usize;
-        let hash_size = u16::from_le_bytes([hdr[10], hdr[11]]) as usize;
-        let sig_size = u16::from_le_bytes([hdr[12], hdr[13]]) as usize;
-        let sig_realsize = u16::from_le_bytes([hdr[14], hdr[15]]) as usize;
-        let img_size = u64::from_le_bytes([hdr[16], hdr[17], hdr[18], hdr[19], hdr[20], hdr[21], hdr[22], hdr[23]]);
-        let rom_size = u32::from_le_bytes([hdr[24], hdr[25], hdr[26], hdr[27]]) as u64;
-        let loader_size = u32::from_le_bytes([hdr[28], hdr[29], hdr[30], hdr[31]]) as u64;
-        let partitions_count = u16::from_le_bytes([hdr[32], hdr[33]]) as usize;
-        let segments_count = u16::from_le_bytes([hdr[34], hdr[35]]) as usize;
+        // PC Tool struct upgrade_hdr layout (packed, LE):
+        //  0x00: magic            u32  = 0x4152544F
+        //  0x04: hdr_version      u32
+        //  0x08: compressed       u32
+        //  0x0C: flashtype        u32
+        //  0x10: header_ext_size  u32  (usually 0)
+        //  0x14: hash_size        u32  (must be 32)
+        //  0x18: sig_size         u32  (must be 256)
+        //  0x1C: sig_realsize     u32
+        //  0x20: img_size         u64  (8 bytes, total image size)
+        //  0x28: rom_size         u32  (≤ 0x8000)
+        //  0x2C: loader_size      u32  (≤ 0x100000)
+        //  0x30: partitions       u32  (count)
+        //  0x34: segments         u32  (count)
+        let magic           = u32::from_le_bytes([hdr[0],  hdr[1],  hdr[2],  hdr[3]]);
+        let hdr_version     = u32::from_le_bytes([hdr[4],  hdr[5],  hdr[6],  hdr[7]]);
+        let compressed      = u32::from_le_bytes([hdr[8],  hdr[9],  hdr[10], hdr[11]]);
+        let flashtype       = u32::from_le_bytes([hdr[12], hdr[13], hdr[14], hdr[15]]);
+        let header_ext_size = u32::from_le_bytes([hdr[16], hdr[17], hdr[18], hdr[19]]) as usize;
+        let hash_size       = u32::from_le_bytes([hdr[20], hdr[21], hdr[22], hdr[23]]) as usize;
+        let sig_size        = u32::from_le_bytes([hdr[24], hdr[25], hdr[26], hdr[27]]) as usize;
+        let sig_realsize    = u32::from_le_bytes([hdr[28], hdr[29], hdr[30], hdr[31]]) as usize;
+        let img_size        = u64::from_le_bytes([hdr[32], hdr[33], hdr[34], hdr[35], hdr[36], hdr[37], hdr[38], hdr[39]]);
+        let rom_size        = u32::from_le_bytes([hdr[40], hdr[41], hdr[42], hdr[43]]) as u64;
+        let loader_size     = u32::from_le_bytes([hdr[44], hdr[45], hdr[46], hdr[47]]) as u64;
+        let partitions_count = u32::from_le_bytes([hdr[48], hdr[49], hdr[50], hdr[51]]) as usize;
+        let segments_count   = u32::from_le_bytes([hdr[52], hdr[53], hdr[54], hdr[55]]) as usize;
 
         tracing::info!(
-            "OTA header: magic=0x{:08X} hdr_ver={} compressed={} flashtype={} part_status={} img_size={} hash_sz={} sig_sz={} sig_real={} hdr_ext_sz={} rom={} loader={} partitions={} segments={}",
+            "OTA header: magic=0x{:08X} hdr_ver={} compressed={} flashtype={} img_size={} hash_sz={} sig_sz={} sig_real={} hdr_ext_sz={} rom={} loader={} partitions={} segments={}",
             magic,
             hdr_version,
             compressed,
             flashtype,
-            part_status,
             img_size,
             hash_size,
             sig_size,
@@ -3059,10 +3101,9 @@ impl BasebandApi {
 
         if hash_size != ffi::OTA_HASH_SIZE || sig_size != ffi::OTA_SIG_SIZE {
             return Err(format!(
-                "Invalid OTA image: hash_size={}, sig_size={}, sig_realsize={}. Header scan:\n{}",
+                "Invalid OTA image: hash_size={}, sig_size={}. Expected hash=32, sig=256. Header scan:\n{}",
                 hash_size,
                 sig_size,
-                sig_realsize,
                 hdr_dump
             ));
         }
