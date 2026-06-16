@@ -953,7 +953,14 @@
                             <div class="chart-box">
                                 <div class="sweep-layout">
                                     <!-- Sweep control sidebar -->
-                                    <aside class="sweep-sidebar">
+                                    <aside class="sweep-sidebar" id="sweep-sidebar">
+                                        <div class="sweep-sidebar-top-row">
+                                            <div class="sweep-sidebar-status">
+                                                <span class="sweep-state-chip idle" id="sweep-stream-state">Idle</span>
+                                            </div>
+                                            <button class="plot-collapse-toggle" id="sweep-sidebar-collapse" type="button" title="Toggle Control Panel" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
+                                        </div>
+                                        <div class="sweep-sidebar-body">
                                         <div class="sweep-sidebar-group sweep-sidebar-group-primary">
                                             <button class="sweep-btn sweep-btn-start" id="sweep-start-btn" type="button">
                                                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"><polygon points="5,3 19,12 5,21" fill="currentColor"/></svg>
@@ -1015,16 +1022,14 @@
                                                 <span class="sweep-btn-label">Axes</span>
                                             </button>
                                         </div>
-                                        <div class="sweep-sidebar-status">
-                                            <span class="sweep-state-chip idle" id="sweep-stream-state">Idle</span>
-                                        </div>
+                                        </div><!-- close sweep-sidebar-body -->
                                     </aside>
                                     <!-- Sweep plot area -->
                                     <div class="sweep-plot-area">
                                         <div class="plot-series-grid" id="sweep-series-grid">
                                             <!-- Time-domain panel -->
                                             <div class="plot-panel-block">
-                                                <div class="plot-panel-heading"><span class="sys-section-title">Sweep Time Domain</span><span class="plot-time-window-pills" id="sweep-time-window-pills"><button class="time-window-pill" data-win="5">5s</button><button class="time-window-pill" data-win="10">10s</button><button class="time-window-pill" data-win="30">30s</button><button class="time-window-pill is-active" data-win="auto">Auto</button></span><span class="plot-sample-count-badge" id="sweep-time-badge"></span></div>
+                                                <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-time-collapse" type="button" title="Toggle Time Domain" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Time Domain</span><span class="plot-time-window-pills" id="sweep-time-window-pills"><button class="time-window-pill" data-win="5">5s</button><button class="time-window-pill" data-win="10">10s</button><button class="time-window-pill" data-win="30">30s</button><button class="time-window-pill is-active" data-win="auto">Auto</button></span><span class="plot-sample-count-badge" id="sweep-time-badge"></span></div>
                                                 <div class="plot-workbench is-dense">
                                                     <div class="plot-stage">
                                                         <div class="plot-surface" data-plot-surface="sweep-time">
@@ -1091,18 +1096,24 @@
                                                             </div>
                                                         </div>
                                             </div>
-                                            <div class="plot-legend-sidebar">
+                                            <div class="plot-legend-sidebar" id="sweep-time-legend-sidebar">
+                                                <div class="plot-legend-collapse-header">
+                                                    <button class="plot-collapse-toggle" id="sweep-time-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
+                                                    <span>Legend</span>
+                                                </div>
+                                                <div class="plot-legend-body">
                                                 <div class="plot-legend-controls" aria-label="Time-domain legend controls">
                                                     <button class="plot-legend-control-btn" id="sweep-time-show-all" type="button">Show All</button>
                                                     <button class="plot-legend-control-btn" id="sweep-time-hide-all" type="button">Hide All</button>
                                                 </div>
                                                 <div class="plot-legend-list is-dense" id="sweep-time-legend"></div>
+                                                </div><!-- close plot-legend-body -->
                                             </div>
                                         </div>
                                     </div>
                                     <!-- Freq-domain panel -->
                                     <div class="plot-panel-block">
-                                        <div class="plot-panel-heading"><span class="sys-section-title">Sweep Frequency Domain</span><span class="plot-sample-count-badge" id="sweep-freq-badge"></span></div>
+                                        <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-freq-collapse" type="button" title="Toggle Frequency Domain" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Frequency Domain</span><span class="plot-sample-count-badge" id="sweep-freq-badge"></span></div>
                                         <div class="plot-workbench is-dense">
                                             <div class="plot-stage">
                                                 <div class="plot-surface" data-plot-surface="sweep-freq">
@@ -1111,7 +1122,15 @@
                                                 <div class="plot-hover-panel" data-plot-hover="sweep-freq" hidden></div>
                                                 <div class="plot-crosshair" data-plot-crosshair="sweep-freq" hidden></div>
                                             </div>
-                                            <div class="plot-legend-sidebar"><div class="plot-legend-list is-dense" id="sweep-freq-legend"></div></div>
+                                            <div class="plot-legend-sidebar" id="sweep-freq-legend-sidebar">
+                                                <div class="plot-legend-collapse-header">
+                                                    <button class="plot-collapse-toggle" id="sweep-freq-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
+                                                    <span>Legend</span>
+                                                </div>
+                                                <div class="plot-legend-body">
+                                                <div class="plot-legend-list is-dense" id="sweep-freq-legend"></div>
+                                                </div><!-- close plot-legend-body -->
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -7393,6 +7412,23 @@
                 }
             }
 
+            // ── Plot collapse toggle ──
+            function bindPlotCollapseToggle(toggleId, blockSelector) {
+                const toggle = document.getElementById(toggleId);
+                if (!toggle) return;
+                toggle.addEventListener('click', () => {
+                    const block = document.querySelector(blockSelector);
+                    if (!block) return;
+                    const isCollapsed = block.classList.toggle('is-collapsed');
+                    toggle.setAttribute('aria-expanded', String(!isCollapsed));
+                });
+            }
+            bindPlotCollapseToggle('sweep-time-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(1)');
+            bindPlotCollapseToggle('sweep-freq-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(2)');
+            bindPlotCollapseToggle('sweep-sidebar-collapse', '#sweep-sidebar');
+            bindPlotCollapseToggle('sweep-time-legend-collapse', '#sweep-time-legend-sidebar');
+            bindPlotCollapseToggle('sweep-freq-legend-collapse', '#sweep-freq-legend-sidebar');
+
             if (axesToggle) {
                 axesToggle.addEventListener('click', () => {
                     if (axesOverlay && !axesOverlay.hidden) {
@@ -7608,6 +7644,10 @@
                 sweepState.lastFreqPayload = null;
                 sweepUpdateToolbar();
                 sweepStopPolling();
+
+                // 清除时域和频域 SVG 图表，显示等待状态
+                clearSweepTimeDomain();
+                clearSweepFreqDomain();
             } catch (err) {
                 sweepSetStatus(`Stop failed: ${err.message}`, 'error');
             }
@@ -7627,6 +7667,26 @@
         function sweepStopPolling() {
             if (sweepState.timePollTimerId) { clearInterval(sweepState.timePollTimerId); sweepState.timePollTimerId = null; }
             if (sweepState.freqPollTimerId) { clearInterval(sweepState.freqPollTimerId); sweepState.freqPollTimerId = null; }
+        }
+
+        /** 清除时域 SVG 图表，显示等待状态 */
+        function clearSweepTimeDomain() {
+            const svg = document.getElementById('sweep-time-svg');
+            if (!svg) return;
+            svg.innerHTML = '<text x="400" y="170" text-anchor="middle" fill="#888" font-size="14">Waiting for data…</text>';
+            const badge = document.getElementById('sweep-time-badge');
+            if (badge) badge.textContent = '';
+        }
+
+        /** 清除频域 SVG 图表，显示等待状态 */
+        function clearSweepFreqDomain() {
+            const svg = document.getElementById('sweep-freq-svg');
+            if (!svg) return;
+            svg.innerHTML = '<text x="400" y="170" text-anchor="middle" fill="#888" font-size="14">Waiting for frequency data…</text>';
+            const badge = document.getElementById('sweep-freq-badge');
+            if (badge) badge.textContent = '';
+            const legend = document.getElementById('sweep-freq-legend');
+            if (legend) legend.innerHTML = '';
         }
 
         async function sweepPollTimeDomain() {
@@ -8049,8 +8109,14 @@
             const ySpan = yMax - yMin;
             const freqTickStep = ySpan > 200 ? 50 : ySpan > 100 ? 20 : ySpan > 50 ? 10 : 5;
 
-            // X axis: evenly spaced by index, not by frequency value
-            const xScale = (idx) => margin.left + (idx / Math.max(1, freqs.length - 1)) * pw;
+            // X axis: evenly spaced by index, not by frequency value.
+            // Reserve barWidth/2 padding on both sides so bars don't overlap axes.
+            const barWidth = (freqs.length > 1)
+                ? Math.max(4, (pw / Math.max(1, freqs.length - 1)) * 0.7)
+                : 8;
+            const leftPad = barWidth / 2;
+            const usableWidth = pw - barWidth; // subtract total side padding
+            const xScale = (idx) => margin.left + leftPad + (idx / Math.max(1, freqs.length - 1)) * usableWidth;
             const yScale = (v) => margin.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
 
             // xMin/xMax for crosshair/hover/etc
@@ -8058,10 +8124,6 @@
             const xMax = freqs.length - 1;
 
             /* ── bar chart helpers ── */
-            const barWidth = (freqs.length > 1)
-                ? Math.max(4, ((xScale(1) - xScale(0)) * 0.7))
-                : 8;
-
             function barRect(freqIdx, value, color, opacity = 1) {
                 const x = xScale(freqIdx) - barWidth / 2;
                 const y = (value == null || !Number.isFinite(value)) ? margin.top : yScale(value);
@@ -8084,6 +8146,7 @@
 
             let barsMarkup = '';
             let overlayMarkup = '';
+            let dataLabelMarkup = '';
             const seriesDefs = [
                 { key: 'free_run', label: 'Free Run', type: 'bar', color: '#10b981', opacity: 0.85 },
                 { key: 'max_hold', label: 'Max Hold', type: 'line', color: '#ef4444' },
@@ -8113,6 +8176,31 @@
                     overlayMarkup += d
                         ? `<path class="plot-multi-line" data-sweep-series="${def.key}" style="stroke:${def.color};fill:none;stroke-width:1.8" d="${d}"/>`
                         : '';
+                }
+            }
+
+            /* ── 频域数据标签：基于 Max Hold / Min Hold 曲线 ── */
+            {
+                const holdSeries = [
+                    { key: 'max_hold', data: seriesData.max_hold, color: '#ef4444', dy: -8, label: 'Max' },
+                    { key: 'min_hold', data: seriesData.min_hold, color: '#3b82f6', dy: 10, label: 'Min' },
+                ];
+                for (const hs of holdSeries) {
+                    if (!hs.data || visibleSeries.get(hs.key) === false) continue;
+                    let extremeVal = hs.key === 'max_hold' ? -Infinity : Infinity;
+                    let extremeIdx = 0;
+                    for (let i = 0; i < hs.data.length && i < freqs.length; i++) {
+                        const v = hs.data[i];
+                        if (v == null || !Number.isFinite(v)) continue;
+                        if (hs.key === 'max_hold' && v > extremeVal) { extremeVal = v; extremeIdx = i; }
+                        if (hs.key === 'min_hold' && v < extremeVal) { extremeVal = v; extremeIdx = i; }
+                    }
+                    if (!Number.isFinite(extremeVal)) continue;
+                    const mhz = Math.round(freqs[extremeIdx] / 1000);
+                    const x = xScale(extremeIdx);
+                    const y = yScale(extremeVal) + hs.dy;
+                    dataLabelMarkup +=
+                        `<text class="plot-data-label" x="${x}" y="${y}" text-anchor="middle" fill="${hs.color}" font-size="10" font-weight="700">${extremeVal} dBm</text>`;
                 }
             }
 
@@ -8157,6 +8245,7 @@
                 <line class="plot-axis-line" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H-margin.bottom}"/>
                 <line class="plot-axis-line" x1="${margin.left}" y1="${H-margin.bottom}" x2="${W-margin.right}" y2="${H-margin.bottom}"/>
                 ${barsMarkup}
+                ${dataLabelMarkup}
                 ${overlayMarkup}
                 <text class="plot-axis-title plot-axis-title-y" x="18" y="${margin.top + ph/2}">Power (dBm)</text>
                 <text class="plot-axis-title plot-axis-title-x" x="${W/2}" y="${H-2}">Frequency (MHz)</text>

@@ -2797,41 +2797,42 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 max_dbm,
             };
 
-            {
-                let mut cache = state.sweep_plot_cache.write().await;
-                cache.push(point.clone());
-                if cache.len() > SWEEP_PLOT_HISTORY_LIMIT {
-                    let overflow = cache.len() - SWEEP_PLOT_HISTORY_LIMIT;
-                    cache.drain(0..overflow);
-                }
-            }
-
-            // update global max/min/average hold accumulators
-            {
-                let mut max_hold = state.sweep_max_hold.write().await;
-                let mut min_hold = state.sweep_min_hold.write().await;
-                let mut avg_hold = state.sweep_average_hold.write().await;
-                let mut avg_count = state.sweep_average_count.write().await;
-
-                if max_hold.len() != free_run.len() {
-                    *max_hold = free_run.clone();
-                    *min_hold = free_run.clone();
-                    *avg_hold = free_run.iter().map(|&v| v as f64).collect();
-                    *avg_count = 1;
-                } else {
-                    *avg_count += 1;
-                    let n = *avg_count as f64;
-                    for i in 0..free_run.len() {
-                        let v = free_run[i];
-                        if v > max_hold[i] { max_hold[i] = v; }
-                        if v < min_hold[i] { min_hold[i] = v; }
-                        // incremental average: new_avg = old_avg + (v - old_avg) / n
-                        avg_hold[i] += (v as f64 - avg_hold[i]) / n;
+            if control.running {
+                {
+                    let mut cache = state.sweep_plot_cache.write().await;
+                    cache.push(point.clone());
+                    if cache.len() > SWEEP_PLOT_HISTORY_LIMIT {
+                        let overflow = cache.len() - SWEEP_PLOT_HISTORY_LIMIT;
+                        cache.drain(0..overflow);
                     }
                 }
-            }
 
-            if control.running {
+                // update global max/min/average hold accumulators
+                // (only when sweep is actively running — stop must freeze hold)
+                {
+                    let mut max_hold = state.sweep_max_hold.write().await;
+                    let mut min_hold = state.sweep_min_hold.write().await;
+                    let mut avg_hold = state.sweep_average_hold.write().await;
+                    let mut avg_count = state.sweep_average_count.write().await;
+
+                    if max_hold.len() != free_run.len() {
+                        *max_hold = free_run.clone();
+                        *min_hold = free_run.clone();
+                        *avg_hold = free_run.iter().map(|&v| v as f64).collect();
+                        *avg_count = 1;
+                    } else {
+                        *avg_count += 1;
+                        let n = *avg_count as f64;
+                        for i in 0..free_run.len() {
+                            let v = free_run[i];
+                            if v > max_hold[i] { max_hold[i] = v; }
+                            if v < min_hold[i] { min_hold[i] = v; }
+                            // incremental average: new_avg = old_avg + (v - old_avg) / n
+                            avg_hold[i] += (v as f64 - avg_hold[i]) / n;
+                        }
+                    }
+                }
+
                 let frame = serde_json::json!({
                     "sequence": sequence,
                     "timestamp_ms": timestamp_ms,
@@ -5750,9 +5751,19 @@ async fn post_sweep_plot_stop(
     let mut control = state.sweep_control.write().await;
     control.running = false;
     control.started_at = None;
+
+    // 清除所有 hold 缓存，确保重新 start 后以全新数据显示
+    state.sweep_plot_cache.write().await.clear();
+    state.sweep_frame_plot_cache.write().await.clear();
+    state.sweep_max_hold.write().await.clear();
+    state.sweep_min_hold.write().await.clear();
+    state.sweep_average_hold.write().await.clear();
+    *state.sweep_average_count.write().await = 0;
+    info!("Sweep feeder: all sweep caches cleared on stop");
+
     Json(serde_json::json!({
         "success": true,
-        "message": "Sweep stopped",
+        "message": "Sweep stopped, caches cleared",
         "current": build_sweep_config_json(&control),
     }))
 }
