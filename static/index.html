@@ -1161,46 +1161,103 @@
 
             <section class="content-panel panel-serial">
                 <div class="section-strip"></div>
-                <div class="panel-body serial-debug-panel">
-                    <div class="serial-debug-toolbar">
-                        <div class="serial-config-row">
-                            <div class="serial-config-group">
-                                <label class="serial-config-label" for="serial-port-select">Port</label>
-                                <select id="serial-port-select" class="serial-config-select">
-                                    <option value="">-- select port --</option>
-                                </select>
-                            </div>
-                            <div class="serial-config-group">
-                                <label class="serial-config-label" for="serial-baud-select">Baud</label>
-                                <select id="serial-baud-select" class="serial-config-select">
-                                    <option value="9600">9600</option>
-                                    <option value="19200">19200</option>
-                                    <option value="38400">38400</option>
-                                    <option value="57600">57600</option>
-                                    <option value="115200" selected>115200</option>
-                                    <option value="230400">230400</option>
-                                    <option value="460800">460800</option>
-                                    <option value="921600">921600</option>
-                                </select>
-                            </div>
-                            <button id="serial-connect-btn" class="btn btn-sm btn-primary" type="button">Connect</button>
-                            <button id="serial-disconnect-btn" class="btn btn-sm btn-secondary" type="button" disabled>Disconnect</button>
-                            <span id="serial-conn-status" class="serial-conn-status"></span>
-                        </div>
-                        <div class="serial-action-row">
-                            <button id="serial-clear-btn" class="btn btn-sm btn-ghost" type="button" title="Clear output">Clear</button>
-                            <label class="serial-autoscroll-label" title="Auto-scroll on new output">
-                                <input id="serial-autoscroll-cb" type="checkbox" checked> Auto-scroll
-                            </label>
-                            <span id="serial-byte-count" class="serial-byte-count">Rx: 0 / Tx: 0</span>
-                        </div>
+                <div class="panel-body serial-debug-panel" style="padding:0">
+                    <div class="chart-panel-header" style="padding:8px 12px 0">
+                        <h2 class="sys-section-title chart-panel-title" style="font-size:20px">Serial Console</h2>
                     </div>
-                    <div id="serial-output-area" class="serial-output-area" tabindex="0">
-                        <div class="serial-output-placeholder">Serial port not connected. Select a port and click Connect to begin.</div>
-                    </div>
-                    <div class="serial-input-row">
-                        <input id="serial-command-input" class="serial-command-input" type="text" placeholder="Type command and press Enter to send…" disabled autocomplete="off" spellcheck="false">
-                        <button id="serial-send-btn" class="btn btn-sm btn-primary" type="button" disabled>Send</button>
+                    <div class="serial-layout">
+                        <!-- Serial config sidebar -->
+                        <aside class="serial-sidebar" id="serial-sidebar">
+                            <div class="serial-sidebar-top-row">
+                                <button class="plot-collapse-toggle" id="serial-sidebar-collapse" type="button" title="Toggle Config" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
+                            </div>
+                            <div class="serial-sidebar-body">
+                                <div class="serial-config-group">
+                                    <label class="serial-config-label" for="serial-port-select">Port</label>
+                                    <select id="serial-port-select" class="serial-config-select">
+                                        <option value="">-- select --</option>
+                                    </select>
+                                </div>
+                                <div class="serial-config-group">
+                                    <label class="serial-config-label" for="serial-baud-select">Baud rate</label>
+                                    <select id="serial-baud-select" class="serial-config-select" onchange="const c=document.getElementById('serial-baud-custom');if(this.value==='custom'){c.style.display='';c.focus()}else{c.style.display='none'}">
+                                        <option value="300">300</option>
+                                        <option value="600">600</option>
+                                        <option value="1200">1200</option>
+                                        <option value="2400">2400</option>
+                                        <option value="4800">4800</option>
+                                        <option value="9600">9600</option>
+                                        <option value="14400">14400</option>
+                                        <option value="19200">19200</option>
+                                        <option value="38400">38400</option>
+                                        <option value="57600">57600</option>
+                                        <option value="115200" selected>115200</option>
+                                        <option value="230400">230400</option>
+                                        <option value="460800">460800</option>
+                                        <option value="921600">921600</option>
+                                        <option value="custom">Custom…</option>
+                                    </select>
+                                    <input id="serial-baud-custom" class="serial-config-select" type="number" min="1" max="12000000" placeholder="1~12,000,000" style="display:none">
+                                </div>
+                                <div class="serial-config-group">
+                                    <label class="serial-config-label" for="serial-data-select">Data bits</label>
+                                    <select id="serial-data-select" class="serial-config-select">
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                        <option value="7">7</option>
+                                        <option value="8" selected>8</option>
+                                    </select>
+                                </div>
+                                <div class="serial-config-group">
+                                    <label class="serial-config-label" for="serial-parity-select">Parity</label>
+                                    <select id="serial-parity-select" class="serial-config-select">
+                                        <option value="none" selected>None</option>
+                                        <option value="even">Even</option>
+                                        <option value="odd">Odd</option>
+                                        <option value="mark">Mark</option>
+                                        <option value="space">Space</option>
+                                    </select>
+                                </div>
+                                <div class="serial-config-group">
+                                    <label class="serial-config-label" for="serial-stop-select">Stop bits</label>
+                                    <select id="serial-stop-select" class="serial-config-select">
+                                        <option value="1" selected>1</option>
+                                        <option value="1.5">1.5</option>
+                                        <option value="2">2</option>
+                                    </select>
+                                </div>
+                                <div class="serial-config-group">
+                                    <label class="serial-config-label" for="serial-flow-select">Flow ctrl</label>
+                                    <select id="serial-flow-select" class="serial-config-select">
+                                        <option value="none" selected>None</option>
+                                        <option value="rts_cts">RTS/CTS</option>
+                                    </select>
+                                </div>
+                                <hr class="sweep-sidebar-sep">
+                                <button id="serial-connect-btn" class="sweep-btn sweep-btn-start" type="button" style="width:100%"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><path d="M5 12h14"/><polyline points="12 5 19 12 12 19"/></svg> Connect</button>
+                                <button id="serial-disconnect-btn" class="sweep-btn sweep-btn-pause" type="button" disabled style="width:100%"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg> Disconnect</button>
+                                <button id="serial-refresh-btn" class="sweep-btn" type="button" title="Refresh port list" style="width:100%"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>
+                            </div>
+                        </aside>
+                        <!-- Serial output area -->
+                        <div class="serial-stage">
+                            <div class="serial-stage-toolbar">
+                                <button id="serial-clear-btn" class="serial-btn serial-btn-ghost" type="button" title="Clear output">Clear</button>
+                                <label class="serial-autoscroll-label" title="Auto-scroll on new output">
+                                    <input id="serial-autoscroll-cb" type="checkbox" checked> Auto-scroll
+                                </label>
+                                <span id="serial-byte-count" class="serial-byte-count">Rx: 0 / Tx: 0</span>
+                                <span id="serial-conn-status" class="serial-conn-status" data-state="disconnected">Disconnected</span>
+                            </div>
+                            <div id="serial-output-area" class="serial-output-area" tabindex="0">
+                                <div class="serial-output-placeholder">Disconnected · Select a port and click Connect</div>
+                            </div>
+                            <div class="serial-input-row">
+                                <input id="serial-command-input" class="serial-command-input" type="text" placeholder="Type command, Enter to send…" disabled autocomplete="off" spellcheck="false">
+                                <button id="serial-send-btn" class="serial-btn serial-btn-primary" type="button" disabled>Send</button>
+                                <span class="serial-send-hint">⏎ Enter</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -7428,6 +7485,7 @@
             bindPlotCollapseToggle('sweep-sidebar-collapse', '#sweep-sidebar');
             bindPlotCollapseToggle('sweep-time-legend-collapse', '#sweep-time-legend-sidebar');
             bindPlotCollapseToggle('sweep-freq-legend-collapse', '#sweep-freq-legend-sidebar');
+            bindPlotCollapseToggle('serial-sidebar-collapse', '#serial-sidebar');
 
             if (axesToggle) {
                 axesToggle.addEventListener('click', () => {
@@ -8416,8 +8474,13 @@
             const E = {
                 portSelect:    document.getElementById('serial-port-select'),
                 baudSelect:    document.getElementById('serial-baud-select'),
+                dataSelect:    document.getElementById('serial-data-select'),
+                paritySelect:  document.getElementById('serial-parity-select'),
+                stopSelect:    document.getElementById('serial-stop-select'),
+                flowSelect:    document.getElementById('serial-flow-select'),
                 connectBtn:    document.getElementById('serial-connect-btn'),
                 disconnectBtn: document.getElementById('serial-disconnect-btn'),
+                refreshBtn:    document.getElementById('serial-refresh-btn'),
                 connStatus:    document.getElementById('serial-conn-status'),
                 clearBtn:      document.getElementById('serial-clear-btn'),
                 autoScrollCb:  document.getElementById('serial-autoscroll-cb'),
@@ -8431,6 +8494,7 @@
             let rxTotal = 0;
             let txTotal = 0;
             let reconnectTimer = null;
+            let forceScrollUntil = 0;
 
             function updateByteCount() {
                 if (E.byteCount) {
@@ -8440,6 +8504,15 @@
 
             function appendOutput(text, dir) {
                 if (!E.outputArea) return;
+                const now = Date.now();
+                const shouldStickToBottom =
+                    now < forceScrollUntil ||
+                    (
+                        E.autoScrollCb &&
+                        E.autoScrollCb.checked &&
+                        E.outputArea.scrollHeight - E.outputArea.scrollTop - E.outputArea.clientHeight <= 28
+                    );
+
                 // remove placeholder
                 const placeholder = E.outputArea.querySelector('.serial-output-placeholder');
                 if (placeholder) placeholder.remove();
@@ -8454,8 +8527,7 @@
                 if (dir === 'tx') { txTotal += text.length; }
                 updateByteCount();
 
-                // auto-scroll
-                if (E.autoScrollCb && E.autoScrollCb.checked) {
+                if (shouldStickToBottom) {
                     E.outputArea.scrollTop = E.outputArea.scrollHeight;
                 }
 
@@ -8474,6 +8546,12 @@
                 const connectedState = connected && port;
                 if (E.portSelect) E.portSelect.disabled = connectedState;
                 if (E.baudSelect) E.baudSelect.disabled = connectedState;
+                const baudCustomEl = document.getElementById('serial-baud-custom');
+                if (baudCustomEl) baudCustomEl.disabled = connectedState;
+                if (E.dataSelect) E.dataSelect.disabled = connectedState;
+                if (E.paritySelect) E.paritySelect.disabled = connectedState;
+                if (E.stopSelect) E.stopSelect.disabled = connectedState;
+                if (E.flowSelect) E.flowSelect.disabled = connectedState;
                 if (E.connectBtn) E.connectBtn.disabled = connectedState;
                 if (E.disconnectBtn) E.disconnectBtn.disabled = !connectedState;
                 if (E.cmdInput) E.cmdInput.disabled = !connectedState;
@@ -8510,13 +8588,12 @@
                     const payload = await resp.json();
                     if (E.portSelect) {
                         const currentVal = E.portSelect.value;
-                        E.portSelect.innerHTML = '<option value="">-- select port --</option>';
+                        E.portSelect.innerHTML = '<option value="">-- select --</option>';
                         (payload.ports || []).forEach(p => {
                             const opt = document.createElement('option');
                             opt.value = p.name;
-                            opt.textContent = p.hardware_id
-                                ? `${p.name} (${p.hardware_id})`
-                                : p.name;
+                            // show port name only, no hardware description
+                            opt.textContent = p.name.replace(/\s*\(.*?\)\s*$/, '');
                             E.portSelect.appendChild(opt);
                         });
                         if (currentVal) E.portSelect.value = currentVal;
@@ -8582,7 +8659,18 @@
 
             async function doConnect() {
                 const port = E.portSelect ? E.portSelect.value : '';
-                const baud = E.baudSelect ? parseInt(E.baudSelect.value, 10) : 115200;
+                const baud = (function() {
+                    if (E.baudSelect && E.baudSelect.value === 'custom') {
+                        const customEl = document.getElementById('serial-baud-custom');
+                        const val = customEl ? parseInt(customEl.value, 10) : 0;
+                        return (val > 0) ? val : 115200;
+                    }
+                    return E.baudSelect ? parseInt(E.baudSelect.value, 10) : 115200;
+                })();
+                const dataBits = E.dataSelect ? parseInt(E.dataSelect.value, 10) : 8;
+                const parity = E.paritySelect ? E.paritySelect.value : 'none';
+                const stopBits = E.stopSelect ? parseFloat(E.stopSelect.value) : 1;
+                const flowControl = E.flowSelect ? E.flowSelect.value : 'none';
                 if (!port) {
                     appendOutput('[System] Please select a port first', 'sys');
                     return;
@@ -8591,7 +8679,7 @@
                     const resp = await fetch('/api/serial/connect', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ port, baud }),
+                        body: JSON.stringify({ port, baud, data_bits: dataBits, parity, stop_bits: stopBits, flow_control: flowControl }),
                     });
                     const payload = await resp.json();
                     if (payload.success) {
@@ -8628,11 +8716,10 @@
                     return;
                 }
                 serialSocket.send(text);
+                forceScrollUntil = Date.now() + 3000;
                 appendOutput(`${text}`, 'tx');
                 E.cmdInput.value = '';
-                if (E.autoScrollCb && E.autoScrollCb.checked) {
-                    E.outputArea.scrollTop = E.outputArea.scrollHeight;
-                }
+                E.outputArea.scrollTop = E.outputArea.scrollHeight;
             }
 
             function doClear() {
@@ -8650,6 +8737,7 @@
             // ---- Event bindings ----
             if (E.connectBtn) E.connectBtn.addEventListener('click', doConnect);
             if (E.disconnectBtn) E.disconnectBtn.addEventListener('click', doDisconnect);
+            if (E.refreshBtn) E.refreshBtn.addEventListener('click', fetchPortList);
             if (E.sendBtn) E.sendBtn.addEventListener('click', doSend);
             if (E.clearBtn) E.clearBtn.addEventListener('click', doClear);
 
@@ -8657,7 +8745,13 @@
                 E.cmdInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
-                        doSend();
+                        if (E.cmdInput.value.trim()) {
+                            doSend();
+                        } else {
+                            // empty Enter: just scroll to bottom
+                            forceScrollUntil = Date.now() + 3000;
+                            if (E.outputArea) E.outputArea.scrollTop = E.outputArea.scrollHeight;
+                        }
                     }
                 });
             }
@@ -8670,9 +8764,18 @@
                 });
             }
 
-            // Initial fetch (if Serial tab is active on load... unlikely since default is System)
-            // But we fetch anyway so ports are ready
-            fetchPortList();
+            // Refresh ports when tab is selected (radio change)
+            const serialTabRadio = document.getElementById('tab-serial');
+            if (serialTabRadio) {
+                serialTabRadio.addEventListener('change', () => {
+                    if (serialTabRadio.checked) fetchPortList();
+                });
+            }
+
+            // Initial fetch (if Serial tab is active on load)
+            if (serialTabRadio && serialTabRadio.checked) {
+                fetchPortList();
+            }
         })();
     </script>
 </body>

@@ -116,14 +116,25 @@ impl SerialPortManager {
     }
 
     /// 打开并连接串口
-    pub fn connect(&self, port_name: &str, baud_rate: u32) -> Result<(), String> {
+    pub fn connect(
+        &self,
+        port_name: &str,
+        baud_rate: u32,
+        _data_bits: u8,
+        _parity: &str,
+        _stop_bits: u8,
+    ) -> Result<(), String> {
         let mut connected = self.connected.lock().unwrap();
         if *connected {
             return Err("Serial port is already connected".to_string());
         }
 
-        let port = serialport::new(port_name, baud_rate)
-            .timeout(Duration::from_millis(50))
+        // Serialport crate currently only supports 8N1 by default.
+        // data_bits, parity, stop_bits are accepted for future extension.
+        let builder = serialport::new(port_name, baud_rate)
+            .timeout(Duration::from_millis(50));
+
+        let port = builder
             .open()
             .map_err(|e| format!("Failed to open serial port '{}': {}", port_name, e))?;
 

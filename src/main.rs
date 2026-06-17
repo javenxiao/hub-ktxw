@@ -2926,7 +2926,17 @@ async fn list_serial_ports_handler(
 struct SerialConnectRequest {
     port: String,
     baud: u32,
+    #[serde(default = "default_data_bits")]
+    data_bits: u8,
+    #[serde(default = "default_parity")]
+    parity: String,
+    #[serde(default = "default_stop_bits")]
+    stop_bits: u8,
 }
+
+fn default_data_bits() -> u8 { 8 }
+fn default_parity() -> String { "none".to_string() }
+fn default_stop_bits() -> u8 { 1 }
 
 #[derive(Serialize)]
 struct SerialActionResult {
@@ -2938,7 +2948,7 @@ async fn serial_connect_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SerialConnectRequest>,
 ) -> Json<SerialActionResult> {
-    match state.serial_manager.connect(&req.port, req.baud) {
+    match state.serial_manager.connect(&req.port, req.baud, req.data_bits, &req.parity, req.stop_bits) {
         Ok(()) => {
             // 启动后台读取线程
             serial_port::spawn_reader(Arc::clone(&state.serial_manager));
