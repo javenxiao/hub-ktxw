@@ -1826,10 +1826,20 @@ tbody td {
     border-bottom: 1px solid #edf1f5;
     flex-wrap: wrap;
 }
+#wireless-sweep-panel .chart-panel-header {
+    margin-bottom: 0;
+    padding-bottom: 4px;
+}
+#wireless-rssi-panel .chart-panel-header {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 4px;
+}
 
-.chart-panel .chart-panel-title {
+.chart-panel .chart-panel-title,
+h2.sys-section-title.chart-panel-title {
     margin: 0;
-    padding: 0;
+    padding: 0 0 8px;
     color: #2d4258;
     font-size: 15px;
     font-weight: 700;
@@ -1838,8 +1848,15 @@ tbody td {
     border-bottom: none;
     text-align: left;
     letter-spacing: 0.2px;
-    box-shadow: none;
-    border-radius: 0;
+}
+
+.panel-serial .chart-panel-header .sys-section-title,
+.panel-serial .chart-panel-header {
+    padding-top: 0;
+    margin-top: 0;
+    padding-bottom: 4px;
+    margin-bottom: 0;
+    line-height: 1.2;
 }
 
 .wireless-local-user-field {
@@ -2134,6 +2151,11 @@ tbody td {
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    border-bottom: none;
+}
+.plot-panel-heading .sys-section-title,
+.plot-panel-heading .chart-panel-title {
+    border-bottom: none;
 }
 
 /* ── Panel collapse toggle (Windows Details 风格小方块) ── */
@@ -2290,7 +2312,7 @@ tbody td {
 
 .sweep-sidebar-top-row {
     display: flex; align-items: center; justify-content: space-between; gap: 6px;
-    margin-bottom: 8px; padding-bottom: 8px;
+    margin-bottom: 8px; padding-top: 4px; padding-bottom: 8px;
 }
 .sweep-sidebar-status {
     display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0;
@@ -4918,13 +4940,12 @@ tbody td {
 /* ===== Sweep Sidebar Layout ===== */
 /* ===== Sweep Sidebar Layout ===== */
 .sweep-layout{display:flex;gap:0;align-items:stretch;min-height:0}
-#wireless-sweep-panel .chart-panel-title{font-size:24px;line-height:1.2}
-.sweep-sidebar{width:162px;min-width:162px;padding:22px 10px 16px;background:#f8fafc;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;justify-content:flex-start;gap:11px;overflow:visible;position:relative;transition:width .16s ease,min-width .16s ease,padding .16s ease}
+.sweep-sidebar{width:162px;min-width:162px;padding:22px 10px 16px;margin-left:0;background:#f8fafc;border-right:1px solid #e2e8f0;border-left:none;display:flex;flex-direction:column;justify-content:flex-start;gap:11px;overflow:visible;position:relative;transition:width .16s ease,min-width .16s ease,padding .16s ease}
 .sweep-sidebar-group{display:flex;flex-direction:column}
 .sweep-sidebar-group-primary{justify-content:space-evenly;gap:0;min-height:180px;padding:10px 6px;border:1px solid #d9e2ec;border-radius:10px;background:linear-gradient(180deg,#ffffff 0%,#f7fbff 100%);box-shadow:0 8px 20px rgba(148,163,184,.12)}
 .sweep-sidebar-group-secondary{gap:8px;margin-top:8px}
-.sweep-sidebar-sep{border:none;border-top:1px solid #d4dce6;margin:1px 0}
-.sweep-plot-area{flex:1;min-width:0;padding:8px 12px;overflow-y:auto;position:relative;min-width:300px}
+.sweep-sidebar-sep{border:none;border-top:1px solid #d4dce6;margin:12px -10px}
+.sweep-plot-area{flex:1;min-width:0;padding:8px 12px 8px 8px;overflow-y:auto;position:relative;min-width:300px}
 .sweep-plot-area .plot-series-grid{overflow:visible}
 .sweep-plot-area .plot-panel-block{position:relative;overflow:visible;z-index:0}
 .sweep-plot-area .plot-panel-block:hover,.sweep-plot-area .plot-panel-block:focus-within{z-index:4}
