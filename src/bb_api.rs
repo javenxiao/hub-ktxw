@@ -3255,9 +3255,14 @@ impl BasebandApi {
             self.device_handle != 0
         );
 
-        // 检测是否为 OTA 格式 (.img) — 检查 magic
-        let is_ota_image = firmware.len() >= 4
-            && u32::from_le_bytes([firmware[0], firmware[1], firmware[2], firmware[3]]) == ffi::OTA_IMG_MAGIC;
+        // OTA (.img) partition-based upgrade path is temporarily disabled
+        // because the header layout assumptions in upgrade_ota_image() do not
+        // match the actual .img format produced by the current toolchain.
+        // All firmware files now go through the raw BB_SET_HOT_UPGRADE_WRITE
+        // path, which has been verified to work with the remote bb_host SDK.
+        let is_ota_image = false;
+        // Original detection: firmware.len() >= 4
+        //     && u32::from_le_bytes([firmware[0], firmware[1], firmware[2], firmware[3]]) == ffi::OTA_IMG_MAGIC;
 
         if is_ota_image {
             tracing::info!("[UPGRADE] OTA image detected, using partition-based upgrade");

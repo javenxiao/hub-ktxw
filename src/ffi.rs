@@ -1823,6 +1823,7 @@ pub fn take_fsp_retrigger_pending() -> bool {
 }
 
 unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
+    tracing::info!("handle_fsp_event!!!!!!!!!!!!!!!!!!!");
     // Count every invocation for diagnostics (regardless of type)
     FSP_EVENT_TOTAL.fetch_add(1, Ordering::Relaxed);
 
@@ -1980,6 +1981,7 @@ pub fn fsp_hist_cache_snapshot() -> Option<(u32, Vec<i16>)> {
 }
 
 fn subscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
+    tracing::info!("FSP event subscribed******************");
     let sdk = sdk()?;
     let input = bb_set_event_callback_t {
         event: BB_EVENT_FSP,
