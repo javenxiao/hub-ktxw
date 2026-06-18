@@ -122,6 +122,9 @@
                             <h3 class="sys-section-title">WAN Status</h3>
                             <table class="sys-table">
                                 <tr><td>MAC Address</td><td id="wan-mac">--</td><td>Connection Type</td><td id="wan-conn-type">--</td></tr>
+                                <tr><td>IP Address</td><td id="wan-ip">--</td><td>Gateway</td><td id="wan-gateway">--</td></tr>
+                                <tr><td>Subnet Mask</td><td id="wan-mask">--</td><td>Primary DNS</td><td id="wan-dns">--</td></tr>
+                                <tr><td>Secondary DNS</td><td id="wan-dns2">--</td><td></td><td></td></tr>
                             </table>
                         </div>
                     </div>
@@ -1129,6 +1132,50 @@
                                                 </div>
                                                 <div class="plot-legend-body">
                                                 <div class="plot-legend-list is-dense" id="sweep-freq-legend"></div>
+                                                </div><!-- close plot-legend-body -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Variance (平方差) panel -->
+                                    <div class="plot-panel-block">
+                                        <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-variance-collapse" type="button" title="Toggle Variance" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Variance</span><span class="plot-sample-count-badge" id="sweep-variance-badge"></span></div>
+                                        <div class="plot-workbench is-dense">
+                                            <div class="plot-stage">
+                                                <div class="plot-surface" data-plot-surface="sweep-variance">
+                                                    <svg class="plot-composite-svg" id="sweep-variance-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
+                                                </div>
+                                                <div class="plot-hover-panel" data-plot-hover="sweep-variance" hidden></div>
+                                                <div class="plot-crosshair" data-plot-crosshair="sweep-variance" hidden></div>
+                                            </div>
+                                            <div class="plot-legend-sidebar" id="sweep-variance-legend-sidebar">
+                                                <div class="plot-legend-collapse-header">
+                                                    <button class="plot-collapse-toggle" id="sweep-variance-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
+                                                    <span>Legend</span>
+                                                </div>
+                                                <div class="plot-legend-body">
+                                                <div class="plot-legend-list is-dense" id="sweep-variance-legend"></div>
+                                                </div><!-- close plot-legend-body -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Histogram (直方图) panel -->
+                                    <div class="plot-panel-block">
+                                        <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-histogram-collapse" type="button" title="Toggle Histogram" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Histogram</span><span class="plot-sample-count-badge" id="sweep-histogram-badge"></span></div>
+                                        <div class="plot-workbench is-dense">
+                                            <div class="plot-stage">
+                                                <div class="plot-surface" data-plot-surface="sweep-histogram">
+                                                    <svg class="plot-composite-svg" id="sweep-histogram-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
+                                                </div>
+                                                <div class="plot-hover-panel" data-plot-hover="sweep-histogram" hidden></div>
+                                                <div class="plot-crosshair" data-plot-crosshair="sweep-histogram" hidden></div>
+                                            </div>
+                                            <div class="plot-legend-sidebar" id="sweep-histogram-legend-sidebar">
+                                                <div class="plot-legend-collapse-header">
+                                                    <button class="plot-collapse-toggle" id="sweep-histogram-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
+                                                    <span>Legend</span>
+                                                </div>
+                                                <div class="plot-legend-body">
+                                                <div class="plot-legend-list is-dense" id="sweep-histogram-legend"></div>
                                                 </div><!-- close plot-legend-body -->
                                             </div>
                                         </div>
@@ -7330,6 +7377,8 @@
             timePollIntervalMs: 250,
             freqPollTimerId: null,
             freqPollIntervalMs: 1000,
+            varPollTimerId: null,
+            histPollTimerId: null,
             axesOpen: false,
             lastTimePayload: null,
             lastFreqPayload: null,
@@ -7482,6 +7531,8 @@
             }
             bindPlotCollapseToggle('sweep-time-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(1)');
             bindPlotCollapseToggle('sweep-freq-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(2)');
+            bindPlotCollapseToggle('sweep-variance-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(3)');
+            bindPlotCollapseToggle('sweep-histogram-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(4)');
             bindPlotCollapseToggle('sweep-sidebar-collapse', '#sweep-sidebar');
             bindPlotCollapseToggle('sweep-time-legend-collapse', '#sweep-time-legend-sidebar');
             bindPlotCollapseToggle('sweep-freq-legend-collapse', '#sweep-freq-legend-sidebar');
@@ -7716,15 +7767,23 @@
             sweepState.recordedFrames = [];
             if (sweepState.timePollTimerId) clearInterval(sweepState.timePollTimerId);
             if (sweepState.freqPollTimerId) clearInterval(sweepState.freqPollTimerId);
+            if (sweepState.varPollTimerId) clearInterval(sweepState.varPollTimerId);
+            if (sweepState.histPollTimerId) clearInterval(sweepState.histPollTimerId);
             sweepPollTimeDomain();
             sweepPollFreqDomain();
+            sweepPollVariance();
+            sweepPollHistogram();
             sweepState.timePollTimerId = setInterval(sweepPollTimeDomain, sweepState.timePollIntervalMs);
             sweepState.freqPollTimerId = setInterval(sweepPollFreqDomain, sweepState.freqPollIntervalMs);
+            sweepState.varPollTimerId = setInterval(sweepPollVariance, sweepState.freqPollIntervalMs);
+            sweepState.histPollTimerId = setInterval(sweepPollHistogram, sweepState.freqPollIntervalMs);
         }
 
         function sweepStopPolling() {
             if (sweepState.timePollTimerId) { clearInterval(sweepState.timePollTimerId); sweepState.timePollTimerId = null; }
             if (sweepState.freqPollTimerId) { clearInterval(sweepState.freqPollTimerId); sweepState.freqPollTimerId = null; }
+            if (sweepState.varPollTimerId) { clearInterval(sweepState.varPollTimerId); sweepState.varPollTimerId = null; }
+            if (sweepState.histPollTimerId) { clearInterval(sweepState.histPollTimerId); sweepState.histPollTimerId = null; }
         }
 
         /** 清除时域 SVG 图表，显示等待状态 */
@@ -7857,6 +7916,30 @@
                 if (!sweepState.paused) renderSweepFreqDomain(payload);
             } catch (err) {
                 console.error('Sweep freq poll error:', err);
+            }
+        }
+
+        async function sweepPollVariance() {
+            try {
+                const res = await fetch('/api/wireless/sweep/variance-data?t=' + Date.now());
+                if (!res.ok) return;
+                const payload = await res.json();
+                sweepState.lastVariancePayload = payload;
+                if (!sweepState.paused) renderSweepVariance(payload);
+            } catch (err) {
+                console.error('Sweep variance poll error:', err);
+            }
+        }
+
+        async function sweepPollHistogram() {
+            try {
+                const res = await fetch('/api/wireless/sweep/histogram-data?t=' + Date.now());
+                if (!res.ok) return;
+                const payload = await res.json();
+                sweepState.lastHistogramPayload = payload;
+                if (!sweepState.paused) renderSweepHistogram(payload);
+            } catch (err) {
+                console.error('Sweep histogram poll error:', err);
             }
         }
 
@@ -8329,14 +8412,112 @@
             if (sweepState.recording && last) {
                 sweepState.recordedFrames.push(last);
             }
+        }
 
-            // Hover / crosshair: re-bind to pick up updated SVG data attributes
-            if (!sweepState.paused) {
-                bindSweepFreqHover();
+        // ================================================================
+        //  Sweep Variance (平方差) plot
+        // ================================================================
+        function renderSweepVariance(payload) {
+            const svg = document.getElementById('sweep-variance-svg');
+            const legend = document.getElementById('sweep-variance-legend');
+            if (!svg || !payload || !payload.points || !payload.points.length) return;
+
+            const W = 800, H = 320;
+            const margin = { top: 18, right: 18, bottom: 28, left: 46 };
+            const pw = W - margin.left - margin.right;
+            const ph = H - margin.top - margin.bottom;
+
+            const points = payload.points;
+            const maxVal = Math.max(...points.map(p => Math.abs(p.variance)), 1e-9);
+            const yMax = Math.ceil(maxVal * 1.15);
+
+            function xOf(i) { return margin.left + (i / (points.length - 1 || 1)) * pw; }
+            function yOf(v) { return margin.top + ph - (v / yMax) * ph; }
+
+            let bars = '';
+            const barW = Math.max(1, pw / points.length * 0.7);
+            for (let i = 0; i < points.length; i++) {
+                const x = xOf(i) - barW / 2;
+                const h = (Math.abs(points[i].variance) / yMax) * ph;
+                bars += `<rect x="${x}" y="${margin.top + ph - h}" width="${barW}" height="${h}" fill="#6366f1" opacity="0.7"/>`;
+            }
+
+            let yTicks = '';
+            for (let v = 0; v <= yMax; v += Math.max(1, Math.round(yMax / 4))) {
+                yTicks += `<text class="plot-axis-label" x="${margin.left - 6}" y="${yOf(v) + 4}" text-anchor="end">${v.toFixed(1)}</text>`;
+            }
+
+            svg.innerHTML = `
+                <rect width="${W}" height="${H}" fill="none"/>
+                <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
+                <line x1="${margin.left}" y1="${H - margin.bottom}" x2="${W - margin.right}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
+                ${bars}
+                <text class="plot-axis-title plot-axis-title-y" x="12" y="${H/2}" transform="rotate(-90,12,${H/2})">Variance</text>
+                <text class="plot-axis-title plot-axis-title-x" x="${W/2}" y="${H-2}">Frequency (kHz)</text>
+                ${yTicks}
+            `;
+
+            if (legend) {
+                legend.innerHTML = '';
+                const item = document.createElement('div');
+                item.className = 'plot-legend-item is-dense';
+                item.innerHTML = `<span class="plot-legend-swatch" style="background:#6366f1"></span><span class="plot-legend-label">Variance</span><span class="plot-legend-value">${maxVal.toFixed(1)}</span>`;
+                legend.appendChild(item);
             }
         }
 
-        /* ── hover / crosshair for sweep freq ── */
+        // ================================================================
+        //  Sweep Histogram (直方图) plot
+        // ================================================================
+        function renderSweepHistogram(payload) {
+            const svg = document.getElementById('sweep-histogram-svg');
+            const legend = document.getElementById('sweep-histogram-legend');
+            if (!svg || !payload || !payload.bins || !payload.bins.length) return;
+
+            const W = 800, H = 320;
+            const margin = { top: 18, right: 18, bottom: 28, left: 46 };
+            const pw = W - margin.left - margin.right;
+            const ph = H - margin.top - margin.bottom;
+
+            const bins = payload.bins;
+            const maxCount = Math.max(...bins.map(b => b.count), 1);
+
+            function xOf(i) { return margin.left + (i / (bins.length - 1 || 1)) * pw; }
+            function yOf(v) { return margin.top + ph - (v / maxCount) * ph; }
+
+            let bars = '';
+            const barW = Math.max(1, pw / bins.length * 0.7);
+            for (let i = 0; i < bins.length; i++) {
+                const x = xOf(i) - barW / 2;
+                const h = (bins[i].count / maxCount) * ph;
+                bars += `<rect x="${x}" y="${margin.top + ph - h}" width="${barW}" height="${h}" fill="#f59e0b" opacity="0.7"/>`;
+            }
+
+            let yTicks = '';
+            for (let v = 0; v <= maxCount; v += Math.max(1, Math.round(maxCount / 4))) {
+                yTicks += `<text class="plot-axis-label" x="${margin.left - 6}" y="${yOf(v) + 4}" text-anchor="end">${v}</text>`;
+            }
+
+            svg.innerHTML = `
+                <rect width="${W}" height="${H}" fill="none"/>
+                <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
+                <line x1="${margin.left}" y1="${H - margin.bottom}" x2="${W - margin.right}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
+                ${bars}
+                <text class="plot-axis-title plot-axis-title-y" x="12" y="${H/2}" transform="rotate(-90,12,${H/2})">Count</text>
+                <text class="plot-axis-title plot-axis-title-x" x="${W/2}" y="${H-2}">Frequency (kHz)</text>
+                ${yTicks}
+            `;
+
+            if (legend) {
+                legend.innerHTML = '';
+                const item = document.createElement('div');
+                item.className = 'plot-legend-item is-dense';
+                item.innerHTML = `<span class="plot-legend-swatch" style="background:#f59e0b"></span><span class="plot-legend-label">Histogram</span><span class="plot-legend-value">${maxCount}</span>`;
+                legend.appendChild(item);
+            }
+        }
+
+        /* ── freq-domain hover / crosshair ── */
         function bindSweepFreqHover() {
             const surface = document.querySelector('[data-plot-surface="sweep-freq"]');
             const hoverPanel = document.querySelector('[data-plot-hover="sweep-freq"]');

@@ -36,6 +36,12 @@ static SDK_CONSOLE_REDIRECT_LOCK: Mutex<()> = Mutex::new(());
 static PLOT_RAW_LDPC_FRAME_LOGGED: AtomicBool = AtomicBool::new(false);
 static FSP_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
 static FSP_EVENT_TOTAL: AtomicUsize = AtomicUsize::new(0);
+static FSP_EVENT_FS_RESULT: AtomicUsize = AtomicUsize::new(0);
+static FSP_EVENT_DIFF: AtomicUsize = AtomicUsize::new(0);
+static FSP_EVENT_HIST: AtomicUsize = AtomicUsize::new(0);
+static FSP_EVENT_OTHER: AtomicUsize = AtomicUsize::new(0);
+static FSP_LAST_EVENT_TYPE: AtomicUsize = AtomicUsize::new(usize::MAX);
+static FSP_LAST_EVENT_NUM: AtomicUsize = AtomicUsize::new(0);
 static FSP_RETRIGGER_PENDING: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "windows")]
@@ -1742,16 +1748,46 @@ struct FspCache {
     powers: Vec<i16>,
 }
 
+#[derive(Debug, Default, Clone)]
+struct FspDiffCache {
+    count: u32,
+    values: Vec<f64>,
+}
+
+#[derive(Debug, Default, Clone)]
+struct FspHistCache {
+    count: u32,
+    bins: Vec<i16>,
+}
+
 static FSP_CACHE: OnceLock<Mutex<FspCache>> = OnceLock::new();
+static FSP_DIFF_CACHE: OnceLock<Mutex<FspDiffCache>> = OnceLock::new();
+static FSP_HIST_CACHE: OnceLock<Mutex<FspHistCache>> = OnceLock::new();
 
 fn fsp_cache() -> &'static Mutex<FspCache> {
     FSP_CACHE.get_or_init(|| Mutex::new(FspCache::default()))
+}
+
+fn fsp_diff_cache() -> &'static Mutex<FspDiffCache> {
+    FSP_DIFF_CACHE.get_or_init(|| Mutex::new(FspDiffCache::default()))
+}
+
+fn fsp_hist_cache() -> &'static Mutex<FspHistCache> {
+    FSP_HIST_CACHE.get_or_init(|| Mutex::new(FspHistCache::default()))
 }
 
 pub fn reset_fsp_cache() {
     if let Ok(mut cache) = fsp_cache().lock() {
         cache.count = 0;
         cache.powers.clear();
+    }
+    if let Ok(mut cache) = fsp_diff_cache().lock() {
+        cache.count = 0;
+        cache.values.clear();
+    }
+    if let Ok(mut cache) = fsp_hist_cache().lock() {
+        cache.count = 0;
+        cache.bins.clear();
     }
     FSP_RETRIGGER_PENDING.store(false, Ordering::Relaxed);
 }
@@ -1760,6 +1796,24 @@ pub fn reset_fsp_cache() {
 /// Use for diagnostics: if this stays 0 on AP, the subscription is not generating events.
 pub fn fsp_event_total() -> usize {
     FSP_EVENT_TOTAL.load(Ordering::Relaxed)
+}
+
+pub fn fsp_event_counters() -> (usize, usize, usize, usize) {
+    (
+        FSP_EVENT_FS_RESULT.load(Ordering::Relaxed),
+        FSP_EVENT_DIFF.load(Ordering::Relaxed),
+        FSP_EVENT_HIST.load(Ordering::Relaxed),
+        FSP_EVENT_OTHER.load(Ordering::Relaxed),
+    )
+}
+
+pub fn fsp_last_event_snapshot() -> Option<(u32, u32)> {
+    let event_type = FSP_LAST_EVENT_TYPE.load(Ordering::Relaxed);
+    if event_type == usize::MAX {
+        None
+    } else {
+        Some((event_type as u32, FSP_LAST_EVENT_NUM.load(Ordering::Relaxed) as u32))
+    }
 }
 
 /// Returns true (and clears the flag) when a FS_RESULT event has been received
@@ -1777,29 +1831,125 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
     }
 
     let event = unsafe { &*(arg as *const bb_event_fsp_t) };
-    if event.type_ != BB_FSP_NOTIFY_TYPE_FS_RESULT || event.num == 0 {
-        return;
-    }
+    FSP_LAST_EVENT_TYPE.store(event.type_ as usize, Ordering::Relaxed);
+    FSP_LAST_EVENT_NUM.store(event.num as usize, Ordering::Relaxed);
 
-    let max_count = event.data.len() / 2;
-    let count = (event.num as usize).min(max_count);
-    if count == 0 {
-        return;
+    match event.type_ {
+        BB_FSP_NOTIFY_TYPE_FS_RESULT => {
+            let seen = FSP_EVENT_FS_RESULT.fetch_add(1, Ordering::Relaxed) + 1;
+            if event.num == 0 {
+                if seen <= 3 || seen % 20 == 0 {
+                    tracing::info!("FSP FS_RESULT event received with zero samples (seen={})", seen);
+                }
+                return;
+            }
+            let max_count = event.data.len() / 2;
+            let count = (event.num as usize).min(max_count);
+            if count == 0 {
+                return;
+            }
+            let mut powers = Vec::with_capacity(count);
+            for idx in 0..count {
+                let offset = idx * 2;
+                powers.push(i16::from_le_bytes([event.data[offset], event.data[offset + 1]]));
+            }
+            if seen <= 3 || seen % 20 == 0 {
+                let preview = powers.iter().take(4).copied().collect::<Vec<_>>();
+                tracing::info!(
+                    "FSP FS_RESULT event: seen={} num={} stored={} preview={:?}",
+                    seen,
+                    event.num,
+                    count,
+                    preview
+                );
+            }
+            if let Ok(mut cache) = fsp_cache().lock() {
+                cache.count = count as u32;
+                cache.powers = powers;
+            }
+            // Signal feeder to retrigger next scan (callback-driven loop, not timer-driven)
+            FSP_RETRIGGER_PENDING.store(true, Ordering::Relaxed);
+        }
+        BB_FSP_NOTIFY_TYPE_DIFF => {
+            let seen = FSP_EVENT_DIFF.fetch_add(1, Ordering::Relaxed) + 1;
+            // 平方差模式: data 中包含 i16 值序列
+            if event.num == 0 {
+                if seen <= 3 || seen % 20 == 0 {
+                    tracing::info!("FSP DIFF event received with zero samples (seen={})", seen);
+                }
+                return;
+            }
+            let max_count = event.data.len() / 2;
+            let count = (event.num as usize).min(max_count);
+            if count == 0 {
+                return;
+            }
+            let mut variances = Vec::with_capacity(count);
+            for idx in 0..count {
+                let offset = idx * 2;
+                let raw = i16::from_le_bytes([event.data[offset], event.data[offset + 1]]);
+                // Convert to f64 for later use; DIFF values are typically accumulated squared deltas
+                variances.push(raw as f64);
+            }
+            if seen <= 3 || seen % 20 == 0 {
+                let preview = variances.iter().take(4).copied().collect::<Vec<_>>();
+                tracing::info!(
+                    "FSP DIFF event: seen={} num={} stored={} preview={:?}",
+                    seen,
+                    event.num,
+                    count,
+                    preview
+                );
+            }
+            if let Ok(mut cache) = fsp_diff_cache().lock() {
+                cache.count = count as u32;
+                cache.values = variances;
+            }
+        }
+        BB_FSP_NOTIFY_TYPE_HIST => {
+            let seen = FSP_EVENT_HIST.fetch_add(1, Ordering::Relaxed) + 1;
+            // 直方图模式: data 中包含独立 event.num 个区间的计数值
+            // Format: [count0: u16][count1: u16]...[max0: u16][max1: u16]...? 
+            // For now store raw data as i16 pairs; main.rs will decode
+            if event.num == 0 {
+                if seen <= 3 || seen % 20 == 0 {
+                    tracing::info!("FSP HIST event received with zero samples (seen={})", seen);
+                }
+                return;
+            }
+            let max_count = event.data.len() / 2;
+            let count = (event.num as usize).min(max_count);
+            if count == 0 {
+                return;
+            }
+            let mut bins = Vec::with_capacity(count);
+            for idx in 0..count {
+                let offset = idx * 2;
+                let raw = i16::from_le_bytes([event.data[offset], event.data[offset + 1]]);
+                bins.push(raw);
+            }
+            if seen <= 3 || seen % 20 == 0 {
+                let preview = bins.iter().take(4).copied().collect::<Vec<_>>();
+                tracing::info!(
+                    "FSP HIST event: seen={} num={} stored={} preview={:?}",
+                    seen,
+                    event.num,
+                    count,
+                    preview
+                );
+            }
+            if let Ok(mut cache) = fsp_hist_cache().lock() {
+                cache.count = count as u32;
+                cache.bins = bins;
+            }
+        }
+        other => {
+            let seen = FSP_EVENT_OTHER.fetch_add(1, Ordering::Relaxed) + 1;
+            if seen <= 3 || seen % 20 == 0 {
+                tracing::info!("FSP other event: type={} num={} seen={}", other, event.num, seen);
+            }
+        }
     }
-
-    let mut powers = Vec::with_capacity(count);
-    for idx in 0..count {
-        let offset = idx * 2;
-        powers.push(i16::from_le_bytes([event.data[offset], event.data[offset + 1]]));
-    }
-
-    if let Ok(mut cache) = fsp_cache().lock() {
-        cache.count = count as u32;
-        cache.powers = powers;
-    }
-
-    // Signal feeder to retrigger next scan (callback-driven loop, not timer-driven)
-    FSP_RETRIGGER_PENDING.store(true, Ordering::Relaxed);
 }
 
 pub fn fsp_cache_snapshot() -> Option<(u32, Vec<i16>)> {
@@ -1808,6 +1958,24 @@ pub fn fsp_cache_snapshot() -> Option<(u32, Vec<i16>)> {
         None
     } else {
         Some((cache.count, cache.powers.clone()))
+    }
+}
+
+pub fn fsp_diff_cache_snapshot() -> Option<(u32, Vec<f64>)> {
+    let cache = fsp_diff_cache().lock().ok()?;
+    if cache.count == 0 || cache.values.is_empty() {
+        None
+    } else {
+        Some((cache.count, cache.values.clone()))
+    }
+}
+
+pub fn fsp_hist_cache_snapshot() -> Option<(u32, Vec<i16>)> {
+    let cache = fsp_hist_cache().lock().ok()?;
+    if cache.count == 0 || cache.bins.is_empty() {
+        None
+    } else {
+        Some((cache.count, cache.bins.clone()))
     }
 }
 

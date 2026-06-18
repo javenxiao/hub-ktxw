@@ -478,6 +478,49 @@ struct SweepRecordingDataResponse {
     frames: Vec<serde_json::Value>,
 }
 
+// -- sweep variance / histogram types --
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepVariancePoint {
+    freq_khz: u32,
+    variance: f64,
+    power_dbm: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepVarianceResponse {
+    success: bool,
+    message: String,
+    points: Vec<SweepVariancePoint>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepHistogramBin {
+    freq_khz: u32,
+    count: u32,
+    power_min_dbm: i32,
+    power_max_dbm: i32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepHistogramResponse {
+    success: bool,
+    message: String,
+    bins: Vec<SweepHistogramBin>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SweepFspDebugResponse {
+    success: bool,
+    message: String,
+    total_events: usize,
+    fs_result_events: usize,
+    diff_events: usize,
+    hist_events: usize,
+    other_events: usize,
+    last_event: Option<(u32, u32)>,
+}
+
 #[derive(Debug, Clone)]
 struct SweepControlState {
     running: bool,
@@ -605,6 +648,8 @@ struct AppState {
     sweep_min_hold: RwLock<Vec<i32>>,
     sweep_average_hold: RwLock<Vec<f64>>,
     sweep_average_count: RwLock<u64>,
+    sweep_variance_cache: RwLock<Vec<SweepVariancePoint>>,
+    sweep_histogram_cache: RwLock<Vec<SweepHistogramBin>>,
     serial_manager: Arc<serial_port::SerialPortManager>,
 }
 
@@ -652,6 +697,8 @@ impl AppState {
             sweep_min_hold: RwLock::new(Vec::new()),
             sweep_average_hold: RwLock::new(Vec::new()),
             sweep_average_count: RwLock::new(0),
+            sweep_variance_cache: RwLock::new(Vec::new()),
+            sweep_histogram_cache: RwLock::new(Vec::new()),
             serial_manager: Arc::new(serial_port::SerialPortManager::new()),
         }
     }
@@ -1006,6 +1053,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/wireless/sweep/plot/stop", post(post_sweep_plot_stop))
         .route("/api/wireless/sweep/frame-plot/start", post(post_sweep_frame_plot_start))
         .route("/api/wireless/sweep/frame-plot/stop", post(post_sweep_frame_plot_stop))
+        .route("/api/wireless/sweep/variance-data", get(get_sweep_variance_data))
+        .route("/api/wireless/sweep/histogram-data", get(get_sweep_histogram_data))
+        .route("/api/wireless/sweep/fsp-debug", get(get_sweep_fsp_debug))
         .route("/api/wireless/sweep/config", post(post_sweep_config))
         .route("/api/wireless/sweep/recording/start", post(post_sweep_recording_start))
         .route("/api/wireless/sweep/recording/stop", post(post_sweep_recording_stop))
@@ -2691,8 +2741,6 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                     }
                 }
             }
-            // Slave devices (sync_master=0) may not support FSP events — use
-            // BB_CFG_CHANNEL to trigger a real spectrum scan instead. The SDK
             // will update its internal power[] table, which BB_GET_CHAN_INFO
             // then returns fresh values matching the "chan" command output.
             //
@@ -2742,16 +2790,48 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
             };
 
             let freq_list: Vec<u32> = channel_info.channels.iter().map(|entry| entry.frequency_khz).collect();
-            let free_run: Vec<i32> = channel_info.channels.iter().map(|entry| entry.power_dbm).collect();
-            let free_run_source = "channel_info";
+            // default free_run from channel_info (reliable, always available)
+            let default_free_run: Vec<i32> = channel_info.channels.iter().map(|entry| entry.power_dbm).collect();
 
-            // SKIP FSP cache: SDK R&D confirmed both master and slave use
-            // BB_GET_CHAN_INFO as the sole sweep data source. The FSP path
-            // was producing different values (positive i16) compared to the
-            // direct channel_info path (int32_t). To align with the "chan"
-            // console command, always use channel_info.power_dbm directly.
-            // (Previous FSP cache logic kept as comment for reference.)
-            // if let Some((fsp_count, fsp_powers)) = ffi::fsp_cache_snapshot() { ... }
+            // Always try FSP cache first. If the SDK produces FS_RESULT events,
+            // this path gives the raw sweep power values. Otherwise, fall back to
+            // channel_info (which is always available and equivalent to the "chan"
+            // console command).
+            //
+            // Note: DIFF and HIST data ONLY come from FSP events — there is no
+            // channel_info equivalent, so those caches are always populated from
+            // FSP callbacks regardless of which source free_run uses.
+            let (free_run, free_run_source) =
+                ffi::fsp_cache_snapshot()
+                    .filter(|(count, powers)| *count > 0 && !powers.is_empty())
+                    .map(|(_count, powers)| {
+                        let powers_i32: Vec<i32> = powers.iter().map(|&v| v as i32).collect();
+                        let source = "fsp";
+                        (powers_i32, source)
+                    })
+                    .unwrap_or_else(|| {
+                        (default_free_run.clone(), "channel_info")
+                    });
+            let first_power = free_run.first().copied();
+
+            if control.running && sequence % 20 == 1 {
+                let (fs_result_events, diff_events, hist_events, other_events) = ffi::fsp_event_counters();
+                let last_fsp_event = ffi::fsp_last_event_snapshot();
+                tracing::info!(
+                    "Sweep tick {} role={:?} free_run_source={} chan_num={} first_power={:?} fsp_total={} fs_result={} diff={} hist={} other={} last_fsp={:?}",
+                    sequence,
+                    last_role,
+                    free_run_source,
+                    freq_list.len(),
+                    first_power,
+                    ffi::fsp_event_total(),
+                    fs_result_events,
+                    diff_events,
+                    hist_events,
+                    other_events,
+                    last_fsp_event,
+                );
+            }
 
             // Diagnostic: log data source and first power value every 4 ticks (~1s)
             /*if sequence % 4 == 1 {
@@ -2865,6 +2945,66 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                     if recording_frames.len() > recording_state.max_frames {
                         let overflow = recording_frames.len() - recording_state.max_frames;
                         recording_frames.drain(0..overflow);
+                    }
+                }
+            }
+
+        // =================================================================
+        //  FSP sub-event feeders (DIFF / HIST – only available via FSP)
+        //
+        //  These caches are populated by handle_fsp_event() in ffi.rs.
+        //  When the SDK fires DIFF/HIST callbacks, the feeder picks them
+        //  up here and writes them into the REST-facing caches.
+        //
+        //  Unlike free_run, there is NO fallback to channel_info here —
+        //  variance and histogram data are exclusive to FSP.
+        // =================================================================
+        // -- Feed variance (square-diff) and histogram caches from FSP events --
+            if control.running {
+                if let Some((_, values)) = ffi::fsp_diff_cache_snapshot() {
+                    let chan_info_guard = state.sweep_chan_cache.read().await;
+                    let freqs: Vec<u32> = chan_info_guard
+                        .as_ref()
+                        .map(|ci| ci.frequencies_khz.clone())
+                        .unwrap_or_default();
+                    // avoid holding read lock during the potentially longer write
+                    drop(chan_info_guard);
+                    let points: Vec<SweepVariancePoint> = freqs
+                        .iter()
+                        .take(values.len())
+                        .enumerate()
+                        .map(|(i, &freq)| SweepVariancePoint {
+                            freq_khz: freq,
+                            variance: values[i],
+                            power_dbm: 0,
+                        })
+                        .collect();
+                    if !points.is_empty() {
+                        let mut cache = state.sweep_variance_cache.write().await;
+                        *cache = points;
+                    }
+                }
+                if let Some((_, bins)) = ffi::fsp_hist_cache_snapshot() {
+                    let chan_info_guard = state.sweep_chan_cache.read().await;
+                    let freqs: Vec<u32> = chan_info_guard
+                        .as_ref()
+                        .map(|ci| ci.frequencies_khz.clone())
+                        .unwrap_or_default();
+                    drop(chan_info_guard);
+                    let hist_bins: Vec<SweepHistogramBin> = freqs
+                        .iter()
+                        .take(bins.len())
+                        .enumerate()
+                        .map(|(i, &freq)| SweepHistogramBin {
+                            freq_khz: freq,
+                            count: bins[i] as u32,
+                            power_min_dbm: 0,
+                            power_max_dbm: 0,
+                        })
+                        .collect();
+                    if !hist_bins.is_empty() {
+                        let mut cache = state.sweep_histogram_cache.write().await;
+                        *cache = hist_bins;
                     }
                 }
             }
@@ -5731,6 +5871,42 @@ async fn get_sweep_frame_plot_data(
     })
 }
 
+async fn get_sweep_variance_data(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepVarianceResponse> {
+    let cache = state.sweep_variance_cache.read().await.clone();
+    Json(SweepVarianceResponse {
+        success: true,
+        message: "ok".to_string(),
+        points: cache,
+    })
+}
+
+async fn get_sweep_histogram_data(
+    State(state): State<Arc<AppState>>,
+) -> Json<SweepHistogramResponse> {
+    let cache = state.sweep_histogram_cache.read().await.clone();
+    Json(SweepHistogramResponse {
+        success: true,
+        message: "ok".to_string(),
+        bins: cache,
+    })
+}
+
+async fn get_sweep_fsp_debug() -> Json<SweepFspDebugResponse> {
+    let (fs_result_events, diff_events, hist_events, other_events) = ffi::fsp_event_counters();
+    Json(SweepFspDebugResponse {
+        success: true,
+        message: "ok".to_string(),
+        total_events: ffi::fsp_event_total(),
+        fs_result_events,
+        diff_events,
+        hist_events,
+        other_events,
+        last_event: ffi::fsp_last_event_snapshot(),
+    })
+}
+
 async fn post_sweep_plot_start(
     State(state): State<Arc<AppState>>,
     Json(_request): Json<SweepPlotControlRequest>,
@@ -5769,6 +5945,8 @@ async fn post_sweep_plot_stop(
     state.sweep_min_hold.write().await.clear();
     state.sweep_average_hold.write().await.clear();
     *state.sweep_average_count.write().await = 0;
+    state.sweep_variance_cache.write().await.clear();
+    state.sweep_histogram_cache.write().await.clear();
     info!("Sweep feeder: all sweep caches cleared on stop");
 
     Json(serde_json::json!({
