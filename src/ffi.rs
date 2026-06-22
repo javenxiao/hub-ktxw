@@ -25,6 +25,14 @@ use libloading::Library;
 mod ffi_adapter_types;
 pub use ffi_adapter_types::*;
 
+mod sdk_bindings {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    #![allow(dead_code)]
+    include!("generated/ffi_bindings.rs");
+}
+
 #[cfg(target_os = "windows")]
 const O_RDWR: c_int = 0x0002;
 
@@ -533,131 +541,49 @@ impl Default for bb_event_plot_data_t {
     }
 }
 
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Clone, Copy)]
 pub struct bb_event_fsp_t {
-    pub type_: u32,
-    pub num: u32,
+    // bb_api.h uses bitfields: frame_id:16, num:8, type:4, len:10.
+    // Keep raw bytes to avoid Rust bitfield layout assumptions.
+    pub header: [u8; 8],
     pub data: [u8; 768],
 }
 
 impl Default for bb_event_fsp_t {
     fn default() -> Self {
         Self {
-            type_: 0,
-            num: 0,
+            header: [0; 8],
             data: [0; 768],
         }
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct bb_event_fsp_param_t {
-    pub header: u32,
-}
-
-impl bb_event_fsp_param_t {
-    pub fn sub_event_bmp(&self) -> u32 {
-        self.header & 0xFF
+impl bb_event_fsp_t {
+    #[inline]
+    pub fn frame_id(&self) -> u32 {
+        u16::from_le_bytes([self.header[0], self.header[1]]) as u32
     }
 
-    pub fn set_sub_event_bmp(&mut self, value: u32) {
-        self.header = (self.header & !0xFF) | (value & 0xFF);
-    }
-}
-
-#[repr(C, align(4))]
-#[derive(Debug, Clone, Copy)]
-pub struct bb_set_fsp_ctrl_t {
-    pub header: u32,
-    pub data: [u8; BB_CFG_PAGE_SIZE - 4],
-}
-
-impl Default for bb_set_fsp_ctrl_t {
-    fn default() -> Self {
-        Self {
-            header: 0,
-            data: [0; BB_CFG_PAGE_SIZE - 4],
-        }
-    }
-}
-
-impl bb_set_fsp_ctrl_t {
-    pub fn msg_type(&self) -> u32 {
-        self.header & 0x0F
+    #[inline]
+    pub fn num(&self) -> u32 {
+        self.header[2] as u32
     }
 
-    pub fn set_msg_type(&mut self, value: u32) {
-        self.header = (self.header & !0x0F) | (value & 0x0F);
+    #[inline]
+    pub fn type_(&self) -> u32 {
+        (self.header[3] & 0x0F) as u32
     }
 
-    pub fn seq_id(&self) -> u32 {
-        (self.header >> 4) & 0x0F
-    }
-
-    pub fn set_seq_id(&mut self, value: u32) {
-        self.header = (self.header & !(0x0F << 4)) | ((value & 0x0F) << 4);
-    }
-
+    #[inline]
     pub fn len(&self) -> u32 {
-        (self.header >> 8) & 0x07FF
-    }
-
-    pub fn set_len(&mut self, value: u32) {
-        self.header = (self.header & !(0x07FF << 8)) | ((value & 0x07FF) << 8);
+        (u16::from_le_bytes([self.header[4], self.header[5]]) & 0x03FF) as u32
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct bb_set_fsp_param_t {
-    pub header: u32,
-    pub freqs: [u32; BB_FSP_FREQ_LIST_MAX],
-}
-
-impl Default for bb_set_fsp_param_t {
-    fn default() -> Self {
-        Self {
-            header: 0,
-            freqs: [0; BB_FSP_FREQ_LIST_MAX],
-        }
-    }
-}
-
-impl bb_set_fsp_param_t {
-    pub fn mode(&self) -> u32 {
-        self.header & 0x03
-    }
-
-    pub fn set_mode(&mut self, value: u32) {
-        self.header = (self.header & !0x03) | (value & 0x03);
-    }
-
-    pub fn freq_count(&self) -> u32 {
-        (self.header >> 2) & 0x3F
-    }
-
-    pub fn set_freq_count(&mut self, value: u32) {
-        self.header = (self.header & !(0x3F << 2)) | ((value & 0x3F) << 2);
-    }
-
-    pub fn bw(&self) -> u32 {
-        (self.header >> 8) & 0x07
-    }
-
-    pub fn set_bw(&mut self, value: u32) {
-        self.header = (self.header & !(0x07 << 8)) | ((value & 0x07) << 8);
-    }
-
-    pub fn param_bmp(&self) -> u32 {
-        (self.header >> 11) & 0xFF
-    }
-
-    pub fn set_param_bmp(&mut self, value: u32) {
-        self.header = (self.header & !(0xFF << 11)) | ((value & 0xFF) << 11);
-    }
-}
+pub type bb_event_fsp_param_t = sdk_bindings::bb_event_fsp_param_t;
+pub type bb_set_fsp_ctrl_t = sdk_bindings::bb_set_fsp_ctrl_t;
+pub type bb_set_fsp_param_t = sdk_bindings::bb_set_fsp_param_t;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
@@ -983,49 +909,14 @@ pub struct bb_set_hot_upgrade_crc32_in_t {
 
 pub type bb_set_hot_upgrade_crc32_out_t = bb_set_hot_upgrade_write_out_t;
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct bb_set_prj_dispatch_in_t {
-    pub data: [u8; 256],
-}
-
-impl Default for bb_set_prj_dispatch_in_t {
-    fn default() -> Self {
-        Self { data: [0; 256] }
-    }
-}
+pub type bb_set_prj_dispatch_in_t = sdk_bindings::bb_set_prj_dispatch_in_t;
 
 /// 对应 prj_cmd_set_role_t / prj_cmd_get_role_t
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_role_t {
-    pub role: u8,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_mac_t {
-    pub mac: bb_mac_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_set_slot_mac_t {
-    pub slot_id: u8,
-    pub slot_mac: bb_mac_t,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_get_slot_mac_in_t {
-    pub slot_id: u8,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Default)]
-pub struct prj_cmd_get_slot_mac_out_t {
-    pub mac: bb_mac_t,
-}
+pub type prj_cmd_set_role_t = sdk_bindings::prj_cmd_set_role_t;
+pub type prj_cmd_set_mac_t = sdk_bindings::prj_cmd_set_mac_t;
+pub type prj_cmd_set_slot_mac_t = sdk_bindings::prj_cmd_set_slot_mac_t;
+pub type prj_cmd_get_slot_mac_in_t = sdk_bindings::prj_cmd_get_slot_mac_in_t;
+pub type prj_cmd_get_slot_mac_out_t = sdk_bindings::prj_cmd_get_slot_mac_out_t;
 
 // ============ OTA 热升级镜像格式，对齐 PC Tool ar8030_upgrade_ota.cpp ============
 
@@ -1823,7 +1714,6 @@ pub fn take_fsp_retrigger_pending() -> bool {
 }
 
 unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
-    tracing::info!("handle_fsp_event!!!!!!!!!!!!!!!!!!!");
     // Count every invocation for diagnostics (regardless of type)
     FSP_EVENT_TOTAL.fetch_add(1, Ordering::Relaxed);
 
@@ -1831,21 +1721,28 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
         return;
     }
 
-    let event = unsafe { &*(arg as *const bb_event_fsp_t) };
-    FSP_LAST_EVENT_TYPE.store(event.type_ as usize, Ordering::Relaxed);
-    FSP_LAST_EVENT_NUM.store(event.num as usize, Ordering::Relaxed);
+    let event = unsafe { std::ptr::read_unaligned(arg as *const bb_event_fsp_t) };
+    let event_type = event.type_();
+    let event_num = event.num();
+    let event_len = event.len() as usize;
 
-    match event.type_ {
+    FSP_LAST_EVENT_TYPE.store(event_type as usize, Ordering::Relaxed);
+    FSP_LAST_EVENT_NUM.store(event_num as usize, Ordering::Relaxed);
+
+    match event_type {
         BB_FSP_NOTIFY_TYPE_FS_RESULT => {
             let seen = FSP_EVENT_FS_RESULT.fetch_add(1, Ordering::Relaxed) + 1;
-            if event.num == 0 {
+            if event_num == 0 {
                 if seen <= 3 || seen % 20 == 0 {
                     tracing::info!("FSP FS_RESULT event received with zero samples (seen={})", seen);
                 }
                 return;
             }
             let max_count = event.data.len() / 2;
-            let count = (event.num as usize).min(max_count);
+            let mut count = (event_num as usize).min(max_count);
+            if event_len > 0 {
+                count = count.min(event_len / 2);
+            }
             if count == 0 {
                 return;
             }
@@ -1859,7 +1756,7 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
                 tracing::info!(
                     "FSP FS_RESULT event: seen={} num={} stored={} preview={:?}",
                     seen,
-                    event.num,
+                    event_num,
                     count,
                     preview
                 );
@@ -1874,14 +1771,17 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
         BB_FSP_NOTIFY_TYPE_DIFF => {
             let seen = FSP_EVENT_DIFF.fetch_add(1, Ordering::Relaxed) + 1;
             // 平方差模式: data 中包含 i16 值序列
-            if event.num == 0 {
+            if event_num == 0 {
                 if seen <= 3 || seen % 20 == 0 {
                     tracing::info!("FSP DIFF event received with zero samples (seen={})", seen);
                 }
                 return;
             }
             let max_count = event.data.len() / 2;
-            let count = (event.num as usize).min(max_count);
+            let mut count = (event_num as usize).min(max_count);
+            if event_len > 0 {
+                count = count.min(event_len / 2);
+            }
             if count == 0 {
                 return;
             }
@@ -1897,7 +1797,7 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
                 tracing::info!(
                     "FSP DIFF event: seen={} num={} stored={} preview={:?}",
                     seen,
-                    event.num,
+                    event_num,
                     count,
                     preview
                 );
@@ -1912,14 +1812,17 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
             // 直方图模式: data 中包含独立 event.num 个区间的计数值
             // Format: [count0: u16][count1: u16]...[max0: u16][max1: u16]...? 
             // For now store raw data as i16 pairs; main.rs will decode
-            if event.num == 0 {
+            if event_num == 0 {
                 if seen <= 3 || seen % 20 == 0 {
                     tracing::info!("FSP HIST event received with zero samples (seen={})", seen);
                 }
                 return;
             }
             let max_count = event.data.len() / 2;
-            let count = (event.num as usize).min(max_count);
+            let mut count = (event_num as usize).min(max_count);
+            if event_len > 0 {
+                count = count.min(event_len / 2);
+            }
             if count == 0 {
                 return;
             }
@@ -1934,7 +1837,7 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
                 tracing::info!(
                     "FSP HIST event: seen={} num={} stored={} preview={:?}",
                     seen,
-                    event.num,
+                    event_num,
                     count,
                     preview
                 );
@@ -1947,7 +1850,7 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
         other => {
             let seen = FSP_EVENT_OTHER.fetch_add(1, Ordering::Relaxed) + 1;
             if seen <= 3 || seen % 20 == 0 {
-                tracing::info!("FSP other event: type={} num={} seen={}", other, event.num, seen);
+                tracing::info!("FSP other event: type={} num={} seen={}", other, event_num, seen);
             }
         }
     }

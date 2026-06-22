@@ -95,7 +95,7 @@ fn resolved_bindings_output_path(manifest_dir: &Path) -> PathBuf {
 
     let path = match configured {
         Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => PathBuf::from("target/generated/ffi_bindings.rs"),
+        _ => PathBuf::from("src/generated/ffi_bindings.rs"),
     };
 
     if path.is_absolute() {
