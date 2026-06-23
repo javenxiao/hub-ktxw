@@ -25,14 +25,6 @@ use libloading::Library;
 mod ffi_adapter_types;
 pub use ffi_adapter_types::*;
 
-mod sdk_bindings {
-    #![allow(non_upper_case_globals)]
-    #![allow(non_camel_case_types)]
-    #![allow(non_snake_case)]
-    #![allow(dead_code)]
-    include!("generated/ffi_bindings.rs");
-}
-
 #[cfg(target_os = "windows")]
 const O_RDWR: c_int = 0x0002;
 
@@ -44,12 +36,6 @@ static SDK_CONSOLE_REDIRECT_LOCK: Mutex<()> = Mutex::new(());
 static PLOT_RAW_LDPC_FRAME_LOGGED: AtomicBool = AtomicBool::new(false);
 static FSP_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
 static FSP_EVENT_TOTAL: AtomicUsize = AtomicUsize::new(0);
-static FSP_EVENT_FS_RESULT: AtomicUsize = AtomicUsize::new(0);
-static FSP_EVENT_DIFF: AtomicUsize = AtomicUsize::new(0);
-static FSP_EVENT_HIST: AtomicUsize = AtomicUsize::new(0);
-static FSP_EVENT_OTHER: AtomicUsize = AtomicUsize::new(0);
-static FSP_LAST_EVENT_TYPE: AtomicUsize = AtomicUsize::new(usize::MAX);
-static FSP_LAST_EVENT_NUM: AtomicUsize = AtomicUsize::new(0);
 static FSP_RETRIGGER_PENDING: AtomicBool = AtomicBool::new(false);
 
 #[cfg(target_os = "windows")]
@@ -541,121 +527,129 @@ impl Default for bb_event_plot_data_t {
     }
 }
 
-#[repr(C, align(4))]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct bb_event_fsp_t {
-    // bb_api.h uses bitfields: frame_id:16, num:8, type:4, len:10.
-    // Keep raw bytes to avoid Rust bitfield layout assumptions.
-    pub header: [u8; 8],
+    pub type_: u32,
+    pub num: u32,
     pub data: [u8; 768],
 }
 
 impl Default for bb_event_fsp_t {
     fn default() -> Self {
         Self {
-            header: [0; 8],
+            type_: 0,
+            num: 0,
             data: [0; 768],
         }
     }
 }
 
-impl bb_event_fsp_t {
-    #[inline]
-    pub fn frame_id(&self) -> u32 {
-        u16::from_le_bytes([self.header[0], self.header[1]]) as u32
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct bb_event_fsp_param_t {
+    pub header: u32,
+}
+
+impl bb_event_fsp_param_t {
+    pub fn sub_event_bmp(&self) -> u32 {
+        self.header & 0xFF
     }
 
-    #[inline]
-    pub fn num(&self) -> u32 {
-        self.header[2] as u32
-    }
-
-    #[inline]
-    pub fn type_(&self) -> u32 {
-        (self.header[3] & 0x0F) as u32
-    }
-
-    #[inline]
-    pub fn len(&self) -> u32 {
-        (u16::from_le_bytes([self.header[4], self.header[5]]) & 0x03FF) as u32
+    pub fn set_sub_event_bmp(&mut self, value: u32) {
+        self.header = (self.header & !0xFF) | (value & 0xFF);
     }
 }
 
-pub type bb_event_fsp_param_t = sdk_bindings::bb_event_fsp_param_t;
-pub type bb_set_fsp_param_t = sdk_bindings::bb_set_fsp_param_t;
-
-// Manual definition of bb_set_fsp_ctrl_t with CORRECT C layout.
-//
-// The C header declares:
-//   typedef struct {
-//       uint32_t msg_type:4, seq_id:4, len:11;  // uint32_t base → 4 bytes
-//       uint8_t data[BB_CFG_PAGE_SIZE - 4];      // offset 4
-//   } bb_set_fsp_ctrl_t;
-//
-// bindgen computes the bitfield as 3 bytes (ceil(19/8)=3) and places data at
-// offset 3, which is WRONG — the C compiler uses uint32_t as the bitfield
-// storage unit, so data must be at offset 4.  The 1‑byte shift corrupts every
-// BB_SET_FSP_CTRL ioctl (configure_sweep, start_sweep, trigger_fsp_scan,
-// stop_sweep), passing garbage msg_type/seq_id/len and shifted payload data
-// to the SDK.  On AP devices this manifests as an unexpected device restart
-// during sweep re‑initialisation after an Active Device switch.
-#[repr(C)]
-#[derive(Clone, Copy)]
+#[repr(C, align(4))]
+#[derive(Debug, Clone, Copy)]
 pub struct bb_set_fsp_ctrl_t {
-    /// 4‑byte bitfield storage unit (matches uint32_t in C)
-    pub _bitfield_1: sdk_bindings::__BindgenBitfieldUnit<[u8; 4usize]>,
-    /// Payload — must be at offset 4 (BB_CFG_PAGE_SIZE = 1024, so 1020 bytes)
+    pub header: u32,
     pub data: [u8; BB_CFG_PAGE_SIZE - 4],
 }
 
 impl Default for bb_set_fsp_ctrl_t {
     fn default() -> Self {
         Self {
-            _bitfield_1: sdk_bindings::__BindgenBitfieldUnit::new([0u8; 4]),
-            data: [0u8; BB_CFG_PAGE_SIZE - 4],
+            header: 0,
+            data: [0; BB_CFG_PAGE_SIZE - 4],
         }
     }
 }
 
 impl bb_set_fsp_ctrl_t {
-    // Bit positions identical to the generated binding:
-    //   msg_type : bit  0, width 4
-    //   seq_id   : bit  4, width 4
-    //   len      : bit  8, width 11
-    // Only the storage unit size changes (3 → 4 bytes) so that data lands at
-    // offset 4 instead of offset 3.
-    #[inline]
     pub fn msg_type(&self) -> u32 {
-        unsafe { ::std::mem::transmute(self._bitfield_1.get(0usize, 4u8) as u32) }
+        self.header & 0x0F
     }
-    #[inline]
-    pub fn set_msg_type(&mut self, val: u32) {
-        unsafe {
-            let val: u32 = ::std::mem::transmute(val);
-            self._bitfield_1.set(0usize, 4u8, val as u64)
-        }
+
+    pub fn set_msg_type(&mut self, value: u32) {
+        self.header = (self.header & !0x0F) | (value & 0x0F);
     }
-    #[inline]
+
     pub fn seq_id(&self) -> u32 {
-        unsafe { ::std::mem::transmute(self._bitfield_1.get(4usize, 4u8) as u32) }
+        (self.header >> 4) & 0x0F
     }
-    #[inline]
-    pub fn set_seq_id(&mut self, val: u32) {
-        unsafe {
-            let val: u32 = ::std::mem::transmute(val);
-            self._bitfield_1.set(4usize, 4u8, val as u64)
-        }
+
+    pub fn set_seq_id(&mut self, value: u32) {
+        self.header = (self.header & !(0x0F << 4)) | ((value & 0x0F) << 4);
     }
-    #[inline]
+
     pub fn len(&self) -> u32 {
-        unsafe { ::std::mem::transmute(self._bitfield_1.get(8usize, 11u8) as u32) }
+        (self.header >> 8) & 0x07FF
     }
-    #[inline]
-    pub fn set_len(&mut self, val: u32) {
-        unsafe {
-            let val: u32 = ::std::mem::transmute(val);
-            self._bitfield_1.set(8usize, 11u8, val as u64)
+
+    pub fn set_len(&mut self, value: u32) {
+        self.header = (self.header & !(0x07FF << 8)) | ((value & 0x07FF) << 8);
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_fsp_param_t {
+    pub header: u32,
+    pub freqs: [u32; BB_FSP_FREQ_LIST_MAX],
+}
+
+impl Default for bb_set_fsp_param_t {
+    fn default() -> Self {
+        Self {
+            header: 0,
+            freqs: [0; BB_FSP_FREQ_LIST_MAX],
         }
+    }
+}
+
+impl bb_set_fsp_param_t {
+    pub fn mode(&self) -> u32 {
+        self.header & 0x03
+    }
+
+    pub fn set_mode(&mut self, value: u32) {
+        self.header = (self.header & !0x03) | (value & 0x03);
+    }
+
+    pub fn freq_count(&self) -> u32 {
+        (self.header >> 2) & 0x3F
+    }
+
+    pub fn set_freq_count(&mut self, value: u32) {
+        self.header = (self.header & !(0x3F << 2)) | ((value & 0x3F) << 2);
+    }
+
+    pub fn bw(&self) -> u32 {
+        (self.header >> 8) & 0x07
+    }
+
+    pub fn set_bw(&mut self, value: u32) {
+        self.header = (self.header & !(0x07 << 8)) | ((value & 0x07) << 8);
+    }
+
+    pub fn param_bmp(&self) -> u32 {
+        (self.header >> 11) & 0xFF
+    }
+
+    pub fn set_param_bmp(&mut self, value: u32) {
+        self.header = (self.header & !(0xFF << 11)) | ((value & 0xFF) << 11);
     }
 }
 
@@ -983,14 +977,49 @@ pub struct bb_set_hot_upgrade_crc32_in_t {
 
 pub type bb_set_hot_upgrade_crc32_out_t = bb_set_hot_upgrade_write_out_t;
 
-pub type bb_set_prj_dispatch_in_t = sdk_bindings::bb_set_prj_dispatch_in_t;
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct bb_set_prj_dispatch_in_t {
+    pub data: [u8; 256],
+}
+
+impl Default for bb_set_prj_dispatch_in_t {
+    fn default() -> Self {
+        Self { data: [0; 256] }
+    }
+}
 
 /// 对应 prj_cmd_set_role_t / prj_cmd_get_role_t
-pub type prj_cmd_set_role_t = sdk_bindings::prj_cmd_set_role_t;
-pub type prj_cmd_set_mac_t = sdk_bindings::prj_cmd_set_mac_t;
-pub type prj_cmd_set_slot_mac_t = sdk_bindings::prj_cmd_set_slot_mac_t;
-pub type prj_cmd_get_slot_mac_in_t = sdk_bindings::prj_cmd_get_slot_mac_in_t;
-pub type prj_cmd_get_slot_mac_out_t = sdk_bindings::prj_cmd_get_slot_mac_out_t;
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_set_role_t {
+    pub role: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_set_mac_t {
+    pub mac: bb_mac_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_set_slot_mac_t {
+    pub slot_id: u8,
+    pub slot_mac: bb_mac_t,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_get_slot_mac_in_t {
+    pub slot_id: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct prj_cmd_get_slot_mac_out_t {
+    pub mac: bb_mac_t,
+}
 
 // ============ OTA 热升级镜像格式，对齐 PC Tool ar8030_upgrade_ota.cpp ============
 
@@ -1713,46 +1742,16 @@ struct FspCache {
     powers: Vec<i16>,
 }
 
-#[derive(Debug, Default, Clone)]
-struct FspDiffCache {
-    count: u32,
-    values: Vec<f64>,
-}
-
-#[derive(Debug, Default, Clone)]
-struct FspHistCache {
-    count: u32,
-    bins: Vec<i16>,
-}
-
 static FSP_CACHE: OnceLock<Mutex<FspCache>> = OnceLock::new();
-static FSP_DIFF_CACHE: OnceLock<Mutex<FspDiffCache>> = OnceLock::new();
-static FSP_HIST_CACHE: OnceLock<Mutex<FspHistCache>> = OnceLock::new();
 
 fn fsp_cache() -> &'static Mutex<FspCache> {
     FSP_CACHE.get_or_init(|| Mutex::new(FspCache::default()))
-}
-
-fn fsp_diff_cache() -> &'static Mutex<FspDiffCache> {
-    FSP_DIFF_CACHE.get_or_init(|| Mutex::new(FspDiffCache::default()))
-}
-
-fn fsp_hist_cache() -> &'static Mutex<FspHistCache> {
-    FSP_HIST_CACHE.get_or_init(|| Mutex::new(FspHistCache::default()))
 }
 
 pub fn reset_fsp_cache() {
     if let Ok(mut cache) = fsp_cache().lock() {
         cache.count = 0;
         cache.powers.clear();
-    }
-    if let Ok(mut cache) = fsp_diff_cache().lock() {
-        cache.count = 0;
-        cache.values.clear();
-    }
-    if let Ok(mut cache) = fsp_hist_cache().lock() {
-        cache.count = 0;
-        cache.bins.clear();
     }
     FSP_RETRIGGER_PENDING.store(false, Ordering::Relaxed);
 }
@@ -1761,24 +1760,6 @@ pub fn reset_fsp_cache() {
 /// Use for diagnostics: if this stays 0 on AP, the subscription is not generating events.
 pub fn fsp_event_total() -> usize {
     FSP_EVENT_TOTAL.load(Ordering::Relaxed)
-}
-
-pub fn fsp_event_counters() -> (usize, usize, usize, usize) {
-    (
-        FSP_EVENT_FS_RESULT.load(Ordering::Relaxed),
-        FSP_EVENT_DIFF.load(Ordering::Relaxed),
-        FSP_EVENT_HIST.load(Ordering::Relaxed),
-        FSP_EVENT_OTHER.load(Ordering::Relaxed),
-    )
-}
-
-pub fn fsp_last_event_snapshot() -> Option<(u32, u32)> {
-    let event_type = FSP_LAST_EVENT_TYPE.load(Ordering::Relaxed);
-    if event_type == usize::MAX {
-        None
-    } else {
-        Some((event_type as u32, FSP_LAST_EVENT_NUM.load(Ordering::Relaxed) as u32))
-    }
 }
 
 /// Returns true (and clears the flag) when a FS_RESULT event has been received
@@ -1795,139 +1776,30 @@ unsafe extern "C" fn handle_fsp_event(arg: *mut c_void, _user: *mut c_void) {
         return;
     }
 
-    let event = unsafe { std::ptr::read_unaligned(arg as *const bb_event_fsp_t) };
-    let event_type = event.type_();
-    let event_num = event.num();
-    let event_len = event.len() as usize;
-
-    FSP_LAST_EVENT_TYPE.store(event_type as usize, Ordering::Relaxed);
-    FSP_LAST_EVENT_NUM.store(event_num as usize, Ordering::Relaxed);
-
-    match event_type {
-        BB_FSP_NOTIFY_TYPE_FS_RESULT => {
-            let seen = FSP_EVENT_FS_RESULT.fetch_add(1, Ordering::Relaxed) + 1;
-            if event_num == 0 {
-                if seen <= 3 || seen % 20 == 0 {
-                    tracing::info!("FSP FS_RESULT event received with zero samples (seen={})", seen);
-                }
-                return;
-            }
-            let max_count = event.data.len() / 2;
-            let mut count = (event_num as usize).min(max_count);
-            if event_len > 0 {
-                count = count.min(event_len / 2);
-            }
-            if count == 0 {
-                return;
-            }
-            let mut powers = Vec::with_capacity(count);
-            for idx in 0..count {
-                let offset = idx * 2;
-                powers.push(i16::from_le_bytes([event.data[offset], event.data[offset + 1]]));
-            }
-            if seen <= 3 || seen % 20 == 0 {
-                let preview = powers.iter().take(4).copied().collect::<Vec<_>>();
-                tracing::info!(
-                    "FSP FS_RESULT event: seen={} num={} stored={} preview={:?}",
-                    seen,
-                    event_num,
-                    count,
-                    preview
-                );
-            }
-            if let Ok(mut cache) = fsp_cache().lock() {
-                cache.count = count as u32;
-                cache.powers = powers;
-            }
-            // Signal feeder to retrigger next scan (callback-driven loop, not timer-driven)
-            FSP_RETRIGGER_PENDING.store(true, Ordering::Relaxed);
-        }
-        BB_FSP_NOTIFY_TYPE_DIFF => {
-            let seen = FSP_EVENT_DIFF.fetch_add(1, Ordering::Relaxed) + 1;
-            // 平方差模式: data 中包含 i16 值序列
-            if event_num == 0 {
-                if seen <= 3 || seen % 20 == 0 {
-                    tracing::info!("FSP DIFF event received with zero samples (seen={})", seen);
-                }
-                return;
-            }
-            let max_count = event.data.len() / 2;
-            let mut count = (event_num as usize).min(max_count);
-            if event_len > 0 {
-                count = count.min(event_len / 2);
-            }
-            if count == 0 {
-                return;
-            }
-            let mut variances = Vec::with_capacity(count);
-            for idx in 0..count {
-                let offset = idx * 2;
-                let raw = i16::from_le_bytes([event.data[offset], event.data[offset + 1]]);
-                // Convert to f64 for later use; DIFF values are typically accumulated squared deltas
-                variances.push(raw as f64);
-            }
-            if seen <= 3 || seen % 20 == 0 {
-                let preview = variances.iter().take(4).copied().collect::<Vec<_>>();
-                tracing::info!(
-                    "FSP DIFF event: seen={} num={} stored={} preview={:?}",
-                    seen,
-                    event_num,
-                    count,
-                    preview
-                );
-            }
-            if let Ok(mut cache) = fsp_diff_cache().lock() {
-                cache.count = count as u32;
-                cache.values = variances;
-            }
-        }
-        BB_FSP_NOTIFY_TYPE_HIST => {
-            let seen = FSP_EVENT_HIST.fetch_add(1, Ordering::Relaxed) + 1;
-            // 直方图模式: data 中包含独立 event.num 个区间的计数值
-            // Format: [count0: u16][count1: u16]...[max0: u16][max1: u16]...? 
-            // For now store raw data as i16 pairs; main.rs will decode
-            if event_num == 0 {
-                if seen <= 3 || seen % 20 == 0 {
-                    tracing::info!("FSP HIST event received with zero samples (seen={})", seen);
-                }
-                return;
-            }
-            let max_count = event.data.len() / 2;
-            let mut count = (event_num as usize).min(max_count);
-            if event_len > 0 {
-                count = count.min(event_len / 2);
-            }
-            if count == 0 {
-                return;
-            }
-            let mut bins = Vec::with_capacity(count);
-            for idx in 0..count {
-                let offset = idx * 2;
-                let raw = i16::from_le_bytes([event.data[offset], event.data[offset + 1]]);
-                bins.push(raw);
-            }
-            if seen <= 3 || seen % 20 == 0 {
-                let preview = bins.iter().take(4).copied().collect::<Vec<_>>();
-                tracing::info!(
-                    "FSP HIST event: seen={} num={} stored={} preview={:?}",
-                    seen,
-                    event_num,
-                    count,
-                    preview
-                );
-            }
-            if let Ok(mut cache) = fsp_hist_cache().lock() {
-                cache.count = count as u32;
-                cache.bins = bins;
-            }
-        }
-        other => {
-            let seen = FSP_EVENT_OTHER.fetch_add(1, Ordering::Relaxed) + 1;
-            if seen <= 3 || seen % 20 == 0 {
-                tracing::info!("FSP other event: type={} num={} seen={}", other, event_num, seen);
-            }
-        }
+    let event = unsafe { &*(arg as *const bb_event_fsp_t) };
+    if event.type_ != BB_FSP_NOTIFY_TYPE_FS_RESULT || event.num == 0 {
+        return;
     }
+
+    let max_count = event.data.len() / 2;
+    let count = (event.num as usize).min(max_count);
+    if count == 0 {
+        return;
+    }
+
+    let mut powers = Vec::with_capacity(count);
+    for idx in 0..count {
+        let offset = idx * 2;
+        powers.push(i16::from_le_bytes([event.data[offset], event.data[offset + 1]]));
+    }
+
+    if let Ok(mut cache) = fsp_cache().lock() {
+        cache.count = count as u32;
+        cache.powers = powers;
+    }
+
+    // Signal feeder to retrigger next scan (callback-driven loop, not timer-driven)
+    FSP_RETRIGGER_PENDING.store(true, Ordering::Relaxed);
 }
 
 pub fn fsp_cache_snapshot() -> Option<(u32, Vec<i16>)> {
@@ -1939,26 +1811,7 @@ pub fn fsp_cache_snapshot() -> Option<(u32, Vec<i16>)> {
     }
 }
 
-pub fn fsp_diff_cache_snapshot() -> Option<(u32, Vec<f64>)> {
-    let cache = fsp_diff_cache().lock().ok()?;
-    if cache.count == 0 || cache.values.is_empty() {
-        None
-    } else {
-        Some((cache.count, cache.values.clone()))
-    }
-}
-
-pub fn fsp_hist_cache_snapshot() -> Option<(u32, Vec<i16>)> {
-    let cache = fsp_hist_cache().lock().ok()?;
-    if cache.count == 0 || cache.bins.is_empty() {
-        None
-    } else {
-        Some((cache.count, cache.bins.clone()))
-    }
-}
-
 fn subscribe_fsp_event(handle: *mut bb_dev_handle_t) -> Result<(), String> {
-    tracing::info!("FSP event subscribed******************");
     let sdk = sdk()?;
     let input = bb_set_event_callback_t {
         event: BB_EVENT_FSP,
@@ -2701,10 +2554,10 @@ pub fn get_channel_info(handle: *mut bb_dev_handle_t) -> Result<BbChannelInfoSum
     })
 }
 
-/// Trigger a real channel scan by sending BB_CFG_CHANNEL with minimal
-/// parameters. This causes the SDK to perform a spectrum scan and update
-/// its internal power[] table, which BB_GET_CHAN_INFO will then return.
-/// Without this, AP-slave and DEV devices return stale/zero power values
+/// Trigger a real channel scan on slave devices by sending BB_CFG_CHANNEL
+/// with minimal parameters. This causes the SDK to perform a spectrum scan
+/// and update its internal power[] table, which BB_GET_CHAN_INFO will then
+/// return. Without this, slave devices return stale/zero power values
 /// because they lack FSP event subscriptions.
 pub fn trigger_slave_channel_scan(
     handle: *mut bb_dev_handle_t,
@@ -4682,18 +4535,4 @@ mod tests {
         assert_eq!(BB_ROLE_DEV, 1);
         assert!(BB_DATA_USER_MAX >= 10);
         assert!(BB_SLOT_MAX >= 8);
-    }
-
-    /// Verify that the manually-defined bb_set_fsp_ctrl_t places data at
-    /// offset 4 (not 3), matching the C header uint32_t-aligned bitfield.
-    #[test]
-    fn abi_bb_set_fsp_ctrl_t_layout_matches_c_header() {
-        let dummy = bb_set_fsp_ctrl_t::default();
-        let base = &dummy as *const _ as usize;
-        let data_offset = &dummy.data as *const _ as usize - base;
-        assert_eq!(data_offset, 4,
-            "bb_set_fsp_ctrl_t::data offset: expected 4, got {}", data_offset);
-        assert_eq!(std::mem::size_of::<bb_set_fsp_ctrl_t>(), 1024,
-            "bb_set_fsp_ctrl_t size: expected 1024");
-    }
-}
+    }}

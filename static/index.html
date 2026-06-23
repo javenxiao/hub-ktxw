@@ -122,9 +122,6 @@
                             <h3 class="sys-section-title">WAN Status</h3>
                             <table class="sys-table">
                                 <tr><td>MAC Address</td><td id="wan-mac">--</td><td>Connection Type</td><td id="wan-conn-type">--</td></tr>
-                                <tr><td>IP Address</td><td id="wan-ip">--</td><td>Gateway</td><td id="wan-gateway">--</td></tr>
-                                <tr><td>Subnet Mask</td><td id="wan-mask">--</td><td>Primary DNS</td><td id="wan-dns">--</td></tr>
-                                <tr><td>Secondary DNS</td><td id="wan-dns2">--</td><td></td><td></td></tr>
                             </table>
                         </div>
                     </div>
@@ -469,7 +466,7 @@
                             <button class="sub-tab" type="button" data-wireless-tab="rssi" role="tab" aria-selected="false" aria-controls="wireless-panel-rssi">RSSI Graph</button>
                             <button class="sub-tab" type="button" data-wireless-tab="rf" role="tab" aria-selected="false" aria-controls="wireless-panel-rf">RF Settings</button>
                             <button class="sub-tab" type="button" data-wireless-tab="configuration" role="tab" aria-selected="false" aria-controls="wireless-panel-configuration">Configuration</button>
-                            <button class="sub-tab" type="button" data-wireless-tab="sweep" role="tab" aria-selected="false" aria-controls="wireless-panel-sweep">Sweep Plot</button>
+                            <button class="sub-tab" type="button" data-wireless-tab="sweep" role="tab" aria-selected="false" aria-controls="wireless-panel-sweep">Sweep</button>
                         </div>
                     </div>
 
@@ -956,14 +953,7 @@
                             <div class="chart-box">
                                 <div class="sweep-layout">
                                     <!-- Sweep control sidebar -->
-                                    <aside class="sweep-sidebar" id="sweep-sidebar">
-                                        <div class="sweep-sidebar-top-row">
-                                            <div class="sweep-sidebar-status">
-                                                <span class="sweep-state-chip idle" id="sweep-stream-state">Idle</span>
-                                            </div>
-                                            <button class="plot-collapse-toggle" id="sweep-sidebar-collapse" type="button" title="Toggle Control Panel" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
-                                        </div>
-                                        <div class="sweep-sidebar-body">
+                                    <aside class="sweep-sidebar">
                                         <div class="sweep-sidebar-group sweep-sidebar-group-primary">
                                             <button class="sweep-btn sweep-btn-start" id="sweep-start-btn" type="button">
                                                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"><polygon points="5,3 19,12 5,21" fill="currentColor"/></svg>
@@ -1025,14 +1015,16 @@
                                                 <span class="sweep-btn-label">Axes</span>
                                             </button>
                                         </div>
-                                        </div><!-- close sweep-sidebar-body -->
+                                        <div class="sweep-sidebar-status">
+                                            <span class="sweep-state-chip idle" id="sweep-stream-state">Idle</span>
+                                        </div>
                                     </aside>
                                     <!-- Sweep plot area -->
                                     <div class="sweep-plot-area">
                                         <div class="plot-series-grid" id="sweep-series-grid">
                                             <!-- Time-domain panel -->
                                             <div class="plot-panel-block">
-                                                <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-time-collapse" type="button" title="Toggle Time Domain" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Time Domain</span><span class="plot-time-window-pills" id="sweep-time-window-pills"><button class="time-window-pill" data-win="5">5s</button><button class="time-window-pill" data-win="10">10s</button><button class="time-window-pill" data-win="30">30s</button><button class="time-window-pill is-active" data-win="auto">Auto</button></span><span class="plot-sample-count-badge" id="sweep-time-badge"></span></div>
+                                                <div class="plot-panel-heading"><span class="sys-section-title">Sweep Time Domain</span><span class="plot-time-window-pills" id="sweep-time-window-pills"><button class="time-window-pill" data-win="5">5s</button><button class="time-window-pill" data-win="10">10s</button><button class="time-window-pill" data-win="30">30s</button><button class="time-window-pill is-active" data-win="auto">Auto</button></span><span class="plot-sample-count-badge" id="sweep-time-badge"></span></div>
                                                 <div class="plot-workbench is-dense">
                                                     <div class="plot-stage">
                                                         <div class="plot-surface" data-plot-surface="sweep-time">
@@ -1099,24 +1091,18 @@
                                                             </div>
                                                         </div>
                                             </div>
-                                            <div class="plot-legend-sidebar" id="sweep-time-legend-sidebar">
-                                                <div class="plot-legend-collapse-header">
-                                                    <button class="plot-collapse-toggle" id="sweep-time-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
-                                                    <span>Legend</span>
-                                                </div>
-                                                <div class="plot-legend-body">
+                                            <div class="plot-legend-sidebar">
                                                 <div class="plot-legend-controls" aria-label="Time-domain legend controls">
                                                     <button class="plot-legend-control-btn" id="sweep-time-show-all" type="button">Show All</button>
                                                     <button class="plot-legend-control-btn" id="sweep-time-hide-all" type="button">Hide All</button>
                                                 </div>
                                                 <div class="plot-legend-list is-dense" id="sweep-time-legend"></div>
-                                                </div><!-- close plot-legend-body -->
                                             </div>
                                         </div>
                                     </div>
                                     <!-- Freq-domain panel -->
                                     <div class="plot-panel-block">
-                                        <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-freq-collapse" type="button" title="Toggle Frequency Domain" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Frequency Domain</span><span class="plot-sample-count-badge" id="sweep-freq-badge"></span></div>
+                                        <div class="plot-panel-heading"><span class="sys-section-title">Sweep Frequency Domain</span><span class="plot-sample-count-badge" id="sweep-freq-badge"></span></div>
                                         <div class="plot-workbench is-dense">
                                             <div class="plot-stage">
                                                 <div class="plot-surface" data-plot-surface="sweep-freq">
@@ -1125,59 +1111,7 @@
                                                 <div class="plot-hover-panel" data-plot-hover="sweep-freq" hidden></div>
                                                 <div class="plot-crosshair" data-plot-crosshair="sweep-freq" hidden></div>
                                             </div>
-                                            <div class="plot-legend-sidebar" id="sweep-freq-legend-sidebar">
-                                                <div class="plot-legend-collapse-header">
-                                                    <button class="plot-collapse-toggle" id="sweep-freq-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
-                                                    <span>Legend</span>
-                                                </div>
-                                                <div class="plot-legend-body">
-                                                <div class="plot-legend-list is-dense" id="sweep-freq-legend"></div>
-                                                </div><!-- close plot-legend-body -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <!-- Variance (平方差) panel -->
-                                    <div class="plot-panel-block">
-                                        <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-variance-collapse" type="button" title="Toggle Variance" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Variance</span><span class="plot-sample-count-badge" id="sweep-variance-badge"></span></div>
-                                        <div class="plot-workbench is-dense">
-                                            <div class="plot-stage">
-                                                <div class="plot-surface" data-plot-surface="sweep-variance">
-                                                    <svg class="plot-composite-svg" id="sweep-variance-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
-                                                </div>
-                                                <div class="plot-hover-panel" data-plot-hover="sweep-variance" hidden></div>
-                                                <div class="plot-crosshair" data-plot-crosshair="sweep-variance" hidden></div>
-                                            </div>
-                                            <div class="plot-legend-sidebar" id="sweep-variance-legend-sidebar">
-                                                <div class="plot-legend-collapse-header">
-                                                    <button class="plot-collapse-toggle" id="sweep-variance-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
-                                                    <span>Legend</span>
-                                                </div>
-                                                <div class="plot-legend-body">
-                                                <div class="plot-legend-list is-dense" id="sweep-variance-legend"></div>
-                                                </div><!-- close plot-legend-body -->
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <!-- Histogram (直方图) panel -->
-                                    <div class="plot-panel-block">
-                                        <div class="plot-panel-heading"><button class="plot-collapse-toggle" id="sweep-histogram-collapse" type="button" title="Toggle Histogram" aria-expanded="true"><span class="plot-collapse-icon"></span></button><span class="sys-section-title">Sweep Histogram</span><span class="plot-sample-count-badge" id="sweep-histogram-badge"></span></div>
-                                        <div class="plot-workbench is-dense">
-                                            <div class="plot-stage">
-                                                <div class="plot-surface" data-plot-surface="sweep-histogram">
-                                                    <svg class="plot-composite-svg" id="sweep-histogram-svg" viewBox="0 0 800 320" preserveAspectRatio="none"></svg>
-                                                </div>
-                                                <div class="plot-hover-panel" data-plot-hover="sweep-histogram" hidden></div>
-                                                <div class="plot-crosshair" data-plot-crosshair="sweep-histogram" hidden></div>
-                                            </div>
-                                            <div class="plot-legend-sidebar" id="sweep-histogram-legend-sidebar">
-                                                <div class="plot-legend-collapse-header">
-                                                    <button class="plot-collapse-toggle" id="sweep-histogram-legend-collapse" type="button" title="Toggle Legend" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
-                                                    <span>Legend</span>
-                                                </div>
-                                                <div class="plot-legend-body">
-                                                <div class="plot-legend-list is-dense" id="sweep-histogram-legend"></div>
-                                                </div><!-- close plot-legend-body -->
-                                            </div>
+                                            <div class="plot-legend-sidebar"><div class="plot-legend-list is-dense" id="sweep-freq-legend"></div></div>
                                         </div>
                                     </div>
                                 </div>
@@ -1208,103 +1142,46 @@
 
             <section class="content-panel panel-serial">
                 <div class="section-strip"></div>
-                <div class="panel-body serial-debug-panel" style="padding:0">
-                    <div class="chart-panel-header" style="padding:8px 12px 0">
-                        <h2 class="sys-section-title chart-panel-title" style="font-size:20px">Serial Console</h2>
-                    </div>
-                    <div class="serial-layout">
-                        <!-- Serial config sidebar -->
-                        <aside class="serial-sidebar" id="serial-sidebar">
-                            <div class="serial-sidebar-top-row">
-                                <button class="plot-collapse-toggle" id="serial-sidebar-collapse" type="button" title="Toggle Config" aria-expanded="true"><span class="plot-collapse-icon"></span></button>
+                <div class="panel-body serial-debug-panel">
+                    <div class="serial-debug-toolbar">
+                        <div class="serial-config-row">
+                            <div class="serial-config-group">
+                                <label class="serial-config-label" for="serial-port-select">Port</label>
+                                <select id="serial-port-select" class="serial-config-select">
+                                    <option value="">-- select port --</option>
+                                </select>
                             </div>
-                            <div class="serial-sidebar-body">
-                                <div class="serial-config-group">
-                                    <label class="serial-config-label" for="serial-port-select">Port</label>
-                                    <select id="serial-port-select" class="serial-config-select">
-                                        <option value="">-- select --</option>
-                                    </select>
-                                </div>
-                                <div class="serial-config-group">
-                                    <label class="serial-config-label" for="serial-baud-select">Baud rate</label>
-                                    <select id="serial-baud-select" class="serial-config-select" onchange="const c=document.getElementById('serial-baud-custom');if(this.value==='custom'){c.style.display='';c.focus()}else{c.style.display='none'}">
-                                        <option value="300">300</option>
-                                        <option value="600">600</option>
-                                        <option value="1200">1200</option>
-                                        <option value="2400">2400</option>
-                                        <option value="4800">4800</option>
-                                        <option value="9600">9600</option>
-                                        <option value="14400">14400</option>
-                                        <option value="19200">19200</option>
-                                        <option value="38400">38400</option>
-                                        <option value="57600">57600</option>
-                                        <option value="115200" selected>115200</option>
-                                        <option value="230400">230400</option>
-                                        <option value="460800">460800</option>
-                                        <option value="921600">921600</option>
-                                        <option value="custom">Custom…</option>
-                                    </select>
-                                    <input id="serial-baud-custom" class="serial-config-select" type="number" min="1" max="12000000" placeholder="1~12,000,000" style="display:none">
-                                </div>
-                                <div class="serial-config-group">
-                                    <label class="serial-config-label" for="serial-data-select">Data bits</label>
-                                    <select id="serial-data-select" class="serial-config-select">
-                                        <option value="5">5</option>
-                                        <option value="6">6</option>
-                                        <option value="7">7</option>
-                                        <option value="8" selected>8</option>
-                                    </select>
-                                </div>
-                                <div class="serial-config-group">
-                                    <label class="serial-config-label" for="serial-parity-select">Parity</label>
-                                    <select id="serial-parity-select" class="serial-config-select">
-                                        <option value="none" selected>None</option>
-                                        <option value="even">Even</option>
-                                        <option value="odd">Odd</option>
-                                        <option value="mark">Mark</option>
-                                        <option value="space">Space</option>
-                                    </select>
-                                </div>
-                                <div class="serial-config-group">
-                                    <label class="serial-config-label" for="serial-stop-select">Stop bits</label>
-                                    <select id="serial-stop-select" class="serial-config-select">
-                                        <option value="1" selected>1</option>
-                                        <option value="1.5">1.5</option>
-                                        <option value="2">2</option>
-                                    </select>
-                                </div>
-                                <div class="serial-config-group">
-                                    <label class="serial-config-label" for="serial-flow-select">Flow ctrl</label>
-                                    <select id="serial-flow-select" class="serial-config-select">
-                                        <option value="none" selected>None</option>
-                                        <option value="rts_cts">RTS/CTS</option>
-                                    </select>
-                                </div>
-                                <hr class="sweep-sidebar-sep">
-                                <button id="serial-connect-btn" class="sweep-btn sweep-btn-start" type="button" style="width:100%"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><path d="M5 12h14"/><polyline points="12 5 19 12 12 19"/></svg> Connect</button>
-                                <button id="serial-disconnect-btn" class="sweep-btn sweep-btn-pause" type="button" disabled style="width:100%"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg> Disconnect</button>
-                                <button id="serial-refresh-btn" class="sweep-btn" type="button" title="Refresh port list" style="width:100%"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>
+                            <div class="serial-config-group">
+                                <label class="serial-config-label" for="serial-baud-select">Baud</label>
+                                <select id="serial-baud-select" class="serial-config-select">
+                                    <option value="9600">9600</option>
+                                    <option value="19200">19200</option>
+                                    <option value="38400">38400</option>
+                                    <option value="57600">57600</option>
+                                    <option value="115200" selected>115200</option>
+                                    <option value="230400">230400</option>
+                                    <option value="460800">460800</option>
+                                    <option value="921600">921600</option>
+                                </select>
                             </div>
-                        </aside>
-                        <!-- Serial output area -->
-                        <div class="serial-stage">
-                            <div class="serial-stage-toolbar">
-                                <button id="serial-clear-btn" class="serial-btn serial-btn-ghost" type="button" title="Clear output">Clear</button>
-                                <label class="serial-autoscroll-label" title="Auto-scroll on new output">
-                                    <input id="serial-autoscroll-cb" type="checkbox" checked> Auto-scroll
-                                </label>
-                                <span id="serial-byte-count" class="serial-byte-count">Rx: 0 / Tx: 0</span>
-                                <span id="serial-conn-status" class="serial-conn-status" data-state="disconnected">Disconnected</span>
-                            </div>
-                            <div id="serial-output-area" class="serial-output-area" tabindex="0">
-                                <div class="serial-output-placeholder">Disconnected · Select a port and click Connect</div>
-                            </div>
-                            <div class="serial-input-row">
-                                <input id="serial-command-input" class="serial-command-input" type="text" placeholder="Type command, Enter to send…" disabled autocomplete="off" spellcheck="false">
-                                <button id="serial-send-btn" class="serial-btn serial-btn-primary" type="button" disabled>Send</button>
-                                <span class="serial-send-hint">⏎ Enter</span>
-                            </div>
+                            <button id="serial-connect-btn" class="btn btn-sm btn-primary" type="button">Connect</button>
+                            <button id="serial-disconnect-btn" class="btn btn-sm btn-secondary" type="button" disabled>Disconnect</button>
+                            <span id="serial-conn-status" class="serial-conn-status"></span>
                         </div>
+                        <div class="serial-action-row">
+                            <button id="serial-clear-btn" class="btn btn-sm btn-ghost" type="button" title="Clear output">Clear</button>
+                            <label class="serial-autoscroll-label" title="Auto-scroll on new output">
+                                <input id="serial-autoscroll-cb" type="checkbox" checked> Auto-scroll
+                            </label>
+                            <span id="serial-byte-count" class="serial-byte-count">Rx: 0 / Tx: 0</span>
+                        </div>
+                    </div>
+                    <div id="serial-output-area" class="serial-output-area" tabindex="0">
+                        <div class="serial-output-placeholder">Serial port not connected. Select a port and click Connect to begin.</div>
+                    </div>
+                    <div class="serial-input-row">
+                        <input id="serial-command-input" class="serial-command-input" type="text" placeholder="Type command and press Enter to send…" disabled autocomplete="off" spellcheck="false">
+                        <button id="serial-send-btn" class="btn btn-sm btn-primary" type="button" disabled>Send</button>
                     </div>
                 </div>
             </section>
@@ -7377,8 +7254,6 @@
             timePollIntervalMs: 250,
             freqPollTimerId: null,
             freqPollIntervalMs: 1000,
-            varPollTimerId: null,
-            histPollTimerId: null,
             axesOpen: false,
             lastTimePayload: null,
             lastFreqPayload: null,
@@ -7517,26 +7392,6 @@
                     axesToggle.setAttribute('aria-expanded', 'false');
                 }
             }
-
-            // ── Plot collapse toggle ──
-            function bindPlotCollapseToggle(toggleId, blockSelector) {
-                const toggle = document.getElementById(toggleId);
-                if (!toggle) return;
-                toggle.addEventListener('click', () => {
-                    const block = document.querySelector(blockSelector);
-                    if (!block) return;
-                    const isCollapsed = block.classList.toggle('is-collapsed');
-                    toggle.setAttribute('aria-expanded', String(!isCollapsed));
-                });
-            }
-            bindPlotCollapseToggle('sweep-time-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(1)');
-            bindPlotCollapseToggle('sweep-freq-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(2)');
-            bindPlotCollapseToggle('sweep-variance-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(3)');
-            bindPlotCollapseToggle('sweep-histogram-collapse', '#wireless-sweep-panel .plot-panel-block:nth-of-type(4)');
-            bindPlotCollapseToggle('sweep-sidebar-collapse', '#sweep-sidebar');
-            bindPlotCollapseToggle('sweep-time-legend-collapse', '#sweep-time-legend-sidebar');
-            bindPlotCollapseToggle('sweep-freq-legend-collapse', '#sweep-freq-legend-sidebar');
-            bindPlotCollapseToggle('serial-sidebar-collapse', '#serial-sidebar');
 
             if (axesToggle) {
                 axesToggle.addEventListener('click', () => {
@@ -7753,11 +7608,6 @@
                 sweepState.lastFreqPayload = null;
                 sweepUpdateToolbar();
                 sweepStopPolling();
-
-                // 清除时域和频域 SVG 图表，显示等待状态
-                clearSweepTimeDomain();
-                clearSweepFreqDomain();
-                clearPlotHoverInfo();
             } catch (err) {
                 sweepSetStatus(`Stop failed: ${err.message}`, 'error');
             }
@@ -7768,55 +7618,15 @@
             sweepState.recordedFrames = [];
             if (sweepState.timePollTimerId) clearInterval(sweepState.timePollTimerId);
             if (sweepState.freqPollTimerId) clearInterval(sweepState.freqPollTimerId);
-            if (sweepState.varPollTimerId) clearInterval(sweepState.varPollTimerId);
-            if (sweepState.histPollTimerId) clearInterval(sweepState.histPollTimerId);
             sweepPollTimeDomain();
             sweepPollFreqDomain();
-            sweepPollVariance();
-            sweepPollHistogram();
             sweepState.timePollTimerId = setInterval(sweepPollTimeDomain, sweepState.timePollIntervalMs);
             sweepState.freqPollTimerId = setInterval(sweepPollFreqDomain, sweepState.freqPollIntervalMs);
-            sweepState.varPollTimerId = setInterval(sweepPollVariance, sweepState.freqPollIntervalMs);
-            sweepState.histPollTimerId = setInterval(sweepPollHistogram, sweepState.freqPollIntervalMs);
         }
 
         function sweepStopPolling() {
             if (sweepState.timePollTimerId) { clearInterval(sweepState.timePollTimerId); sweepState.timePollTimerId = null; }
             if (sweepState.freqPollTimerId) { clearInterval(sweepState.freqPollTimerId); sweepState.freqPollTimerId = null; }
-            if (sweepState.varPollTimerId) { clearInterval(sweepState.varPollTimerId); sweepState.varPollTimerId = null; }
-            if (sweepState.histPollTimerId) { clearInterval(sweepState.histPollTimerId); sweepState.histPollTimerId = null; }
-        }
-
-        /** 清除时域 SVG 图表，显示等待状态 */
-        function clearSweepTimeDomain() {
-            const svg = document.getElementById('sweep-time-svg');
-            if (!svg) return;
-            svg.innerHTML = '<text x="400" y="170" text-anchor="middle" fill="#888" font-size="14">Waiting for data…</text>';
-            stripSvgSweepDataAttrs(svg);
-            if (_sweepTimeHoverAbort) { _sweepTimeHoverAbort.abort(); _sweepTimeHoverAbort = null; }
-            const badge = document.getElementById('sweep-time-badge');
-            if (badge) badge.textContent = '';
-        }
-
-        /** 清除频域 SVG 图表，显示等待状态 */
-        function clearSweepFreqDomain() {
-            const svg = document.getElementById('sweep-freq-svg');
-            if (!svg) return;
-            svg.innerHTML = '<text x="400" y="170" text-anchor="middle" fill="#888" font-size="14">Waiting for frequency data…</text>';
-            stripSvgSweepDataAttrs(svg);
-            if (_sweepFreqHoverAbort) { _sweepFreqHoverAbort.abort(); _sweepFreqHoverAbort = null; }
-            const badge = document.getElementById('sweep-freq-badge');
-            if (badge) badge.textContent = '';
-            const legend = document.getElementById('sweep-freq-legend');
-            if (legend) legend.innerHTML = '';
-        }
-
-        /** Remove stale data-sweep-* attributes so hover handlers see empty data. */
-        function stripSvgSweepDataAttrs(svg) {
-            const names = svg.getAttributeNames();
-            for (const name of names) {
-                if (name.startsWith('data-sweep-')) svg.removeAttribute(name);
-            }
         }
 
         async function sweepPollTimeDomain() {
@@ -7929,30 +7739,6 @@
                 if (!sweepState.paused) renderSweepFreqDomain(payload);
             } catch (err) {
                 console.error('Sweep freq poll error:', err);
-            }
-        }
-
-        async function sweepPollVariance() {
-            try {
-                const res = await fetch('/api/wireless/sweep/variance-data?t=' + Date.now());
-                if (!res.ok) return;
-                const payload = await res.json();
-                sweepState.lastVariancePayload = payload;
-                if (!sweepState.paused) renderSweepVariance(payload);
-            } catch (err) {
-                console.error('Sweep variance poll error:', err);
-            }
-        }
-
-        async function sweepPollHistogram() {
-            try {
-                const res = await fetch('/api/wireless/sweep/histogram-data?t=' + Date.now());
-                if (!res.ok) return;
-                const payload = await res.json();
-                sweepState.lastHistogramPayload = payload;
-                if (!sweepState.paused) renderSweepHistogram(payload);
-            } catch (err) {
-                console.error('Sweep histogram poll error:', err);
             }
         }
 
@@ -8263,14 +8049,8 @@
             const ySpan = yMax - yMin;
             const freqTickStep = ySpan > 200 ? 50 : ySpan > 100 ? 20 : ySpan > 50 ? 10 : 5;
 
-            // X axis: evenly spaced by index, not by frequency value.
-            // Reserve barWidth/2 padding on both sides so bars don't overlap axes.
-            const barWidth = (freqs.length > 1)
-                ? Math.max(4, (pw / Math.max(1, freqs.length - 1)) * 0.7)
-                : 8;
-            const leftPad = barWidth / 2;
-            const usableWidth = pw - barWidth; // subtract total side padding
-            const xScale = (idx) => margin.left + leftPad + (idx / Math.max(1, freqs.length - 1)) * usableWidth;
+            // X axis: evenly spaced by index, not by frequency value
+            const xScale = (idx) => margin.left + (idx / Math.max(1, freqs.length - 1)) * pw;
             const yScale = (v) => margin.top + ph - ((v - yMin) / (yMax - yMin)) * ph;
 
             // xMin/xMax for crosshair/hover/etc
@@ -8278,6 +8058,10 @@
             const xMax = freqs.length - 1;
 
             /* ── bar chart helpers ── */
+            const barWidth = (freqs.length > 1)
+                ? Math.max(4, ((xScale(1) - xScale(0)) * 0.7))
+                : 8;
+
             function barRect(freqIdx, value, color, opacity = 1) {
                 const x = xScale(freqIdx) - barWidth / 2;
                 const y = (value == null || !Number.isFinite(value)) ? margin.top : yScale(value);
@@ -8300,7 +8084,6 @@
 
             let barsMarkup = '';
             let overlayMarkup = '';
-            let dataLabelMarkup = '';
             const seriesDefs = [
                 { key: 'free_run', label: 'Free Run', type: 'bar', color: '#10b981', opacity: 0.85 },
                 { key: 'max_hold', label: 'Max Hold', type: 'line', color: '#ef4444' },
@@ -8330,31 +8113,6 @@
                     overlayMarkup += d
                         ? `<path class="plot-multi-line" data-sweep-series="${def.key}" style="stroke:${def.color};fill:none;stroke-width:1.8" d="${d}"/>`
                         : '';
-                }
-            }
-
-            /* ── 频域数据标签：基于 Max Hold / Min Hold 曲线 ── */
-            {
-                const holdSeries = [
-                    { key: 'max_hold', data: seriesData.max_hold, color: '#ef4444', dy: -8, label: 'Max' },
-                    { key: 'min_hold', data: seriesData.min_hold, color: '#3b82f6', dy: 10, label: 'Min' },
-                ];
-                for (const hs of holdSeries) {
-                    if (!hs.data || visibleSeries.get(hs.key) === false) continue;
-                    let extremeVal = hs.key === 'max_hold' ? -Infinity : Infinity;
-                    let extremeIdx = 0;
-                    for (let i = 0; i < hs.data.length && i < freqs.length; i++) {
-                        const v = hs.data[i];
-                        if (v == null || !Number.isFinite(v)) continue;
-                        if (hs.key === 'max_hold' && v > extremeVal) { extremeVal = v; extremeIdx = i; }
-                        if (hs.key === 'min_hold' && v < extremeVal) { extremeVal = v; extremeIdx = i; }
-                    }
-                    if (!Number.isFinite(extremeVal)) continue;
-                    const mhz = Math.round(freqs[extremeIdx] / 1000);
-                    const x = xScale(extremeIdx);
-                    const y = yScale(extremeVal) + hs.dy;
-                    dataLabelMarkup +=
-                        `<text class="plot-data-label" x="${x}" y="${y}" text-anchor="middle" fill="${hs.color}" font-size="10" font-weight="700">${extremeVal} dBm</text>`;
                 }
             }
 
@@ -8399,7 +8157,6 @@
                 <line class="plot-axis-line" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H-margin.bottom}"/>
                 <line class="plot-axis-line" x1="${margin.left}" y1="${H-margin.bottom}" x2="${W-margin.right}" y2="${H-margin.bottom}"/>
                 ${barsMarkup}
-                ${dataLabelMarkup}
                 ${overlayMarkup}
                 <text class="plot-axis-title plot-axis-title-y" x="18" y="${margin.top + ph/2}">Power (dBm)</text>
                 <text class="plot-axis-title plot-axis-title-x" x="${W/2}" y="${H-2}">Frequency (MHz)</text>
@@ -8426,119 +8183,13 @@
                 sweepState.recordedFrames.push(last);
             }
 
-            /* ── hover / crosshair ── */
-            // Re-bind only when not paused (pause already binds it once after
-            // the freeze-render at line 7733).  Without this call the hover
-            // layer is never wired up while the plot is actively running.
+            // Hover / crosshair: re-bind to pick up updated SVG data attributes
             if (!sweepState.paused) {
                 bindSweepFreqHover();
             }
         }
 
-        // ================================================================
-        //  Sweep Variance (平方差) plot
-        // ================================================================
-        function renderSweepVariance(payload) {
-            const svg = document.getElementById('sweep-variance-svg');
-            const legend = document.getElementById('sweep-variance-legend');
-            if (!svg || !payload || !payload.points || !payload.points.length) return;
-
-            const W = 800, H = 320;
-            const margin = { top: 18, right: 18, bottom: 28, left: 46 };
-            const pw = W - margin.left - margin.right;
-            const ph = H - margin.top - margin.bottom;
-
-            const points = payload.points;
-            const maxVal = Math.max(...points.map(p => Math.abs(p.variance)), 1e-9);
-            const yMax = Math.ceil(maxVal * 1.15);
-
-            function xOf(i) { return margin.left + (i / (points.length - 1 || 1)) * pw; }
-            function yOf(v) { return margin.top + ph - (v / yMax) * ph; }
-
-            let bars = '';
-            const barW = Math.max(1, pw / points.length * 0.7);
-            for (let i = 0; i < points.length; i++) {
-                const x = xOf(i) - barW / 2;
-                const h = (Math.abs(points[i].variance) / yMax) * ph;
-                bars += `<rect x="${x}" y="${margin.top + ph - h}" width="${barW}" height="${h}" fill="#6366f1" opacity="0.7"/>`;
-            }
-
-            let yTicks = '';
-            for (let v = 0; v <= yMax; v += Math.max(1, Math.round(yMax / 4))) {
-                yTicks += `<text class="plot-axis-label" x="${margin.left - 6}" y="${yOf(v) + 4}" text-anchor="end">${v.toFixed(1)}</text>`;
-            }
-
-            svg.innerHTML = `
-                <rect width="${W}" height="${H}" fill="none"/>
-                <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
-                <line x1="${margin.left}" y1="${H - margin.bottom}" x2="${W - margin.right}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
-                ${bars}
-                <text class="plot-axis-title plot-axis-title-y" x="12" y="${H/2}" transform="rotate(-90,12,${H/2})">Variance</text>
-                <text class="plot-axis-title plot-axis-title-x" x="${W/2}" y="${H-2}">Frequency (kHz)</text>
-                ${yTicks}
-            `;
-
-            if (legend) {
-                legend.innerHTML = '';
-                const item = document.createElement('div');
-                item.className = 'plot-legend-item is-dense';
-                item.innerHTML = `<span class="plot-legend-swatch" style="background:#6366f1"></span><span class="plot-legend-label">Variance</span><span class="plot-legend-value">${maxVal.toFixed(1)}</span>`;
-                legend.appendChild(item);
-            }
-        }
-
-        // ================================================================
-        //  Sweep Histogram (直方图) plot
-        // ================================================================
-        function renderSweepHistogram(payload) {
-            const svg = document.getElementById('sweep-histogram-svg');
-            const legend = document.getElementById('sweep-histogram-legend');
-            if (!svg || !payload || !payload.bins || !payload.bins.length) return;
-
-            const W = 800, H = 320;
-            const margin = { top: 18, right: 18, bottom: 28, left: 46 };
-            const pw = W - margin.left - margin.right;
-            const ph = H - margin.top - margin.bottom;
-
-            const bins = payload.bins;
-            const maxCount = Math.max(...bins.map(b => b.count), 1);
-
-            function xOf(i) { return margin.left + (i / (bins.length - 1 || 1)) * pw; }
-            function yOf(v) { return margin.top + ph - (v / maxCount) * ph; }
-
-            let bars = '';
-            const barW = Math.max(1, pw / bins.length * 0.7);
-            for (let i = 0; i < bins.length; i++) {
-                const x = xOf(i) - barW / 2;
-                const h = (bins[i].count / maxCount) * ph;
-                bars += `<rect x="${x}" y="${margin.top + ph - h}" width="${barW}" height="${h}" fill="#f59e0b" opacity="0.7"/>`;
-            }
-
-            let yTicks = '';
-            for (let v = 0; v <= maxCount; v += Math.max(1, Math.round(maxCount / 4))) {
-                yTicks += `<text class="plot-axis-label" x="${margin.left - 6}" y="${yOf(v) + 4}" text-anchor="end">${v}</text>`;
-            }
-
-            svg.innerHTML = `
-                <rect width="${W}" height="${H}" fill="none"/>
-                <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
-                <line x1="${margin.left}" y1="${H - margin.bottom}" x2="${W - margin.right}" y2="${H - margin.bottom}" stroke="#c0c0c0" stroke-width="1"/>
-                ${bars}
-                <text class="plot-axis-title plot-axis-title-y" x="12" y="${H/2}" transform="rotate(-90,12,${H/2})">Count</text>
-                <text class="plot-axis-title plot-axis-title-x" x="${W/2}" y="${H-2}">Frequency (kHz)</text>
-                ${yTicks}
-            `;
-
-            if (legend) {
-                legend.innerHTML = '';
-                const item = document.createElement('div');
-                item.className = 'plot-legend-item is-dense';
-                item.innerHTML = `<span class="plot-legend-swatch" style="background:#f59e0b"></span><span class="plot-legend-label">Histogram</span><span class="plot-legend-value">${maxCount}</span>`;
-                legend.appendChild(item);
-            }
-        }
-
-        /* ── freq-domain hover / crosshair ── */
+        /* ── hover / crosshair for sweep freq ── */
         function bindSweepFreqHover() {
             const surface = document.querySelector('[data-plot-surface="sweep-freq"]');
             const hoverPanel = document.querySelector('[data-plot-hover="sweep-freq"]');
@@ -8676,13 +8327,8 @@
             const E = {
                 portSelect:    document.getElementById('serial-port-select'),
                 baudSelect:    document.getElementById('serial-baud-select'),
-                dataSelect:    document.getElementById('serial-data-select'),
-                paritySelect:  document.getElementById('serial-parity-select'),
-                stopSelect:    document.getElementById('serial-stop-select'),
-                flowSelect:    document.getElementById('serial-flow-select'),
                 connectBtn:    document.getElementById('serial-connect-btn'),
                 disconnectBtn: document.getElementById('serial-disconnect-btn'),
-                refreshBtn:    document.getElementById('serial-refresh-btn'),
                 connStatus:    document.getElementById('serial-conn-status'),
                 clearBtn:      document.getElementById('serial-clear-btn'),
                 autoScrollCb:  document.getElementById('serial-autoscroll-cb'),
@@ -8696,7 +8342,6 @@
             let rxTotal = 0;
             let txTotal = 0;
             let reconnectTimer = null;
-            let forceScrollUntil = 0;
 
             function updateByteCount() {
                 if (E.byteCount) {
@@ -8706,15 +8351,6 @@
 
             function appendOutput(text, dir) {
                 if (!E.outputArea) return;
-                const now = Date.now();
-                const shouldStickToBottom =
-                    now < forceScrollUntil ||
-                    (
-                        E.autoScrollCb &&
-                        E.autoScrollCb.checked &&
-                        E.outputArea.scrollHeight - E.outputArea.scrollTop - E.outputArea.clientHeight <= 28
-                    );
-
                 // remove placeholder
                 const placeholder = E.outputArea.querySelector('.serial-output-placeholder');
                 if (placeholder) placeholder.remove();
@@ -8729,7 +8365,8 @@
                 if (dir === 'tx') { txTotal += text.length; }
                 updateByteCount();
 
-                if (shouldStickToBottom) {
+                // auto-scroll
+                if (E.autoScrollCb && E.autoScrollCb.checked) {
                     E.outputArea.scrollTop = E.outputArea.scrollHeight;
                 }
 
@@ -8748,12 +8385,6 @@
                 const connectedState = connected && port;
                 if (E.portSelect) E.portSelect.disabled = connectedState;
                 if (E.baudSelect) E.baudSelect.disabled = connectedState;
-                const baudCustomEl = document.getElementById('serial-baud-custom');
-                if (baudCustomEl) baudCustomEl.disabled = connectedState;
-                if (E.dataSelect) E.dataSelect.disabled = connectedState;
-                if (E.paritySelect) E.paritySelect.disabled = connectedState;
-                if (E.stopSelect) E.stopSelect.disabled = connectedState;
-                if (E.flowSelect) E.flowSelect.disabled = connectedState;
                 if (E.connectBtn) E.connectBtn.disabled = connectedState;
                 if (E.disconnectBtn) E.disconnectBtn.disabled = !connectedState;
                 if (E.cmdInput) E.cmdInput.disabled = !connectedState;
@@ -8790,12 +8421,13 @@
                     const payload = await resp.json();
                     if (E.portSelect) {
                         const currentVal = E.portSelect.value;
-                        E.portSelect.innerHTML = '<option value="">-- select --</option>';
+                        E.portSelect.innerHTML = '<option value="">-- select port --</option>';
                         (payload.ports || []).forEach(p => {
                             const opt = document.createElement('option');
                             opt.value = p.name;
-                            // show port name only, no hardware description
-                            opt.textContent = p.name.replace(/\s*\(.*?\)\s*$/, '');
+                            opt.textContent = p.hardware_id
+                                ? `${p.name} (${p.hardware_id})`
+                                : p.name;
                             E.portSelect.appendChild(opt);
                         });
                         if (currentVal) E.portSelect.value = currentVal;
@@ -8861,18 +8493,7 @@
 
             async function doConnect() {
                 const port = E.portSelect ? E.portSelect.value : '';
-                const baud = (function() {
-                    if (E.baudSelect && E.baudSelect.value === 'custom') {
-                        const customEl = document.getElementById('serial-baud-custom');
-                        const val = customEl ? parseInt(customEl.value, 10) : 0;
-                        return (val > 0) ? val : 115200;
-                    }
-                    return E.baudSelect ? parseInt(E.baudSelect.value, 10) : 115200;
-                })();
-                const dataBits = E.dataSelect ? parseInt(E.dataSelect.value, 10) : 8;
-                const parity = E.paritySelect ? E.paritySelect.value : 'none';
-                const stopBits = E.stopSelect ? parseFloat(E.stopSelect.value) : 1;
-                const flowControl = E.flowSelect ? E.flowSelect.value : 'none';
+                const baud = E.baudSelect ? parseInt(E.baudSelect.value, 10) : 115200;
                 if (!port) {
                     appendOutput('[System] Please select a port first', 'sys');
                     return;
@@ -8881,7 +8502,7 @@
                     const resp = await fetch('/api/serial/connect', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ port, baud, data_bits: dataBits, parity, stop_bits: stopBits, flow_control: flowControl }),
+                        body: JSON.stringify({ port, baud }),
                     });
                     const payload = await resp.json();
                     if (payload.success) {
@@ -8918,10 +8539,11 @@
                     return;
                 }
                 serialSocket.send(text);
-                forceScrollUntil = Date.now() + 3000;
                 appendOutput(`${text}`, 'tx');
                 E.cmdInput.value = '';
-                E.outputArea.scrollTop = E.outputArea.scrollHeight;
+                if (E.autoScrollCb && E.autoScrollCb.checked) {
+                    E.outputArea.scrollTop = E.outputArea.scrollHeight;
+                }
             }
 
             function doClear() {
@@ -8939,7 +8561,6 @@
             // ---- Event bindings ----
             if (E.connectBtn) E.connectBtn.addEventListener('click', doConnect);
             if (E.disconnectBtn) E.disconnectBtn.addEventListener('click', doDisconnect);
-            if (E.refreshBtn) E.refreshBtn.addEventListener('click', fetchPortList);
             if (E.sendBtn) E.sendBtn.addEventListener('click', doSend);
             if (E.clearBtn) E.clearBtn.addEventListener('click', doClear);
 
@@ -8947,13 +8568,7 @@
                 E.cmdInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         e.preventDefault();
-                        if (E.cmdInput.value.trim()) {
-                            doSend();
-                        } else {
-                            // empty Enter: just scroll to bottom
-                            forceScrollUntil = Date.now() + 3000;
-                            if (E.outputArea) E.outputArea.scrollTop = E.outputArea.scrollHeight;
-                        }
+                        doSend();
                     }
                 });
             }
@@ -8966,18 +8581,9 @@
                 });
             }
 
-            // Refresh ports when tab is selected (radio change)
-            const serialTabRadio = document.getElementById('tab-serial');
-            if (serialTabRadio) {
-                serialTabRadio.addEventListener('change', () => {
-                    if (serialTabRadio.checked) fetchPortList();
-                });
-            }
-
-            // Initial fetch (if Serial tab is active on load)
-            if (serialTabRadio && serialTabRadio.checked) {
-                fetchPortList();
-            }
+            // Initial fetch (if Serial tab is active on load... unlikely since default is System)
+            // But we fetch anyway so ports are ready
+            fetchPortList();
         })();
     </script>
 </body>

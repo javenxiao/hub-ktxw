@@ -478,49 +478,6 @@ struct SweepRecordingDataResponse {
     frames: Vec<serde_json::Value>,
 }
 
-// -- sweep variance / histogram types --
-
-#[derive(Debug, Clone, Serialize)]
-struct SweepVariancePoint {
-    freq_khz: u32,
-    variance: f64,
-    power_dbm: i32,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct SweepVarianceResponse {
-    success: bool,
-    message: String,
-    points: Vec<SweepVariancePoint>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct SweepHistogramBin {
-    freq_khz: u32,
-    count: u32,
-    power_min_dbm: i32,
-    power_max_dbm: i32,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct SweepHistogramResponse {
-    success: bool,
-    message: String,
-    bins: Vec<SweepHistogramBin>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct SweepFspDebugResponse {
-    success: bool,
-    message: String,
-    total_events: usize,
-    fs_result_events: usize,
-    diff_events: usize,
-    hist_events: usize,
-    other_events: usize,
-    last_event: Option<(u32, u32)>,
-}
-
 #[derive(Debug, Clone)]
 struct SweepControlState {
     running: bool,
@@ -648,8 +605,6 @@ struct AppState {
     sweep_min_hold: RwLock<Vec<i32>>,
     sweep_average_hold: RwLock<Vec<f64>>,
     sweep_average_count: RwLock<u64>,
-    sweep_variance_cache: RwLock<Vec<SweepVariancePoint>>,
-    sweep_histogram_cache: RwLock<Vec<SweepHistogramBin>>,
     serial_manager: Arc<serial_port::SerialPortManager>,
 }
 
@@ -697,8 +652,6 @@ impl AppState {
             sweep_min_hold: RwLock::new(Vec::new()),
             sweep_average_hold: RwLock::new(Vec::new()),
             sweep_average_count: RwLock::new(0),
-            sweep_variance_cache: RwLock::new(Vec::new()),
-            sweep_histogram_cache: RwLock::new(Vec::new()),
             serial_manager: Arc::new(serial_port::SerialPortManager::new()),
         }
     }
@@ -1053,9 +1006,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/wireless/sweep/plot/stop", post(post_sweep_plot_stop))
         .route("/api/wireless/sweep/frame-plot/start", post(post_sweep_frame_plot_start))
         .route("/api/wireless/sweep/frame-plot/stop", post(post_sweep_frame_plot_stop))
-        .route("/api/wireless/sweep/variance-data", get(get_sweep_variance_data))
-        .route("/api/wireless/sweep/histogram-data", get(get_sweep_histogram_data))
-        .route("/api/wireless/sweep/fsp-debug", get(get_sweep_fsp_debug))
         .route("/api/wireless/sweep/config", post(post_sweep_config))
         .route("/api/wireless/sweep/recording/start", post(post_sweep_recording_start))
         .route("/api/wireless/sweep/recording/stop", post(post_sweep_recording_stop))
@@ -2642,13 +2592,11 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut sweep_initialized = false;
         let mut last_role: Option<u8> = None;
-        let mut last_active_device_mac: Option<String> = None;
         // Track whether we've ever done FSP init. After the first init
         // (success or failure), subsequent role-switch re-initializations
         // MUST NOT touch FSP — FSP failures on unsupported devices can
         // corrupt the SDK session and cause daemon exit / device hang.
         let mut fsp_attempted = false;
-        let mut has_seen_device_switch = false;
         // Slave channel scan backoff (BB_CFG_CHANNEL -5 is expected on some firmware)
         let mut slave_scan_backoff_until: Option<Instant> = None;
         let mut slave_scan_backoff_delay: Duration = Duration::from_secs(4);
@@ -2662,33 +2610,15 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 continue;
             };
 
-            // Detect current device/role from cached snapshot (cheap)
-            let current_status = baseband.get_status_snapshot().ok();
-            let current_role = current_status.as_ref().map(|status| status.role);
-            let current_active_device_mac = current_status
-                .as_ref()
-                .map(|status| normalize_device_mac(&status.mac_hex))
-                .filter(|mac| !mac.is_empty());
-            let device_changed = matches!(
-                (&last_active_device_mac, &current_active_device_mac),
-                (Some(previous_mac), Some(current_mac)) if previous_mac != current_mac
-            );
-            let role_changed = current_role.is_some() && current_role != last_role;
+            // Detect current role — use cached snapshot (cheap)
+            let current_role = baseband.get_status_snapshot().map(|s| s.role).ok();
 
-            // Active device changed → reset initialization and clear stale caches.
-            // FSP must only ever be touched for the initial startup AP device.
-            if device_changed || role_changed {
-                if device_changed && last_active_device_mac.is_some() {
-                    has_seen_device_switch = true;
-                }
-
-                if last_role.is_some() || last_active_device_mac.is_some() {
+            // Role changed (device switch) → reset initialization and clear stale caches
+            if current_role.is_some() && current_role != last_role {
+                if last_role.is_some() {
                     info!(
-                        "Sweep feeder: active device changed mac={:?} -> {:?}, role={:?} -> {:?}; re-initializing",
-                        last_active_device_mac,
-                        current_active_device_mac,
-                        last_role,
-                        current_role
+                        "Sweep feeder: active device role changed {:?} → {:?}, re-initializing",
+                        last_role, current_role
                     );
                     ffi::reset_fsp_cache();
                     // Clear all sweep data caches so the frontend sees fresh data
@@ -2702,50 +2632,23 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                     info!("Sweep feeder: all sweep caches cleared for device switch");
                 }
                 last_role = current_role;
-                last_active_device_mac = current_active_device_mac.clone();
                 sweep_initialized = false;
-                // NOTE: fsp_attempted is intentionally NOT reset here.
-                // FSP is only configured once at initial startup.  Re-initialising
-                // FSP after a device switch (configure_sweep + start_sweep) causes
-                // AP devices to reboot — the BB_SET_FSP_CTRL ioctls are unsafe on
-                // a freshly-opened device.  After a switch, the sweep feeder falls
-                // back to BB_CFG_CHANNEL + BB_GET_CHAN_INFO for all AP devices.
+                // Allow fresh FSP init on the new device (even if previously attempted on old device)
+                fsp_attempted = false;
             }
 
-            // Role-aware initialization:
-            //   DEV  — never uses FSP (BB_SET_FSP_CTRL corrupts SDK state).
-            //           Always uses BB_CFG_CHANNEL + BB_GET_CHAN_INFO.
-            //   AP   — FSP is attempted ONCE at startup.  After a device switch,
-            //           FSP is NOT re-initialised (BB_SET_FSP_CTRL on a freshly-
-            //           opened AP device causes a reboot).  The sweep feeder falls
-            //           back to BB_CFG_CHANNEL + BB_GET_CHAN_INFO for all AP
-            //           devices after the first device switch.
+            // Role-aware initialization: DEV does NOT support BB_SET_FSP_CTRL — calling it
+            // (even when it fails) corrupts SDK state and causes subsequent BB_GET_CHAN_INFO
+            // to fail. Only attempt FSP setup on the very first initialization for AP;
+            // all subsequent re-inits (after role switch) skip FSP entirely.
             if !sweep_initialized {
                 match current_role {
                     Some(ffi::BB_ROLE_DEV) => {
                         info!("Sweep feeder: DEV mode — using BB_GET_CHAN_INFO (no FSP)");
-                        // Trigger an initial BB_CFG_CHANNEL scan so that
-                        // BB_GET_CHAN_INFO returns fresh power data instead
-                        // of stale/zero values.  DEV lacks FSP subscriptions,
-                        // so this channel-configuration scan is the only way
-                        // to populate the internal power[] table.
-                        // Always trigger the scan — even with an empty frequency
-                        // list, ACS (init_chan = -1) lets the device auto-select
-                        // channels.  Without this initial scan the channel table
-                        // stays empty (serial "chan" returns Freq=0) and sweep
-                        // data is permanently zero.
-                        let freqs_for_scan: Vec<u32> = if !control.frequencies_khz.is_empty() {
-                            control.frequencies_khz.clone()
-                        } else {
-                            control.target_freq_khz.into_iter().collect()
-                        };
-                        let _ = baseband.trigger_slave_channel_scan(control.bandwidth, &freqs_for_scan);
                         sweep_initialized = true;
                     }
-                    Some(_) if !fsp_attempted && !has_seen_device_switch => {
-                        // Only the startup AP device is allowed to touch FSP.
-                        // Once Active Device has changed, re-initialising FSP on a
-                        // freshly-opened AP device can reboot the board.
+                    Some(_) if !fsp_attempted => {
+                        // First AP init: try FSP
                         fsp_attempted = true;
                         let frequencies: Vec<u32> = if !control.frequencies_khz.is_empty() {
                             control.frequencies_khz.clone()
@@ -2768,11 +2671,8 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                         sweep_initialized = true;
                     }
                     Some(_) => {
-                        // AP init after device switch: FSP was already attempted
-                        // at startup — do NOT re-initialise it (BB_SET_FSP_CTRL on
-                        // a freshly-opened AP device causes a reboot).  Sweep data
-                        // comes from BB_CFG_CHANNEL + BB_GET_CHAN_INFO instead.
-                        info!("Sweep feeder: AP mode — using BB_GET_CHAN_INFO (FSP already attempted, skipping re-init to protect device)");
+                        // Subsequent AP init (after role switch): skip FSP to protect SDK session
+                        info!("Sweep feeder: AP mode — using BB_GET_CHAN_INFO (FSP already attempted, skipping re-init)");
                         sweep_initialized = true;
                     }
                     None => {
@@ -2791,37 +2691,20 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                     }
                 }
             }
+            // Slave devices (sync_master=0) may not support FSP events — use
+            // BB_CFG_CHANNEL to trigger a real spectrum scan instead. The SDK
             // will update its internal power[] table, which BB_GET_CHAN_INFO
             // then returns fresh values matching the "chan" command output.
             //
             // BB_CFG_CHANNEL may return -5 on some firmware/role combinations,
             // which is expected. Suppress the error with exponential backoff
             // to avoid polluting the log and the remote SDK.
-            //
-            // FSP event subscriptions are only active for the very first AP
-            // device opened at startup.  After a device switch, FSP is not
-            // re-initialised (see note above), so ALL AP devices — master and
-            // slave — rely on BB_CFG_CHANNEL + BB_GET_CHAN_INFO for sweep data.
-            // DEV devices never support FSP and always use this path.
-            //
-            // DEV devices, including DEV(S), still need repeated BB_CFG_CHANNEL
-            // attempts. The active device's BB_GET_CHAN_INFO is read locally,
-            // and relying on the paired master's scans leaves DEV(S) stuck with
-            // stale or empty power data after switch/initialization races.
-            let needs_chan_scan = current_role == Some(ffi::BB_ROLE_AP)
-                || current_role == Some(ffi::BB_ROLE_DEV);
-            if needs_chan_scan && sequence % 8 == 0 {
-                let is_ap = current_role == Some(ffi::BB_ROLE_AP);
-                let skip_scan = if is_ap {
-                    slave_scan_backoff_until
-                        .map(|next_scan| Instant::now() < next_scan)
-                        .unwrap_or(false)
-                } else {
-                    // DEV: never skip due to backoff — if BB_CFG_CHANNEL fails
-                    // for DEV(S), we still retry on the next interval because
-                    // there is no alternative data source (no FSP fallback).
-                    false
-                };
+            let is_slave = current_role == Some(ffi::BB_ROLE_AP)
+                && baseband.get_status_snapshot().map(|s| s.sync_master).ok() == Some(0);
+            if is_slave && sequence % 8 == 0 {
+                let skip_scan = slave_scan_backoff_until
+                    .map(|next_scan| Instant::now() < next_scan)
+                    .unwrap_or(false);
                 if !skip_scan {
                     let freqs_for_scan: Vec<u32> = if !control.frequencies_khz.is_empty() {
                         control.frequencies_khz.clone()
@@ -2829,28 +2712,15 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                         control.target_freq_khz.into_iter().collect()
                     };
                     if let Err(_e) = baseband.trigger_slave_channel_scan(control.bandwidth, &freqs_for_scan) {
-                        if is_ap {
-                            // Exponential backoff for AP: start at 4s, max 60s, double on each failure.
-                            // BB_CFG_CHANNEL may return -5 on some AP-slave firmware — this is expected.
-                            let delay = slave_scan_backoff_delay.max(Duration::from_secs(4));
-                            slave_scan_backoff_until = Some(Instant::now() + delay);
-                            slave_scan_backoff_delay = (delay * 2).min(Duration::from_secs(60));
-                            if slave_scan_backoff_delay <= Duration::from_secs(8) {
-                                tracing::debug!(
-                                    "Slave channel scan failed (expected on some firmware), backing off for {:?}",
-                                    delay,
-                                );
-                            }
-                        } else {
-                            // DEV: log failure but DO NOT backoff — retry on next interval.
-                            // DEV(S) may also return -5, but without FSP there is no other
-                            // way to populate the power table.
-                            if sequence % 40 == 1 {
-                                tracing::debug!(
-                                    "DEV channel scan failed (will retry): {}",
-                                    _e
-                                );
-                            }
+                        // Exponential backoff: start at 4s, max 60s, double on each failure
+                        let delay = slave_scan_backoff_delay.max(Duration::from_secs(4));
+                        slave_scan_backoff_until = Some(Instant::now() + delay);
+                        slave_scan_backoff_delay = (delay * 2).min(Duration::from_secs(60));
+                        if slave_scan_backoff_delay <= Duration::from_secs(8) {
+                            tracing::debug!(
+                                "Slave channel scan failed (expected on some firmware), backing off for {:?}",
+                                delay,
+                            );
                         }
                     } else {
                         // Success: reset backoff
@@ -2861,7 +2731,7 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 }
             }
 
-            let channel_info = match baseband.get_sweep_channel_info_for_role(last_role) {
+            let channel_info = match baseband.get_sweep_channel_info() {
                 Ok(value) => value,
                 Err(err) => {
                     if sequence % 20 == 1 {
@@ -2872,48 +2742,16 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
             };
 
             let freq_list: Vec<u32> = channel_info.channels.iter().map(|entry| entry.frequency_khz).collect();
-            // default free_run from channel_info (reliable, always available)
-            let default_free_run: Vec<i32> = channel_info.channels.iter().map(|entry| entry.power_dbm).collect();
+            let free_run: Vec<i32> = channel_info.channels.iter().map(|entry| entry.power_dbm).collect();
+            let free_run_source = "channel_info";
 
-            // Always try FSP cache first. If the SDK produces FS_RESULT events,
-            // this path gives the raw sweep power values. Otherwise, fall back to
-            // channel_info (which is always available and equivalent to the "chan"
-            // console command).
-            //
-            // Note: DIFF and HIST data ONLY come from FSP events — there is no
-            // channel_info equivalent, so those caches are always populated from
-            // FSP callbacks regardless of which source free_run uses.
-            let (free_run, free_run_source) =
-                ffi::fsp_cache_snapshot()
-                    .filter(|(count, powers)| *count > 0 && !powers.is_empty())
-                    .map(|(_count, powers)| {
-                        let powers_i32: Vec<i32> = powers.iter().map(|&v| v as i32).collect();
-                        let source = "fsp";
-                        (powers_i32, source)
-                    })
-                    .unwrap_or_else(|| {
-                        (default_free_run.clone(), "channel_info")
-                    });
-            let first_power = free_run.first().copied();
-
-            if control.running && sequence % 20 == 1 {
-                let (fs_result_events, diff_events, hist_events, other_events) = ffi::fsp_event_counters();
-                let last_fsp_event = ffi::fsp_last_event_snapshot();
-                tracing::info!(
-                    "Sweep tick {} role={:?} free_run_source={} chan_num={} first_power={:?} fsp_total={} fs_result={} diff={} hist={} other={} last_fsp={:?}",
-                    sequence,
-                    last_role,
-                    free_run_source,
-                    freq_list.len(),
-                    first_power,
-                    ffi::fsp_event_total(),
-                    fs_result_events,
-                    diff_events,
-                    hist_events,
-                    other_events,
-                    last_fsp_event,
-                );
-            }
+            // SKIP FSP cache: SDK R&D confirmed both master and slave use
+            // BB_GET_CHAN_INFO as the sole sweep data source. The FSP path
+            // was producing different values (positive i16) compared to the
+            // direct channel_info path (int32_t). To align with the "chan"
+            // console command, always use channel_info.power_dbm directly.
+            // (Previous FSP cache logic kept as comment for reference.)
+            // if let Some((fsp_count, fsp_powers)) = ffi::fsp_cache_snapshot() { ... }
 
             // Diagnostic: log data source and first power value every 4 ticks (~1s)
             /*if sequence % 4 == 1 {
@@ -2959,42 +2797,41 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 max_dbm,
             };
 
+            {
+                let mut cache = state.sweep_plot_cache.write().await;
+                cache.push(point.clone());
+                if cache.len() > SWEEP_PLOT_HISTORY_LIMIT {
+                    let overflow = cache.len() - SWEEP_PLOT_HISTORY_LIMIT;
+                    cache.drain(0..overflow);
+                }
+            }
+
+            // update global max/min/average hold accumulators
+            {
+                let mut max_hold = state.sweep_max_hold.write().await;
+                let mut min_hold = state.sweep_min_hold.write().await;
+                let mut avg_hold = state.sweep_average_hold.write().await;
+                let mut avg_count = state.sweep_average_count.write().await;
+
+                if max_hold.len() != free_run.len() {
+                    *max_hold = free_run.clone();
+                    *min_hold = free_run.clone();
+                    *avg_hold = free_run.iter().map(|&v| v as f64).collect();
+                    *avg_count = 1;
+                } else {
+                    *avg_count += 1;
+                    let n = *avg_count as f64;
+                    for i in 0..free_run.len() {
+                        let v = free_run[i];
+                        if v > max_hold[i] { max_hold[i] = v; }
+                        if v < min_hold[i] { min_hold[i] = v; }
+                        // incremental average: new_avg = old_avg + (v - old_avg) / n
+                        avg_hold[i] += (v as f64 - avg_hold[i]) / n;
+                    }
+                }
+            }
+
             if control.running {
-                {
-                    let mut cache = state.sweep_plot_cache.write().await;
-                    cache.push(point.clone());
-                    if cache.len() > SWEEP_PLOT_HISTORY_LIMIT {
-                        let overflow = cache.len() - SWEEP_PLOT_HISTORY_LIMIT;
-                        cache.drain(0..overflow);
-                    }
-                }
-
-                // update global max/min/average hold accumulators
-                // (only when sweep is actively running — stop must freeze hold)
-                {
-                    let mut max_hold = state.sweep_max_hold.write().await;
-                    let mut min_hold = state.sweep_min_hold.write().await;
-                    let mut avg_hold = state.sweep_average_hold.write().await;
-                    let mut avg_count = state.sweep_average_count.write().await;
-
-                    if max_hold.len() != free_run.len() {
-                        *max_hold = free_run.clone();
-                        *min_hold = free_run.clone();
-                        *avg_hold = free_run.iter().map(|&v| v as f64).collect();
-                        *avg_count = 1;
-                    } else {
-                        *avg_count += 1;
-                        let n = *avg_count as f64;
-                        for i in 0..free_run.len() {
-                            let v = free_run[i];
-                            if v > max_hold[i] { max_hold[i] = v; }
-                            if v < min_hold[i] { min_hold[i] = v; }
-                            // incremental average: new_avg = old_avg + (v - old_avg) / n
-                            avg_hold[i] += (v as f64 - avg_hold[i]) / n;
-                        }
-                    }
-                }
-
                 let frame = serde_json::json!({
                     "sequence": sequence,
                     "timestamp_ms": timestamp_ms,
@@ -3027,66 +2864,6 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                     if recording_frames.len() > recording_state.max_frames {
                         let overflow = recording_frames.len() - recording_state.max_frames;
                         recording_frames.drain(0..overflow);
-                    }
-                }
-            }
-
-        // =================================================================
-        //  FSP sub-event feeders (DIFF / HIST – only available via FSP)
-        //
-        //  These caches are populated by handle_fsp_event() in ffi.rs.
-        //  When the SDK fires DIFF/HIST callbacks, the feeder picks them
-        //  up here and writes them into the REST-facing caches.
-        //
-        //  Unlike free_run, there is NO fallback to channel_info here —
-        //  variance and histogram data are exclusive to FSP.
-        // =================================================================
-        // -- Feed variance (square-diff) and histogram caches from FSP events --
-            if control.running {
-                if let Some((_, values)) = ffi::fsp_diff_cache_snapshot() {
-                    let chan_info_guard = state.sweep_chan_cache.read().await;
-                    let freqs: Vec<u32> = chan_info_guard
-                        .as_ref()
-                        .map(|ci| ci.frequencies_khz.clone())
-                        .unwrap_or_default();
-                    // avoid holding read lock during the potentially longer write
-                    drop(chan_info_guard);
-                    let points: Vec<SweepVariancePoint> = freqs
-                        .iter()
-                        .take(values.len())
-                        .enumerate()
-                        .map(|(i, &freq)| SweepVariancePoint {
-                            freq_khz: freq,
-                            variance: values[i],
-                            power_dbm: 0,
-                        })
-                        .collect();
-                    if !points.is_empty() {
-                        let mut cache = state.sweep_variance_cache.write().await;
-                        *cache = points;
-                    }
-                }
-                if let Some((_, bins)) = ffi::fsp_hist_cache_snapshot() {
-                    let chan_info_guard = state.sweep_chan_cache.read().await;
-                    let freqs: Vec<u32> = chan_info_guard
-                        .as_ref()
-                        .map(|ci| ci.frequencies_khz.clone())
-                        .unwrap_or_default();
-                    drop(chan_info_guard);
-                    let hist_bins: Vec<SweepHistogramBin> = freqs
-                        .iter()
-                        .take(bins.len())
-                        .enumerate()
-                        .map(|(i, &freq)| SweepHistogramBin {
-                            freq_khz: freq,
-                            count: bins[i] as u32,
-                            power_min_dbm: 0,
-                            power_max_dbm: 0,
-                        })
-                        .collect();
-                    if !hist_bins.is_empty() {
-                        let mut cache = state.sweep_histogram_cache.write().await;
-                        *cache = hist_bins;
                     }
                 }
             }
@@ -3148,17 +2925,7 @@ async fn list_serial_ports_handler(
 struct SerialConnectRequest {
     port: String,
     baud: u32,
-    #[serde(default = "default_data_bits")]
-    data_bits: u8,
-    #[serde(default = "default_parity")]
-    parity: String,
-    #[serde(default = "default_stop_bits")]
-    stop_bits: u8,
 }
-
-fn default_data_bits() -> u8 { 8 }
-fn default_parity() -> String { "none".to_string() }
-fn default_stop_bits() -> u8 { 1 }
 
 #[derive(Serialize)]
 struct SerialActionResult {
@@ -3170,7 +2937,7 @@ async fn serial_connect_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SerialConnectRequest>,
 ) -> Json<SerialActionResult> {
-    match state.serial_manager.connect(&req.port, req.baud, req.data_bits, &req.parity, req.stop_bits) {
+    match state.serial_manager.connect(&req.port, req.baud) {
         Ok(()) => {
             // 启动后台读取线程
             serial_port::spawn_reader(Arc::clone(&state.serial_manager));
@@ -5953,42 +5720,6 @@ async fn get_sweep_frame_plot_data(
     })
 }
 
-async fn get_sweep_variance_data(
-    State(state): State<Arc<AppState>>,
-) -> Json<SweepVarianceResponse> {
-    let cache = state.sweep_variance_cache.read().await.clone();
-    Json(SweepVarianceResponse {
-        success: true,
-        message: "ok".to_string(),
-        points: cache,
-    })
-}
-
-async fn get_sweep_histogram_data(
-    State(state): State<Arc<AppState>>,
-) -> Json<SweepHistogramResponse> {
-    let cache = state.sweep_histogram_cache.read().await.clone();
-    Json(SweepHistogramResponse {
-        success: true,
-        message: "ok".to_string(),
-        bins: cache,
-    })
-}
-
-async fn get_sweep_fsp_debug() -> Json<SweepFspDebugResponse> {
-    let (fs_result_events, diff_events, hist_events, other_events) = ffi::fsp_event_counters();
-    Json(SweepFspDebugResponse {
-        success: true,
-        message: "ok".to_string(),
-        total_events: ffi::fsp_event_total(),
-        fs_result_events,
-        diff_events,
-        hist_events,
-        other_events,
-        last_event: ffi::fsp_last_event_snapshot(),
-    })
-}
-
 async fn post_sweep_plot_start(
     State(state): State<Arc<AppState>>,
     Json(_request): Json<SweepPlotControlRequest>,
@@ -6019,21 +5750,9 @@ async fn post_sweep_plot_stop(
     let mut control = state.sweep_control.write().await;
     control.running = false;
     control.started_at = None;
-
-    // 清除所有 hold 缓存，确保重新 start 后以全新数据显示
-    state.sweep_plot_cache.write().await.clear();
-    state.sweep_frame_plot_cache.write().await.clear();
-    state.sweep_max_hold.write().await.clear();
-    state.sweep_min_hold.write().await.clear();
-    state.sweep_average_hold.write().await.clear();
-    *state.sweep_average_count.write().await = 0;
-    state.sweep_variance_cache.write().await.clear();
-    state.sweep_histogram_cache.write().await.clear();
-    info!("Sweep feeder: all sweep caches cleared on stop");
-
     Json(serde_json::json!({
         "success": true,
-        "message": "Sweep stopped, caches cleared",
+        "message": "Sweep stopped",
         "current": build_sweep_config_json(&control),
     }))
 }

@@ -956,178 +956,89 @@ body {
 
 /* ---------- Serial Debug Panel ---------- */
 .serial-debug-panel {
-    height: 100%;
-    min-height: 0;
-}
-
-.serial-layout {
     display: flex;
-    gap: 0;
-    align-items: stretch;
-    height: 100%;
-    min-height: 0;
+    flex-direction: column;
+    gap: 10px;
 }
 
-/* Serial config sidebar */
-.serial-sidebar {
-    width: 200px; min-width: 200px;
-    padding: 14px 12px;
-    background: #f1f4f9;
-    border-right: 1px solid #d5dce5;
-    border-radius: 0 0 0 20px;
-    display: flex; flex-direction: column; gap: 10px;
-    overflow-y: auto; position: relative;
-    transition: width .16s ease, min-width .16s ease, padding .16s ease;
+.serial-debug-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.serial-sidebar-top-row {
-    display: flex; align-items: center; justify-content: flex-end;
-    margin-bottom: 2px; padding-bottom: 4px;
-    border-bottom: 1px solid #dce3ec;
-}
-
-.serial-section-heading {
-    font-size: 10px; font-weight: 800; color: #7c8b9c;
-    text-transform: uppercase; letter-spacing: 0.08em;
-    margin: 0 0 5px; padding: 0 2px;
-}
-
-.serial-settings-card {
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
-    padding: 10px 10px 8px; display: flex; flex-direction: column; gap: 8px;
+.serial-config-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .serial-config-group {
-    display: flex; flex-direction: row; align-items: center; gap: 6px;
-    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .serial-config-label {
-    font-size: 10.5px; font-weight: 700; color: #3b4a5c;
-    min-width: 58px; text-align: left; flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted, #5f7185);
+    white-space: nowrap;
 }
 
 .serial-config-select {
-    height: 26px; padding: 0 5px; border: 1px solid #cbd5e1; border-radius: 5px;
-    font-size: 11px; background: #fff; color: #1e293b;
-    box-sizing: border-box; flex: 1 1 auto; min-width: 0;
-}
-.serial-config-select:focus {
-    outline: none; border-color: #4a90d9;
-    box-shadow: 0 0 0 2px rgba(74,144,217,0.15);
-}
-
-.serial-sidebar .sweep-btn { min-height: 32px; font-size: 12px; margin-top: 6px; text-align: center; justify-content: center; padding-left: 14px; }
-.serial-sidebar .sweep-btn-start { font-size: 13px; font-weight: 700; }
-
-.serial-sidebar.is-collapsed .serial-sidebar-body { display: none !important; }
-.serial-sidebar.is-collapsed .serial-sidebar-top-row {
-    margin-bottom: 0; padding-bottom: 4px; border-bottom: none; justify-content: flex-end;
-}
-.serial-sidebar.is-collapsed {
-    width: 26px; min-width: 26px; flex: 0 0 auto; padding: 8px 2px; overflow: visible;
-}
-
-/* ── Serial buttons (Sweep-style) ── */
-.serial-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    padding: 6px 12px;
-    border: 1px solid #cbd5e1;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid #d0d8e0;
     border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    color: #334155;
+    font-size: 13px;
     background: #fff;
-    transition: background 0.15s, border-color 0.15s;
-    white-space: nowrap;
+    color: var(--text, #2d3a4a);
+    min-width: 100px;
 }
-.serial-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
-.serial-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.serial-btn-primary {
-    border-color: #2563eb;
-    background: #2563eb;
-    color: #fff;
-    box-shadow: 0 1px 3px rgba(37,99,235,.25);
+.serial-config-select:focus {
+    outline: none;
+    border-color: var(--brand, #4a90d9);
+    box-shadow: 0 0 0 2px rgba(74,144,217,0.18);
 }
-.serial-btn-primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
-.serial-btn-primary:active:not(:disabled) { background: #1e40af; }
-
-.serial-btn-warn {
-    border-color: #f59e0b;
-    background: #fffbeb;
-    color: #b45309;
-}
-.serial-btn-warn:hover:not(:disabled) { background: #fef3c7; border-color: #d97706; }
-
-.serial-btn-ghost {
-    border-color: #d0d8e0;
-    background: #fafbfc;
-    color: #64748b;
-}
-.serial-btn-ghost:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
 
 .serial-conn-status {
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 10px;
-    border-radius: 10px;
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    white-space: nowrap;
-}
-.serial-conn-status::before {
-    content: '';
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-left: 4px;
 }
 
 .serial-conn-status[data-state="connected"] {
     background: #e6f4e6;
     color: #1a7a1a;
 }
-.serial-conn-status[data-state="connected"]::before {
-    background: #22c55e;
-}
 
 .serial-conn-status[data-state="disconnected"] {
     background: #f0f0f0;
     color: #888;
-}
-.serial-conn-status[data-state="disconnected"]::before {
-    background: #94a3b8;
 }
 
 .serial-conn-status[data-state="error"] {
     background: #fde8e8;
     color: #c62828;
 }
-.serial-conn-status[data-state="error"]::before {
-    background: #ef4444;
-}
 
 .serial-action-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding-top: 2px;
+    gap: 12px;
 }
 
 .serial-autoscroll-label {
     display: flex;
     align-items: center;
-    gap: 3px;
-    font-size: 11px;
+    gap: 4px;
+    font-size: 12px;
     color: var(--text-muted, #5f7185);
     cursor: pointer;
-    user-select: none;
 }
 
 .serial-autoscroll-label input {
@@ -1135,29 +1046,28 @@ body {
 }
 
 .serial-byte-count {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted, #8899aa);
     margin-left: auto;
     font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
 }
 
 .serial-output-area {
-    height: 600px;
-    min-height: 600px;
-    max-height: 600px;
+    flex: 1;
+    min-height: 300px;
+    max-height: 460px;
     overflow-y: auto;
     background: #0d1117;
     color: #c9d1d9;
     font-family: 'Fira Code', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
-    font-size: 12.5px;
-    line-height: 1.5;
-    padding: 8px 12px;
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 10px 14px;
     border-radius: 8px;
     border: 1px solid #30363d;
     white-space: pre-wrap;
     word-break: break-all;
     outline: none;
-    scroll-behavior: smooth;
 }
 
 .serial-output-area:focus {
@@ -1177,10 +1087,6 @@ body {
 .serial-output-line[data-dir="tx"] {
     color: #7ee787;
 }
-.serial-output-line[data-dir="tx"]::before {
-    content: '▸ ';
-    opacity: 0.6;
-}
 
 .serial-output-line[data-dir="rx"] {
     color: #c9d1d9;
@@ -1190,59 +1096,23 @@ body {
     color: #8b949e;
     font-style: italic;
 }
-.serial-output-line[data-dir="sys"]::before {
-    content: '⚙ ';
-    opacity: 0.7;
-}
 
 .serial-input-row {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
-    flex-shrink: 0;
-    padding: 2px 6px 6px 0;
-}
-
-/* Serial stage & toolbar */
-.serial-stage {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-height: 0;
-    padding-right: 8px;
-}
-
-.serial-stage-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-    padding-top: 4px;
-    padding-bottom: 2px;
-}
-
-.serial-stage-toolbar .serial-conn-status {
-    margin-left: 0;
 }
 
 .serial-command-input {
     flex: 1;
-    height: 32px;
-    padding: 0 10px;
+    height: 34px;
+    padding: 0 12px;
     border: 1px solid #d0d8e0;
-    border-radius: 6px;
+    border-radius: 8px;
     font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    font-size: 12.5px;
+    font-size: 13px;
     background: #fff;
     color: var(--text, #2d3a4a);
-}
-
-.serial-command-input::placeholder {
-    color: #94a3b8;
-    font-size: 11.5px;
-    font-style: italic;
 }
 
 .serial-command-input:focus {
@@ -1254,13 +1124,6 @@ body {
 .serial-command-input:disabled {
     background: #f0f2f5;
     cursor: not-allowed;
-}
-
-.serial-send-hint {
-    font-size: 10px;
-    color: #94a3b8;
-    white-space: nowrap;
-    user-select: none;
 }
 
 #sidebar-collapsed:checked ~ .console-shell .console-layout {
@@ -1826,20 +1689,10 @@ tbody td {
     border-bottom: 1px solid #edf1f5;
     flex-wrap: wrap;
 }
-#wireless-sweep-panel .chart-panel-header {
-    margin-bottom: 0;
-    padding-bottom: 4px;
-}
-#wireless-rssi-panel .chart-panel-header {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 4px;
-}
 
-.chart-panel .chart-panel-title,
-h2.sys-section-title.chart-panel-title {
+.chart-panel .chart-panel-title {
     margin: 0;
-    padding: 0 0 8px;
+    padding: 0;
     color: #2d4258;
     font-size: 15px;
     font-weight: 700;
@@ -1848,15 +1701,8 @@ h2.sys-section-title.chart-panel-title {
     border-bottom: none;
     text-align: left;
     letter-spacing: 0.2px;
-}
-
-.panel-serial .chart-panel-header .sys-section-title,
-.panel-serial .chart-panel-header {
-    padding-top: 0;
-    margin-top: 0;
-    padding-bottom: 4px;
-    margin-bottom: 0;
-    line-height: 1.2;
+    box-shadow: none;
+    border-radius: 0;
 }
 
 .wireless-local-user-field {
@@ -2142,218 +1988,12 @@ h2.sys-section-title.chart-panel-title {
 }
 
 .plot-panel-heading {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     padding: 0 4px;
     color: #0f172a;
     font-size: 13px;
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    border-bottom: none;
-}
-.plot-panel-heading .sys-section-title,
-.plot-panel-heading .chart-panel-title {
-    border-bottom: none;
-}
-
-/* ── Panel collapse toggle (Windows Details 风格小方块) ── */
-.plot-collapse-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px; height: 18px;
-    padding: 0; margin: 0;
-    border: 1px solid #78909c;
-    border-radius: 2px;
-    background: linear-gradient(180deg, #fafbfc 0%, #e1e5e8 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 1px 1px rgba(0,0,0,.06);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background .1s;
-}
-.plot-collapse-toggle:hover {
-    background: linear-gradient(180deg, #e8f0fe 0%, #d0dce8 100%);
-    border-color: #546e7a;
-}
-.plot-collapse-toggle:active {
-    background: #cfd8dc;
-    box-shadow: inset 0 1px 2px rgba(0,0,0,.15);
-}
-.plot-collapse-icon {
-    display: block;
-    width: 9px; height: 9px;
-    position: relative;
-}
-/* + sign (collapsed state) */
-.plot-collapse-icon::before,
-.plot-collapse-icon::after {
-    content: '';
-    position: absolute;
-    background: #37474f;
-    border-radius: 1px;
-}
-.plot-collapse-icon::before {
-    /* horizontal line (always visible) */
-    top: 4px; left: 1px;
-    width: 7px; height: 1.5px;
-}
-.plot-collapse-icon::after {
-    /* vertical line (hidden when expanded) */
-    top: 1px; left: 3.75px;
-    width: 1.5px; height: 7px;
-}
-/* Expanded state: hide vertical line */
-.plot-collapse-toggle[aria-expanded="true"] .plot-collapse-icon::after {
-    display: none;
-}
-/* ── Collapsed panel: hide workbench ── */
-.plot-panel-block.is-collapsed .plot-workbench,
-.plot-panel-block.is-collapsed .plot-legend-sidebar {
-    display: none !important;
-}
-
-/* ── Plot heading inside sweep: compact, no extra gap under title ── */
-.plot-panel-heading .sys-section-title,
-.panel-serial .chart-panel-header .sys-section-title,
-.panel-serial .chart-panel-header {
-    padding-top: 0;
-    margin-top: 0;
-    padding-bottom: 4px;
-    margin-bottom: 0;
-    line-height: 1.2;
-}
-
-/* ── Sidebar & Legend collapse ── */
-.sweep-sidebar-collapse-header,
-.plot-legend-collapse-header {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    margin-bottom: 2px;
-    flex-shrink: 0;
-}
-
-.sweep-sidebar-collapse-header {
-    justify-content: flex-end;
-}
-
-.plot-legend-collapse-header {
-    justify-content: flex-end;
-    width: 100%;
-}
-
-.sweep-sidebar-collapse-label,
-.plot-legend-collapse-header > span {
-    display: none;
-}
-
-#sweep-sidebar-collapse,
-#sweep-time-legend-collapse,
-#sweep-freq-legend-collapse {
-    width: 22px;
-    height: 30px;
-    border-color: #b7c4d3;
-    border-radius: 5px;
-    background: linear-gradient(180deg, #f9fbfd 0%, #e5ebf1 100%);
-}
-
-#sweep-sidebar-collapse .plot-collapse-icon,
-#serial-sidebar-collapse .plot-collapse-icon,
-#sweep-time-legend-collapse .plot-collapse-icon,
-#sweep-freq-legend-collapse .plot-collapse-icon {
-    width: auto;
-    height: auto;
-    position: static;
-    font-size: 11px;
-    line-height: 1;
-    font-weight: 800;
-    color: #334155;
-}
-
-#sweep-sidebar-collapse .plot-collapse-icon::before,
-#serial-sidebar-collapse .plot-collapse-icon::before,
-#sweep-time-legend-collapse .plot-collapse-icon::before,
-#sweep-freq-legend-collapse .plot-collapse-icon::before {
-    content: '>>';
-    position: static;
-    width: auto;
-    height: auto;
-    background: none;
-}
-
-#sweep-sidebar-collapse .plot-collapse-icon::after,
-#serial-sidebar-collapse .plot-collapse-icon::after,
-#sweep-time-legend-collapse .plot-collapse-icon::after,
-#sweep-freq-legend-collapse .plot-collapse-icon::after {
-    display: none;
-}
-
-#sweep-sidebar-collapse[aria-expanded="false"] .plot-collapse-icon::before,
-#serial-sidebar-collapse[aria-expanded="false"] .plot-collapse-icon::before {
-    content: '<<';
-}
-
-#sweep-time-legend-collapse .plot-collapse-icon::before,
-#sweep-freq-legend-collapse .plot-collapse-icon::before {
-    content: '<<';
-}
-
-#sweep-time-legend-collapse[aria-expanded="false"] .plot-collapse-icon::before,
-#sweep-freq-legend-collapse[aria-expanded="false"] .plot-collapse-icon::before {
-    content: '>>';
-}
-
-.sweep-sidebar-body,
-.plot-legend-body {
-    min-height: 0;
-}
-
-.sweep-sidebar-top-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 6px;
-    margin-bottom: 8px; padding-top: 4px; padding-bottom: 8px;
-}
-.sweep-sidebar-status {
-    display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0;
-}
-.sweep-sidebar-status-label {
-    font-size: 12px; font-weight: 700; color: #64748b; letter-spacing: .02em;
-}
-
-/* Sidebar collapsed: hide body and status chip, keep collapse button visible */
-.sweep-sidebar.is-collapsed .sweep-sidebar-body,
-.sweep-sidebar.is-collapsed .sweep-sidebar-top-row .sweep-sidebar-status {
-    display: none !important;
-}
-.sweep-sidebar.is-collapsed .sweep-sidebar-top-row {
-    margin-bottom: 0; padding-bottom: 0; border-bottom: none;
-    justify-content: flex-end;
-}
-.sweep-sidebar.is-collapsed {
-    width: 26px;
-    min-width: 26px;
-    flex: 0 0 auto;
-    padding: 8px 2px;
-    overflow: visible;
-}
-
-/* Legend collapsed: shrink sidebar width, let plot stage expand */
-.plot-legend-sidebar.is-collapsed .plot-legend-body {
-    display: none !important;
-}
-.plot-legend-sidebar.is-collapsed {
-    width: 22px !important;
-    min-width: 22px !important;
-    max-width: 22px !important;
-    flex: 0 0 auto;
-    padding-left: 0;
-    padding-right: 0;
-    overflow: hidden;
-}
-
-.plot-legend-sidebar.is-collapsed .plot-legend-collapse-header {
-    justify-content: flex-end;
 }
 
 .plot-workbench {
@@ -4862,7 +4502,7 @@ h2.sys-section-title.chart-panel-title {
     display: flex; flex-direction: column; gap: 8px; overflow-y: auto; position: relative;
 }
 .sweep-sidebar-sep {
-    border: none; border-top: 1px solid #d4dce6; margin: 12px -10px;
+    border: none; border-top: 1px solid #d4dce6; margin: 4px 0;
 }
 .sweep-plot-area {
     flex: 1; min-width: 0; padding: 8px 12px 8px 12px; overflow-y: auto; position: relative;
@@ -4876,19 +4516,12 @@ h2.sys-section-title.chart-panel-title {
 }
 .sweep-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
 .sweep-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-/* ── 项目2：Start 实心主色按钮 ── */
-.sweep-btn-start {
-    border-color: #2563eb; background: #2563eb; color: #fff;
-    box-shadow: 0 1px 3px rgba(37,99,235,.25);
-}
-.sweep-btn-start:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
-.sweep-btn-start:active:not(:disabled) { background: #1e40af; }
-/* Pause: 琥珀色描边 */
-.sweep-btn-pause { border-color: #f59e0b; background: #fffbeb; color: #b45309; }
-.sweep-btn-pause:hover:not(:disabled) { background: #fef3c7; border-color: #d97706; }
-/* Stop: 红色描边 */
-.sweep-btn-stop { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
-.sweep-btn-stop:hover:not(:disabled) { background: #fee2e2; border-color: #b91c1c; }
+.sweep-btn-start { border-color: #16a34a; color: #16a34a; }
+.sweep-btn-start:hover:not(:disabled) { background: #dcfce7; }
+.sweep-btn-pause { border-color: #f97316; color: #f97316; }
+.sweep-btn-pause:hover:not(:disabled) { background: #fff7ed; }
+.sweep-btn-stop { border-color: #dc2626; color: #dc2626; }
+.sweep-btn-stop:hover:not(:disabled) { background: #fef2f2; }
 .sweep-btn-axes, .sweep-btn-record, .sweep-btn-import {
     border-color: #9ca3af; color: #4b5563; font-size: 12px; padding: 6px 10px;
 }
@@ -4902,6 +4535,7 @@ h2.sys-section-title.chart-panel-title {
 .sweep-sidebar-check {
     display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; margin-top: 2px;
 }
+.sweep-sidebar-status { margin-top: auto; text-align: center; }
 .sweep-state-chip {
     display: inline-block; padding: 4px 14px; border-radius: 999px;
     font-size: 12px; font-weight: 700; background: #e2e8f0; color: #475569;
@@ -4940,22 +4574,23 @@ h2.sys-section-title.chart-panel-title {
 /* ===== Sweep Sidebar Layout ===== */
 /* ===== Sweep Sidebar Layout ===== */
 .sweep-layout{display:flex;gap:0;align-items:stretch;min-height:0}
-.sweep-sidebar{width:162px;min-width:162px;padding:22px 10px 16px;margin-left:0;background:#f8fafc;border-right:1px solid #e2e8f0;border-left:none;display:flex;flex-direction:column;justify-content:flex-start;gap:11px;overflow:visible;position:relative;transition:width .16s ease,min-width .16s ease,padding .16s ease}
+#wireless-sweep-panel .chart-panel-title{font-size:24px;line-height:1.2}
+.sweep-sidebar{width:162px;min-width:162px;padding:22px 10px 16px;background:#f8fafc;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;justify-content:flex-start;gap:11px;overflow-y:auto;position:relative}
 .sweep-sidebar-group{display:flex;flex-direction:column}
 .sweep-sidebar-group-primary{justify-content:space-evenly;gap:0;min-height:180px;padding:10px 6px;border:1px solid #d9e2ec;border-radius:10px;background:linear-gradient(180deg,#ffffff 0%,#f7fbff 100%);box-shadow:0 8px 20px rgba(148,163,184,.12)}
 .sweep-sidebar-group-secondary{gap:8px;margin-top:8px}
-.sweep-sidebar-sep{border:none;border-top:1px solid #d4dce6;margin:12px -10px}
-.sweep-plot-area{flex:1;min-width:0;padding:8px 12px 8px 8px;overflow-y:auto;position:relative;min-width:300px}
+.sweep-sidebar-sep{border:none;border-top:1px solid #d4dce6;margin:1px 0}
+.sweep-plot-area{flex:1;min-width:0;padding:8px 12px;overflow-y:auto;position:relative;min-width:300px}
 .sweep-plot-area .plot-series-grid{overflow:visible}
 .sweep-plot-area .plot-panel-block{position:relative;overflow:visible;z-index:0}
 .sweep-plot-area .plot-panel-block:hover,.sweep-plot-area .plot-panel-block:focus-within{z-index:4}
 .sweep-plot-area .plot-workbench{grid-template-columns:minmax(0,1fr) auto;align-items:stretch;overflow:visible}
-.sweep-plot-area .plot-workbench.is-dense{grid-template-columns:minmax(0,1fr) auto}
+.sweep-plot-area .plot-workbench.is-dense{grid-template-columns:minmax(0,1fr) 158px}
 .sweep-plot-area .plot-stage{overflow:visible;display:flex;height:100%}
 .sweep-plot-area .plot-surface{flex:1 1 auto;height:100%;min-height:440px}
 .sweep-plot-area .plot-composite-svg{height:100%;min-height:440px}
-.sweep-plot-area .plot-legend-sidebar{align-self:stretch;height:auto;max-height:none;overflow:visible;padding-left:8px;padding-right:0;position:relative;transition:width .16s ease,min-width .16s ease,max-width .16s ease,padding .16s ease}
-.sweep-plot-area .plot-workbench.is-dense .plot-legend-sidebar{width:auto;min-width:150px;max-width:none;justify-self:end}
+.sweep-plot-area .plot-legend-sidebar{align-self:stretch;height:auto;max-height:none;overflow:visible;padding-left:8px;padding-right:0}
+.sweep-plot-area .plot-workbench.is-dense .plot-legend-sidebar{width:auto;min-width:150px;max-width:none}
 .sweep-plot-area .plot-legend-controls{margin-bottom:6px;flex:none;padding-bottom:2px;background:linear-gradient(180deg,#ffffff 0%,#f7fbff 100%)}
 .sweep-plot-area .plot-legend-list{flex:0 0 auto;min-height:0;overflow:visible}
 .sweep-plot-area .plot-legend-control-btn{padding:7px 6px;font-size:12px}
@@ -4970,13 +4605,12 @@ h2.sys-section-title.chart-panel-title {
 .sweep-btn-label{display:block;grid-column:2;font-size:15px;line-height:1.2;text-align:center;justify-self:stretch}
 .sweep-btn:hover{background:#f1f5f9;border-color:#94a3b8}
 .sweep-btn:disabled{opacity:.45;cursor:not-allowed}
-.sweep-btn-start{border-color:#2563eb;background:#2563eb;color:#fff;box-shadow:0 1px 3px rgba(37,99,235,.25)}
-.sweep-btn-start:hover:not(:disabled){background:#1d4ed8;border-color:#1d4ed8}
-.sweep-btn-start:active:not(:disabled){background:#1e40af}
-.sweep-btn-pause{border-color:#f59e0b;background:#fffbeb;color:#b45309}
-.sweep-btn-pause:hover:not(:disabled){background:#fef3c7;border-color:#d97706}
-.sweep-btn-stop{border-color:#dc2626;background:#fef2f2;color:#dc2626}
-.sweep-btn-stop:hover:not(:disabled){background:#fee2e2;border-color:#b91c1c}
+.sweep-btn-start{border-color:#16a34a;color:#16a34a}
+.sweep-btn-start:hover:not(:disabled){background:#dcfce7}
+.sweep-btn-pause{border-color:#ea580c;color:#ea580c}
+.sweep-btn-pause:hover:not(:disabled){background:#fff7ed}
+.sweep-btn-stop{border-color:#dc2626;color:#dc2626}
+.sweep-btn-stop:hover:not(:disabled){background:#fef2f2}
 .sweep-btn-axes,.sweep-btn-record,.sweep-btn-import{border-color:#9ca3af;color:#4b5563}
 .sweep-sidebar-field{display:flex;flex-direction:column;gap:2px;font-size:13px;font-weight:700;color:#64748b}
 .sweep-sidebar-select,.sweep-sidebar-input{width:100%;box-sizing:border-box;padding:8px 7px;font-size:13px;border-radius:5px;border:1px solid #cbd5e1}
@@ -4984,20 +4618,10 @@ h2.sys-section-title.chart-panel-title {
 .sweep-sidebar-input[type="number"]::-webkit-outer-spin-button,
 .sweep-sidebar-input[type="number"]::-webkit-inner-spin-button{margin:0;opacity:1}
 .sweep-sidebar-check{display:flex;align-items:center;gap:5px;font-size:13px;color:#475569;margin-top:2px}
-.sweep-sidebar-status{margin:0;padding:0;display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0}
-.sweep-sidebar-status-label{font-size:12px;font-weight:700;color:#64748b;letter-spacing:.02em}
-.sweep-sidebar-status .sweep-state-chip{margin-right:auto}
-.sweep-state-chip{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:5px 14px;border-radius:999px;box-sizing:border-box;font-size:13px;font-weight:700;background:#e2e8f0;color:#475569}
-.sweep-state-chip::before{content:'';width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sweep-sidebar-status{margin-top:auto;padding-top:10px;text-align:center}
+.sweep-state-chip{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:700;background:#e2e8f0;color:#475569}
+.sweep-state-chip.running{background:#dcfce7;color:#16a34a}
 .sweep-state-chip.idle{background:#e2e8f0;color:#64748b}
-.sweep-state-chip.idle::before{background:#94a3b8}
-.sweep-state-chip.running{background:#dcfce7;color:#166534}
-.sweep-state-chip.running::before{background:#22c55e;animation:sweep-chip-pulse 1.2s ease-in-out infinite}
-@keyframes sweep-chip-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(1.55)}}
-.sweep-state-chip.paused{background:#fef3c7;color:#92400e}
-.sweep-state-chip.paused::before{background:#f59e0b}
-.sweep-state-chip.error{background:#fee2e2;color:#991b1b}
-.sweep-state-chip.error::before{background:#ef4444}
 .sweep-layout .plot-toolbar{display:none!important}
 .sweep-sidebar .plot-settings-overlay{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center}
 .sweep-sidebar .plot-settings-overlay[hidden]{display:none!important}

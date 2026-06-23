@@ -135,15 +135,6 @@
 			"command": "cargo check 2>&1 | Select-String -Pattern \"^error|^warning|Finished\"",
 			"isBackground": false,
 			"problemMatcher": []
-		},
-		{
-			"label": "Build rshtml",
-			"type": "shell",
-			"command": "cargo build 2>&1",
-			"isBackground": false,
-			"problemMatcher": [
-				"$rustc"
-			]
 		}
 	]
 }

@@ -707,17 +707,6 @@ impl BasebandApi {
         self.device_role_cache.get(normalized_mac).copied()
     }
 
-    fn cached_role_for_active_device(&self) -> Option<u8> {
-        self.active_device_mac
-            .as_ref()
-            .and_then(|mac| self.device_role_cache.get(mac))
-            .copied()
-    }
-
-    fn is_active_device_dev(&self) -> bool {
-        self.cached_role_for_active_device() == Some(ffi::BB_ROLE_DEV)
-    }
-
     fn cached_sync_role_for_mac(&self, normalized_mac: &str) -> Option<(u8, u8)> {
         self.device_sync_role_cache.get(normalized_mac).copied()
     }
@@ -1068,14 +1057,6 @@ impl BasebandApi {
 
         self.clear_remote_session_state();
         let outcome = self.establish_remote_session()?;
-
-        // After reconnection, refresh role/sync caches for ALL remote devices
-        // so that the Active Device dropdown shows proper labels (AP/DEV + M/S)
-        // immediately, without waiting for the user to click each MAC address.
-        // refresh_all_device_status_caches skips already-cached devices, so this
-        // is a fast no-op when caches are already populated from a prior session.
-        self.refresh_all_device_status_caches();
-
         let remote_host = self.remote_host.as_ref().expect("remote host config must exist");
         let active_mac = outcome.status.mac_hex.clone();
 
@@ -2151,14 +2132,6 @@ impl BasebandApi {
         self.ensure_remote_host_connection()?;
         self.refresh_host_devices_cache()?;
 
-        // Populate role/sync caches for any device we haven't probed yet.
-        // ensure_remote_host_connection only connects to the daemon — it does
-        // not open any device, so remember_current_device is never called.
-        // Without this, the Active Device dropdown shows bare MAC addresses
-        // after a device restart (the reboot window calls this function, not
-        // get_wireless_runtime_details → ensure_remote_session).
-        self.refresh_all_device_status_caches();
-
         let mut devices = self.host_devices_cache.borrow().clone();
         for device in &mut devices {
             let normalized_mac = Self::normalize_mac(&device.mac_address);
@@ -2181,9 +2154,7 @@ impl BasebandApi {
     }
 
     /// Refresh role/sync cache for all remote devices by briefly opening each one.
-    /// Called during startup after the initial session is established, and after
-    /// every session reconnection (e.g. after device reboot) to keep the
-    /// Active Device dropdown labels accurate.
+    /// Called once during startup after the initial session is established.
     pub fn refresh_all_device_status_caches(&mut self) {
         tracing::info!("refresh_all_device_status_caches: starting (remote={})", self.is_remote_mode());
         if !self.is_remote_mode() {
@@ -2210,13 +2181,6 @@ impl BasebandApi {
         for device in &devices {
             let mac = &device.mac_address;
             let normalized_mac = Self::normalize_mac(mac);
-
-            // Never open a second handle to the currently active device —
-            // doing so can interfere with its existing SDK connection and,
-            // for AP devices, may trigger an unexpected reset.
-            if saved_active_mac.as_deref() == Some(normalized_mac.as_str()) {
-                continue;
-            }
 
             // Skip if already cached
             if self.cached_role_for_mac(&normalized_mac).is_some()
@@ -2581,15 +2545,8 @@ impl BasebandApi {
         Ok(())
     }
 
-    /// Get channel info for sweep. When `known_role` is provided (from the
-    /// sweep feeder which already knows the role via get_status_snapshot),
-    /// the expensive and potentially session-destroying get_status_summary()
-    /// call is skipped. This is the preferred path for the sweep feeder loop.
-    pub fn get_sweep_channel_info_for_role(&mut self, known_role: Option<u8>) -> Result<ffi::BbChannelInfoSummary, String> {
-        let role = match known_role {
-            Some(r) => r,
-            None => self.get_status_summary()?.role,
-        };
+    pub fn get_sweep_channel_info(&mut self) -> Result<ffi::BbChannelInfoSummary, String> {
+        let role = self.get_status_summary()?.role;
         let result = self.read_channel_info_for_active_device(role);
         if result.is_ok() {
             // cache updated inside read_channel_info_for_active_device on success
@@ -2597,22 +2554,7 @@ impl BasebandApi {
         result
     }
 
-    pub fn get_sweep_channel_info(&mut self) -> Result<ffi::BbChannelInfoSummary, String> {
-        self.get_sweep_channel_info_for_role(None)
-    }
-
     pub fn configure_sweep(&mut self, mode: u8, bandwidth: u8, frequencies_khz: &[u32]) -> Result<(), String> {
-        // DEV does not support BB_SET_FSP_CTRL — calling it corrupts SDK
-        // state and causes subsequent BB_GET_CHAN_INFO to fail.  DEV sweep
-        // instead uses BB_CFG_CHANNEL (trigger_slave_channel_scan) to
-        // refresh the power table.
-        if self.is_active_device_dev() {
-            // Trigger an immediate channel scan for all DEV devices, including
-            // DEV(S).  Even with an empty frequency list, ACS (init_chan = -1)
-            // lets the device auto-select channels — this populates the channel
-            // table that serial "chan" and BB_GET_CHAN_INFO read from.
-            return self.trigger_slave_channel_scan(bandwidth, frequencies_khz);
-        }
         self.with_device_operation("configure_sweep", |handle| {
             ffi::configure_sweep(handle, mode, bandwidth, frequencies_khz)
         })?;
@@ -2621,12 +2563,6 @@ impl BasebandApi {
     }
 
     pub fn start_sweep(&mut self) -> Result<(), String> {
-        // DEV does not support BB_SET_FSP_CTRL — sweep feeder uses
-        // BB_GET_CHAN_INFO + BB_CFG_CHANNEL instead.
-        if self.is_active_device_dev() {
-            tracing::debug!("Skipping BB_SET_FSP_CTRL start for DEV (will use BB_CFG_CHANNEL for sweep)");
-            return Ok(());
-        }
         self.clear_cached_channel_info_for_active_device();
         self.with_device_operation("start_sweep", |handle| ffi::start_sweep(handle))?;
         Ok(())
@@ -2642,11 +2578,10 @@ impl BasebandApi {
         self.with_device_operation("trigger_fsp_scan", |handle| ffi::trigger_fsp_scan(handle))
     }
 
-    /// Trigger a real channel scan using BB_CFG_CHANNEL.
-    /// This is needed for AP-slave and DEV devices because they lack FSP
-    /// event subscriptions, so BB_GET_CHAN_INFO returns stale/zero power
-    /// values unless we explicitly trigger a scan via the channel
-    /// configuration command.
+    /// Trigger a real channel scan on slave devices using BB_CFG_CHANNEL.
+    /// This is needed because slave devices lack FSP event subscriptions,
+    /// so BB_GET_CHAN_INFO returns stale/zero power values unless we
+    /// explicitly trigger a scan via the channel configuration command.
     pub fn trigger_slave_channel_scan(
         &mut self,
         bandwidth: u8,
@@ -3100,33 +3035,12 @@ impl BasebandApi {
             ));
         }
 
-        // 读取 upgrade_hdr 头部（256 字节）。
-        // 结构体布局严格对齐 PC Tool common.h struct upgrade_hdr (packed, LE):
-        //   0x00: magic            u32   (4 bytes, 0x4152544F)
-        //   0x04: hdr_version      u8    (1 byte)
-        //   0x05: compressed       u8    (1 byte)
-        //   0x06: flashtype        u8    (1 byte)
-        //   0x07: part_status      u8    (1 byte)
-        //   0x08: header_ext_size  u16   (2 bytes)
-        //   0x0A: hash_size        u16   (2 bytes, must be 32)
-        //   0x0C: sig_size         u16   (2 bytes, must be 256)
-        //   0x0E: sig_realsize     u16   (2 bytes)
-        //   0x10: img_size         u64   (8 bytes)
-        //   0x18: rom_size         u32   (4 bytes, ≤ 0x8000)
-        //   0x1C: loader_size      u32   (4 bytes, ≤ 0x100000)
-        //   0x20: partitions       u16   (2 bytes)
-        //   0x22: segments         u16   (2 bytes)
-        //   0x24: object_version   u32   (4 bytes)
-        //   0x28: depend_version   u32   (4 bytes)
-        //   0x2C: reserve[20]            (20 bytes)
-        //   0x40: part_flag[64]          (64 bytes)
-        //   0x80: sdk_version[128]       (128 bytes)
-        //   Total: 256 bytes
+        // 读取 upgrade_hdr 头部（256 字节），按 PC Tool ar8030_upgrade_ota.cpp 布局解析
         let hdr = &image[..ffi::UPGRADE_HDR_SIZE];
 
-        // Diagnostic: print first 16 u32 values as hex dump
+        // 先打印前 64 个 u32 帮助诊断
         let mut hdr_dump = String::new();
-        for i in 0..(ffi::UPGRADE_HDR_SIZE / 4).min(16) {
+        for i in 0..(ffi::UPGRADE_HDR_SIZE / 4).min(64) {
             let val = u32::from_le_bytes([hdr[i * 4], hdr[i * 4 + 1], hdr[i * 4 + 2], hdr[i * 4 + 3]]);
             use std::fmt::Write;
             if i > 0 && i % 8 == 0 {
@@ -3136,34 +3050,45 @@ impl BasebandApi {
         }
         tracing::info!("OTA header scan (u32 LE, offset:value):\n  {}", hdr_dump);
 
-        // Parse fields at the CORRECT offsets matching PC Tool common.h
-        let magic = u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
-        let _hdr_version = hdr[4];
-        let _compressed  = hdr[5];
-        let _flashtype   = hdr[6];
-        let _part_status = hdr[7];
-        let header_ext_size = u16::from_le_bytes([hdr[8], hdr[9]]) as usize;
-        let hash_size       = u16::from_le_bytes([hdr[10], hdr[11]]) as usize;
-        let sig_size        = u16::from_le_bytes([hdr[12], hdr[13]]) as usize;
-        let _sig_realsize   = u16::from_le_bytes([hdr[14], hdr[15]]) as usize;
-        let img_size    = u64::from_le_bytes([hdr[16], hdr[17], hdr[18], hdr[19], hdr[20], hdr[21], hdr[22], hdr[23]]);
-        let rom_size    = u32::from_le_bytes([hdr[24], hdr[25], hdr[26], hdr[27]]) as u64;
-        let loader_size = u32::from_le_bytes([hdr[28], hdr[29], hdr[30], hdr[31]]) as u64;
-        let partitions_count = u16::from_le_bytes([hdr[32], hdr[33]]) as usize;
-        let segments_count   = u16::from_le_bytes([hdr[34], hdr[35]]) as usize;
+        // PC Tool struct upgrade_hdr layout (packed, LE):
+        //  0x00: magic            u32  = 0x4152544F
+        //  0x04: hdr_version      u32
+        //  0x08: compressed       u32
+        //  0x0C: flashtype        u32
+        //  0x10: header_ext_size  u32  (usually 0)
+        //  0x14: hash_size        u32  (must be 32)
+        //  0x18: sig_size         u32  (must be 256)
+        //  0x1C: sig_realsize     u32
+        //  0x20: img_size         u64  (8 bytes, total image size)
+        //  0x28: rom_size         u32  (≤ 0x8000)
+        //  0x2C: loader_size      u32  (≤ 0x100000)
+        //  0x30: partitions       u32  (count)
+        //  0x34: segments         u32  (count)
+        let magic           = u32::from_le_bytes([hdr[0],  hdr[1],  hdr[2],  hdr[3]]);
+        let hdr_version     = u32::from_le_bytes([hdr[4],  hdr[5],  hdr[6],  hdr[7]]);
+        let compressed      = u32::from_le_bytes([hdr[8],  hdr[9],  hdr[10], hdr[11]]);
+        let flashtype       = u32::from_le_bytes([hdr[12], hdr[13], hdr[14], hdr[15]]);
+        let header_ext_size = u32::from_le_bytes([hdr[16], hdr[17], hdr[18], hdr[19]]) as usize;
+        let hash_size       = u32::from_le_bytes([hdr[20], hdr[21], hdr[22], hdr[23]]) as usize;
+        let sig_size        = u32::from_le_bytes([hdr[24], hdr[25], hdr[26], hdr[27]]) as usize;
+        let sig_realsize    = u32::from_le_bytes([hdr[28], hdr[29], hdr[30], hdr[31]]) as usize;
+        let img_size        = u64::from_le_bytes([hdr[32], hdr[33], hdr[34], hdr[35], hdr[36], hdr[37], hdr[38], hdr[39]]);
+        let rom_size        = u32::from_le_bytes([hdr[40], hdr[41], hdr[42], hdr[43]]) as u64;
+        let loader_size     = u32::from_le_bytes([hdr[44], hdr[45], hdr[46], hdr[47]]) as u64;
+        let partitions_count = u32::from_le_bytes([hdr[48], hdr[49], hdr[50], hdr[51]]) as usize;
+        let segments_count   = u32::from_le_bytes([hdr[52], hdr[53], hdr[54], hdr[55]]) as usize;
 
         tracing::info!(
-            "OTA header: magic=0x{:08X} hdr_ver={} compressed={} flashtype={} part_status={} hdr_ext_sz={} hash_sz={} sig_sz={} sig_real={} img_size={} rom={} loader={} partitions={} segments={}",
+            "OTA header: magic=0x{:08X} hdr_ver={} compressed={} flashtype={} img_size={} hash_sz={} sig_sz={} sig_real={} hdr_ext_sz={} rom={} loader={} partitions={} segments={}",
             magic,
-            _hdr_version,
-            _compressed,
-            _flashtype,
-            _part_status,
-            header_ext_size,
+            hdr_version,
+            compressed,
+            flashtype,
+            img_size,
             hash_size,
             sig_size,
-            _sig_realsize,
-            img_size,
+            sig_realsize,
+            header_ext_size,
             rom_size,
             loader_size,
             partitions_count,
@@ -3174,37 +3099,32 @@ impl BasebandApi {
             return Err(format!("Not a valid OTA image: magic 0x{:08X}", magic));
         }
 
-        // Validate hash/sig sizes (must match the hardcoded 32/256 used by PC Tool)
         if hash_size != ffi::OTA_HASH_SIZE || sig_size != ffi::OTA_SIG_SIZE {
             return Err(format!(
-                "OTA image hash/sig size mismatch: hash={}, sig={} (expected hash=32, sig=256). Header scan:\n{}",
+                "Invalid OTA image: hash_size={}, sig_size={}. Expected hash=32, sig=256. Header scan:\n{}",
                 hash_size,
                 sig_size,
                 hdr_dump
             ));
         }
 
-        if rom_size > 0x8000 {
-            return Err(format!("OTA image rom_size too large: {} (max 0x8000)", rom_size));
-        }
-        if loader_size > 0x100000 {
-            return Err(format!("OTA image loader_size too large: {} (max 0x100000)", loader_size));
-        }
-
-        // Offset calculations — exactly matching PC Tool ar8030_upgrade_ota.cpp:
-        //   hdr_ext   = data + sizeof(upgrade_hdr)        = data + 256
-        //   romcode   = hdr_ext + 32 + 256 + header_ext   = data + 544 + header_ext
-        //   bootloader= romcode + rom_size
-        //   gpt       = bootloader + loader_size
-        //   partitions= gpt + GPT_FLASH_SIZE
-        //   segments  = partitions + partitions * sizeof(part_info)
-        //   img_data  = segments + segments * sizeof(segment_info)
-        let romcode_offset    = ffi::UPGRADE_HDR_SIZE + ffi::OTA_HASH_SIZE + ffi::OTA_SIG_SIZE + header_ext_size;
+        // PC Tool 偏移计算（与 ar8030_upgrade_ota.cpp 一致）：
+        //   布局: [header 256] [hash 32] [sig 256] [header_ext N] [romcode] [bootloader区域]
+        //   PC Tool 计算:
+        //     romcode   = sizeof(hdr) + 32(hash) + 256(sig) + header_ext
+        //     bootloader= romcode + rom_size
+        //     gpt       = bootloader + loader_size
+        //     partitions= gpt + GPT_FLASH_SIZE
+        //     segments  = partitions + partitions * sizeof(part_info)
+        let hash_offset      = ffi::UPGRADE_HDR_SIZE;                               // 256
+        let sig_offset       = hash_offset + ffi::OTA_HASH_SIZE;                     // 288
+        let header_ext_offset = sig_offset + ffi::OTA_SIG_SIZE;                      // 544
+        let romcode_offset   = header_ext_offset + header_ext_size;                  // 544 + N
         let bootloader_offset = romcode_offset + rom_size as usize;
-        let gpt_offset        = bootloader_offset + loader_size as usize;
+        let gpt_offset       = bootloader_offset + loader_size as usize;
         let partitions_offset = gpt_offset + ffi::GPT_FLASH_SIZE as usize;
         let segments_offset   = partitions_offset + partitions_count * ffi::PART_INFO_SIZE;
-        // Segment data: img_offset is **absolute** file offset (matching PC Tool data += segments[idx].img_offset)
+        // 段数据: img_offset 是**文件内绝对偏移**（对标 PC Tool data += segments[idx].img_offset）
         let image_data_offset = segments_offset + segments_count * ffi::SEGMENT_INFO_SIZE;
 
         if image_data_offset > image.len() {
@@ -3335,49 +3255,27 @@ impl BasebandApi {
             self.device_handle != 0
         );
 
-        // OTA (.img) partition-based upgrade path is gated behind the OTA_IMG_MAGIC
-        // detection below.  Because the header layout assumptions in upgrade_ota_image()
-        // may not match the .img format produced by every toolchain version, OTA
-        // parsing is opt-in: only firmware images that start with the OTA magic
-        // (0x4152544F, "ARTO") are routed to the partition-aware path.
-        // All other firmware files use the raw BB_SET_HOT_UPGRADE_WRITE flat-binary path.
+        // 检测是否为 OTA 格式 (.img) — 检查 magic
         let is_ota_image = firmware.len() >= 4
             && u32::from_le_bytes([firmware[0], firmware[1], firmware[2], firmware[3]]) == ffi::OTA_IMG_MAGIC;
 
         if is_ota_image {
-            tracing::info!("[UPGRADE] OTA image detected (magic=0x{:08X}), trying partition-based upgrade", ffi::OTA_IMG_MAGIC);
-            match self.upgrade_ota_image(firmware) {
-                Ok(result) => {
-                    tracing::info!("[UPGRADE] OTA image written successfully, triggering reboot");
+            tracing::info!("[UPGRADE] OTA image detected, using partition-based upgrade");
+            let result = self.upgrade_ota_image(firmware)?;
+            tracing::info!("[UPGRADE] OTA image written successfully, triggering reboot");
 
-                    let handle = self.handle_ptr();
-                    run_remote_sdk_call(is_remote, || {
-                        ffi::reboot_device(handle, 2000)
-                    }).map_err(|e| {
-                        tracing::error!("[UPGRADE] Reboot after OTA upgrade failed: {}", e);
-                        format!("OTA firmware written but reboot failed: {}", e)
-                    })?;
+            let handle = self.handle_ptr();
+            run_remote_sdk_call(is_remote, || {
+                ffi::reboot_device(handle, 2000)
+            }).map_err(|e| {
+                tracing::error!("[UPGRADE] Reboot after OTA upgrade failed: {}", e);
+                format!("OTA firmware written but reboot failed: {}", e)
+            })?;
 
-                    tracing::info!("[UPGRADE] Complete, device rebooting");
-                    return Ok(result);
-                }
-                Err(ota_err) => {
-                    // OTA parsing failed — likely the header layout does not match
-                    // this toolchain's .img format.  Fall back to the raw path with
-                    // a warning so the upgrade can still proceed.
-                    tracing::warn!(
-                        "[UPGRADE] OTA partition parsing failed ({}). Falling back to raw flat-binary path. \
-                         The OTA header/metadata bytes will be written to flash address 0, \
-                         which may not be correct for all devices.",
-                        ota_err
-                    );
-                }
-            }
-        }
-
-        // Raw flat-binary path (also serves as fallback when OTA parsing fails)
-        {
-            tracing::info!("[UPGRADE] Using flat binary upgrade path");
+            tracing::info!("[UPGRADE] Complete, device rebooting");
+            Ok(result)
+        } else {
+            tracing::info!("[UPGRADE] Raw firmware detected, using flat binary upgrade");
             if is_remote {
                 self.ensure_remote_session().map_err(|e| {
                     tracing::error!("[UPGRADE] Remote session failed: {}", e);
@@ -3392,11 +3290,6 @@ impl BasebandApi {
                 e
             })?;
             tracing::info!("[UPGRADE] Raw firmware written and CRC verified, triggering reboot");
-
-            // Small delay to let the flash controller finalize before reboot
-            if is_remote {
-                std::thread::sleep(Duration::from_millis(500));
-            }
 
             let handle = self.handle_ptr();
             run_remote_sdk_call(is_remote, || {
@@ -3692,12 +3585,6 @@ impl BasebandManager {
         self.with_api("get_sweep_channel_info", |api| api.get_sweep_channel_info())
     }
 
-    /// Role-aware variant for the sweep feeder — passes known_role directly
-    /// to avoid the expensive / session-destroying get_status_summary() call.
-    pub fn get_sweep_channel_info_for_role(&self, known_role: Option<u8>) -> Result<ffi::BbChannelInfoSummary, String> {
-        self.with_api("get_sweep_channel_info_for_role", |api| api.get_sweep_channel_info_for_role(known_role))
-    }
-
     pub fn configure_sweep(&self, mode: u8, bandwidth: u8, frequencies_khz: &[u32]) -> Result<(), String> {
         self.with_api("configure_sweep", |api| api.configure_sweep(mode, bandwidth, frequencies_khz))
     }
@@ -3715,7 +3602,7 @@ impl BasebandManager {
         self.with_api("trigger_fsp_scan", |api| api.trigger_fsp_scan())
     }
 
-    /// Trigger a real channel scan using BB_CFG_CHANNEL.
+    /// Trigger a real channel scan on slave devices using BB_CFG_CHANNEL.
     /// See BasebandApi::trigger_slave_channel_scan for details.
     pub fn trigger_slave_channel_scan(&self, bandwidth: u8, frequencies_khz: &[u32]) -> Result<(), String> {
         self.with_api("trigger_slave_channel_scan", |api| api.trigger_slave_channel_scan(bandwidth, frequencies_khz))

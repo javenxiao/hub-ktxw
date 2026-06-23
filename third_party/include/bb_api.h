@@ -189,7 +189,6 @@ extern "C" {
 #define BB_SET_ANT_DEV                      BB_REQUEST(BB_REQ_SET, 41)  /**<@note 设置天线*/
 #define BB_SET_ANT_USER                     BB_REQUEST(BB_REQ_SET, 42)  /**<@note 立刻设置天线*/
 #define BB_SET_ANT_PROBE_PARA               BB_REQUEST(BB_REQ_SET, 43)  /**<@note 设置天线探测的配置*/
-#define BB_SET_ADPT_HOP_PARA                BB_REQUEST(BB_REQ_SET, 44)  /**<@note 设置自适应跳频参数*/
 
 // 以下为调试诊断类命令字
 #define BB_SET_REG                          BB_REQUEST(BB_REQ_SET, 100) /**<@note 基带寄存器写入命令字，本类型用于调试诊断*/
@@ -655,11 +654,9 @@ typedef struct {
 
 /**定义FS PRO事件结构体*/
 typedef struct {
-    uint32_t        frame_id:16;                                  /**帧id*/
-    uint32_t        num:8;                                        /**数量*/
-    uint32_t        type:4;                                       /**类型*/
-    uint32_t        len:10;                                       /**数据长度*/
-    uint8_t         data[768];                                    /**数据缓冲区*/
+    uint32_t        type;                                       /**类型*/
+    uint32_t        num;                                        /**数量*/
+    uint8_t         data[768];                                  /**数据缓冲区*/
 } bb_event_fsp_t;
 
 /**定义FS PRO通知类型枚举*/

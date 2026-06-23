@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$SourceDir,
 
-    [string]$Output = "src/generated/ffi_bindings.rs",
+    [string]$Output = "target/generated/ffi_bindings.rs",
 
     [string]$LibclangPath = ""
 )
