@@ -2642,11 +2642,13 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut sweep_initialized = false;
         let mut last_role: Option<u8> = None;
+        let mut last_active_device_mac: Option<String> = None;
         // Track whether we've ever done FSP init. After the first init
         // (success or failure), subsequent role-switch re-initializations
         // MUST NOT touch FSP — FSP failures on unsupported devices can
         // corrupt the SDK session and cause daemon exit / device hang.
         let mut fsp_attempted = false;
+        let mut has_seen_device_switch = false;
         // Slave channel scan backoff (BB_CFG_CHANNEL -5 is expected on some firmware)
         let mut slave_scan_backoff_until: Option<Instant> = None;
         let mut slave_scan_backoff_delay: Duration = Duration::from_secs(4);
@@ -2660,15 +2662,33 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 continue;
             };
 
-            // Detect current role — use cached snapshot (cheap)
-            let current_role = baseband.get_status_snapshot().map(|s| s.role).ok();
+            // Detect current device/role from cached snapshot (cheap)
+            let current_status = baseband.get_status_snapshot().ok();
+            let current_role = current_status.as_ref().map(|status| status.role);
+            let current_active_device_mac = current_status
+                .as_ref()
+                .map(|status| normalize_device_mac(&status.mac_hex))
+                .filter(|mac| !mac.is_empty());
+            let device_changed = matches!(
+                (&last_active_device_mac, &current_active_device_mac),
+                (Some(previous_mac), Some(current_mac)) if previous_mac != current_mac
+            );
+            let role_changed = current_role.is_some() && current_role != last_role;
 
-            // Role changed (device switch) → reset initialization and clear stale caches
-            if current_role.is_some() && current_role != last_role {
-                if last_role.is_some() {
+            // Active device changed → reset initialization and clear stale caches.
+            // FSP must only ever be touched for the initial startup AP device.
+            if device_changed || role_changed {
+                if device_changed && last_active_device_mac.is_some() {
+                    has_seen_device_switch = true;
+                }
+
+                if last_role.is_some() || last_active_device_mac.is_some() {
                     info!(
-                        "Sweep feeder: active device role changed {:?} → {:?}, re-initializing",
-                        last_role, current_role
+                        "Sweep feeder: active device changed mac={:?} -> {:?}, role={:?} -> {:?}; re-initializing",
+                        last_active_device_mac,
+                        current_active_device_mac,
+                        last_role,
+                        current_role
                     );
                     ffi::reset_fsp_cache();
                     // Clear all sweep data caches so the frontend sees fresh data
@@ -2682,23 +2702,50 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                     info!("Sweep feeder: all sweep caches cleared for device switch");
                 }
                 last_role = current_role;
+                last_active_device_mac = current_active_device_mac.clone();
                 sweep_initialized = false;
-                // Allow fresh FSP init on the new device (even if previously attempted on old device)
-                fsp_attempted = false;
+                // NOTE: fsp_attempted is intentionally NOT reset here.
+                // FSP is only configured once at initial startup.  Re-initialising
+                // FSP after a device switch (configure_sweep + start_sweep) causes
+                // AP devices to reboot — the BB_SET_FSP_CTRL ioctls are unsafe on
+                // a freshly-opened device.  After a switch, the sweep feeder falls
+                // back to BB_CFG_CHANNEL + BB_GET_CHAN_INFO for all AP devices.
             }
 
-            // Role-aware initialization: DEV does NOT support BB_SET_FSP_CTRL — calling it
-            // (even when it fails) corrupts SDK state and causes subsequent BB_GET_CHAN_INFO
-            // to fail. Only attempt FSP setup on the very first initialization for AP;
-            // all subsequent re-inits (after role switch) skip FSP entirely.
+            // Role-aware initialization:
+            //   DEV  — never uses FSP (BB_SET_FSP_CTRL corrupts SDK state).
+            //           Always uses BB_CFG_CHANNEL + BB_GET_CHAN_INFO.
+            //   AP   — FSP is attempted ONCE at startup.  After a device switch,
+            //           FSP is NOT re-initialised (BB_SET_FSP_CTRL on a freshly-
+            //           opened AP device causes a reboot).  The sweep feeder falls
+            //           back to BB_CFG_CHANNEL + BB_GET_CHAN_INFO for all AP
+            //           devices after the first device switch.
             if !sweep_initialized {
                 match current_role {
                     Some(ffi::BB_ROLE_DEV) => {
                         info!("Sweep feeder: DEV mode — using BB_GET_CHAN_INFO (no FSP)");
+                        // Trigger an initial BB_CFG_CHANNEL scan so that
+                        // BB_GET_CHAN_INFO returns fresh power data instead
+                        // of stale/zero values.  DEV lacks FSP subscriptions,
+                        // so this channel-configuration scan is the only way
+                        // to populate the internal power[] table.
+                        // Always trigger the scan — even with an empty frequency
+                        // list, ACS (init_chan = -1) lets the device auto-select
+                        // channels.  Without this initial scan the channel table
+                        // stays empty (serial "chan" returns Freq=0) and sweep
+                        // data is permanently zero.
+                        let freqs_for_scan: Vec<u32> = if !control.frequencies_khz.is_empty() {
+                            control.frequencies_khz.clone()
+                        } else {
+                            control.target_freq_khz.into_iter().collect()
+                        };
+                        let _ = baseband.trigger_slave_channel_scan(control.bandwidth, &freqs_for_scan);
                         sweep_initialized = true;
                     }
-                    Some(_) if !fsp_attempted => {
-                        // First AP init: try FSP
+                    Some(_) if !fsp_attempted && !has_seen_device_switch => {
+                        // Only the startup AP device is allowed to touch FSP.
+                        // Once Active Device has changed, re-initialising FSP on a
+                        // freshly-opened AP device can reboot the board.
                         fsp_attempted = true;
                         let frequencies: Vec<u32> = if !control.frequencies_khz.is_empty() {
                             control.frequencies_khz.clone()
@@ -2721,8 +2768,11 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                         sweep_initialized = true;
                     }
                     Some(_) => {
-                        // Subsequent AP init (after role switch): skip FSP to protect SDK session
-                        info!("Sweep feeder: AP mode — using BB_GET_CHAN_INFO (FSP already attempted, skipping re-init)");
+                        // AP init after device switch: FSP was already attempted
+                        // at startup — do NOT re-initialise it (BB_SET_FSP_CTRL on
+                        // a freshly-opened AP device causes a reboot).  Sweep data
+                        // comes from BB_CFG_CHANNEL + BB_GET_CHAN_INFO instead.
+                        info!("Sweep feeder: AP mode — using BB_GET_CHAN_INFO (FSP already attempted, skipping re-init to protect device)");
                         sweep_initialized = true;
                     }
                     None => {
@@ -2747,12 +2797,31 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
             // BB_CFG_CHANNEL may return -5 on some firmware/role combinations,
             // which is expected. Suppress the error with exponential backoff
             // to avoid polluting the log and the remote SDK.
-            let is_slave = current_role == Some(ffi::BB_ROLE_AP)
-                && baseband.get_status_snapshot().map(|s| s.sync_master).ok() == Some(0);
-            if is_slave && sequence % 8 == 0 {
-                let skip_scan = slave_scan_backoff_until
-                    .map(|next_scan| Instant::now() < next_scan)
-                    .unwrap_or(false);
+            //
+            // FSP event subscriptions are only active for the very first AP
+            // device opened at startup.  After a device switch, FSP is not
+            // re-initialised (see note above), so ALL AP devices — master and
+            // slave — rely on BB_CFG_CHANNEL + BB_GET_CHAN_INFO for sweep data.
+            // DEV devices never support FSP and always use this path.
+            //
+            // DEV devices, including DEV(S), still need repeated BB_CFG_CHANNEL
+            // attempts. The active device's BB_GET_CHAN_INFO is read locally,
+            // and relying on the paired master's scans leaves DEV(S) stuck with
+            // stale or empty power data after switch/initialization races.
+            let needs_chan_scan = current_role == Some(ffi::BB_ROLE_AP)
+                || current_role == Some(ffi::BB_ROLE_DEV);
+            if needs_chan_scan && sequence % 8 == 0 {
+                let is_ap = current_role == Some(ffi::BB_ROLE_AP);
+                let skip_scan = if is_ap {
+                    slave_scan_backoff_until
+                        .map(|next_scan| Instant::now() < next_scan)
+                        .unwrap_or(false)
+                } else {
+                    // DEV: never skip due to backoff — if BB_CFG_CHANNEL fails
+                    // for DEV(S), we still retry on the next interval because
+                    // there is no alternative data source (no FSP fallback).
+                    false
+                };
                 if !skip_scan {
                     let freqs_for_scan: Vec<u32> = if !control.frequencies_khz.is_empty() {
                         control.frequencies_khz.clone()
@@ -2760,15 +2829,28 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                         control.target_freq_khz.into_iter().collect()
                     };
                     if let Err(_e) = baseband.trigger_slave_channel_scan(control.bandwidth, &freqs_for_scan) {
-                        // Exponential backoff: start at 4s, max 60s, double on each failure
-                        let delay = slave_scan_backoff_delay.max(Duration::from_secs(4));
-                        slave_scan_backoff_until = Some(Instant::now() + delay);
-                        slave_scan_backoff_delay = (delay * 2).min(Duration::from_secs(60));
-                        if slave_scan_backoff_delay <= Duration::from_secs(8) {
-                            tracing::debug!(
-                                "Slave channel scan failed (expected on some firmware), backing off for {:?}",
-                                delay,
-                            );
+                        if is_ap {
+                            // Exponential backoff for AP: start at 4s, max 60s, double on each failure.
+                            // BB_CFG_CHANNEL may return -5 on some AP-slave firmware — this is expected.
+                            let delay = slave_scan_backoff_delay.max(Duration::from_secs(4));
+                            slave_scan_backoff_until = Some(Instant::now() + delay);
+                            slave_scan_backoff_delay = (delay * 2).min(Duration::from_secs(60));
+                            if slave_scan_backoff_delay <= Duration::from_secs(8) {
+                                tracing::debug!(
+                                    "Slave channel scan failed (expected on some firmware), backing off for {:?}",
+                                    delay,
+                                );
+                            }
+                        } else {
+                            // DEV: log failure but DO NOT backoff — retry on next interval.
+                            // DEV(S) may also return -5, but without FSP there is no other
+                            // way to populate the power table.
+                            if sequence % 40 == 1 {
+                                tracing::debug!(
+                                    "DEV channel scan failed (will retry): {}",
+                                    _e
+                                );
+                            }
                         }
                     } else {
                         // Success: reset backoff
@@ -2779,7 +2861,7 @@ fn spawn_sweep_feeder(state: Arc<AppState>) {
                 }
             }
 
-            let channel_info = match baseband.get_sweep_channel_info() {
+            let channel_info = match baseband.get_sweep_channel_info_for_role(last_role) {
                 Ok(value) => value,
                 Err(err) => {
                     if sequence % 20 == 1 {

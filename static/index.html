@@ -7757,6 +7757,7 @@
                 // 清除时域和频域 SVG 图表，显示等待状态
                 clearSweepTimeDomain();
                 clearSweepFreqDomain();
+                clearPlotHoverInfo();
             } catch (err) {
                 sweepSetStatus(`Stop failed: ${err.message}`, 'error');
             }
@@ -7791,6 +7792,8 @@
             const svg = document.getElementById('sweep-time-svg');
             if (!svg) return;
             svg.innerHTML = '<text x="400" y="170" text-anchor="middle" fill="#888" font-size="14">Waiting for data…</text>';
+            stripSvgSweepDataAttrs(svg);
+            if (_sweepTimeHoverAbort) { _sweepTimeHoverAbort.abort(); _sweepTimeHoverAbort = null; }
             const badge = document.getElementById('sweep-time-badge');
             if (badge) badge.textContent = '';
         }
@@ -7800,10 +7803,20 @@
             const svg = document.getElementById('sweep-freq-svg');
             if (!svg) return;
             svg.innerHTML = '<text x="400" y="170" text-anchor="middle" fill="#888" font-size="14">Waiting for frequency data…</text>';
+            stripSvgSweepDataAttrs(svg);
+            if (_sweepFreqHoverAbort) { _sweepFreqHoverAbort.abort(); _sweepFreqHoverAbort = null; }
             const badge = document.getElementById('sweep-freq-badge');
             if (badge) badge.textContent = '';
             const legend = document.getElementById('sweep-freq-legend');
             if (legend) legend.innerHTML = '';
+        }
+
+        /** Remove stale data-sweep-* attributes so hover handlers see empty data. */
+        function stripSvgSweepDataAttrs(svg) {
+            const names = svg.getAttributeNames();
+            for (const name of names) {
+                if (name.startsWith('data-sweep-')) svg.removeAttribute(name);
+            }
         }
 
         async function sweepPollTimeDomain() {
@@ -8411,6 +8424,14 @@
             /* ── recording ── */
             if (sweepState.recording && last) {
                 sweepState.recordedFrames.push(last);
+            }
+
+            /* ── hover / crosshair ── */
+            // Re-bind only when not paused (pause already binds it once after
+            // the freeze-render at line 7733).  Without this call the hover
+            // layer is never wired up while the plot is actively running.
+            if (!sweepState.paused) {
+                bindSweepFreqHover();
             }
         }
 

@@ -582,8 +582,82 @@ impl bb_event_fsp_t {
 }
 
 pub type bb_event_fsp_param_t = sdk_bindings::bb_event_fsp_param_t;
-pub type bb_set_fsp_ctrl_t = sdk_bindings::bb_set_fsp_ctrl_t;
 pub type bb_set_fsp_param_t = sdk_bindings::bb_set_fsp_param_t;
+
+// Manual definition of bb_set_fsp_ctrl_t with CORRECT C layout.
+//
+// The C header declares:
+//   typedef struct {
+//       uint32_t msg_type:4, seq_id:4, len:11;  // uint32_t base → 4 bytes
+//       uint8_t data[BB_CFG_PAGE_SIZE - 4];      // offset 4
+//   } bb_set_fsp_ctrl_t;
+//
+// bindgen computes the bitfield as 3 bytes (ceil(19/8)=3) and places data at
+// offset 3, which is WRONG — the C compiler uses uint32_t as the bitfield
+// storage unit, so data must be at offset 4.  The 1‑byte shift corrupts every
+// BB_SET_FSP_CTRL ioctl (configure_sweep, start_sweep, trigger_fsp_scan,
+// stop_sweep), passing garbage msg_type/seq_id/len and shifted payload data
+// to the SDK.  On AP devices this manifests as an unexpected device restart
+// during sweep re‑initialisation after an Active Device switch.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct bb_set_fsp_ctrl_t {
+    /// 4‑byte bitfield storage unit (matches uint32_t in C)
+    pub _bitfield_1: sdk_bindings::__BindgenBitfieldUnit<[u8; 4usize]>,
+    /// Payload — must be at offset 4 (BB_CFG_PAGE_SIZE = 1024, so 1020 bytes)
+    pub data: [u8; BB_CFG_PAGE_SIZE - 4],
+}
+
+impl Default for bb_set_fsp_ctrl_t {
+    fn default() -> Self {
+        Self {
+            _bitfield_1: sdk_bindings::__BindgenBitfieldUnit::new([0u8; 4]),
+            data: [0u8; BB_CFG_PAGE_SIZE - 4],
+        }
+    }
+}
+
+impl bb_set_fsp_ctrl_t {
+    // Bit positions identical to the generated binding:
+    //   msg_type : bit  0, width 4
+    //   seq_id   : bit  4, width 4
+    //   len      : bit  8, width 11
+    // Only the storage unit size changes (3 → 4 bytes) so that data lands at
+    // offset 4 instead of offset 3.
+    #[inline]
+    pub fn msg_type(&self) -> u32 {
+        unsafe { ::std::mem::transmute(self._bitfield_1.get(0usize, 4u8) as u32) }
+    }
+    #[inline]
+    pub fn set_msg_type(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::std::mem::transmute(val);
+            self._bitfield_1.set(0usize, 4u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn seq_id(&self) -> u32 {
+        unsafe { ::std::mem::transmute(self._bitfield_1.get(4usize, 4u8) as u32) }
+    }
+    #[inline]
+    pub fn set_seq_id(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::std::mem::transmute(val);
+            self._bitfield_1.set(4usize, 4u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn len(&self) -> u32 {
+        unsafe { ::std::mem::transmute(self._bitfield_1.get(8usize, 11u8) as u32) }
+    }
+    #[inline]
+    pub fn set_len(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::std::mem::transmute(val);
+            self._bitfield_1.set(8usize, 11u8, val as u64)
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
@@ -2627,10 +2701,10 @@ pub fn get_channel_info(handle: *mut bb_dev_handle_t) -> Result<BbChannelInfoSum
     })
 }
 
-/// Trigger a real channel scan on slave devices by sending BB_CFG_CHANNEL
-/// with minimal parameters. This causes the SDK to perform a spectrum scan
-/// and update its internal power[] table, which BB_GET_CHAN_INFO will then
-/// return. Without this, slave devices return stale/zero power values
+/// Trigger a real channel scan by sending BB_CFG_CHANNEL with minimal
+/// parameters. This causes the SDK to perform a spectrum scan and update
+/// its internal power[] table, which BB_GET_CHAN_INFO will then return.
+/// Without this, AP-slave and DEV devices return stale/zero power values
 /// because they lack FSP event subscriptions.
 pub fn trigger_slave_channel_scan(
     handle: *mut bb_dev_handle_t,
@@ -4608,4 +4682,18 @@ mod tests {
         assert_eq!(BB_ROLE_DEV, 1);
         assert!(BB_DATA_USER_MAX >= 10);
         assert!(BB_SLOT_MAX >= 8);
-    }}
+    }
+
+    /// Verify that the manually-defined bb_set_fsp_ctrl_t places data at
+    /// offset 4 (not 3), matching the C header uint32_t-aligned bitfield.
+    #[test]
+    fn abi_bb_set_fsp_ctrl_t_layout_matches_c_header() {
+        let dummy = bb_set_fsp_ctrl_t::default();
+        let base = &dummy as *const _ as usize;
+        let data_offset = &dummy.data as *const _ as usize - base;
+        assert_eq!(data_offset, 4,
+            "bb_set_fsp_ctrl_t::data offset: expected 4, got {}", data_offset);
+        assert_eq!(std::mem::size_of::<bb_set_fsp_ctrl_t>(), 1024,
+            "bb_set_fsp_ctrl_t size: expected 1024");
+    }
+}
