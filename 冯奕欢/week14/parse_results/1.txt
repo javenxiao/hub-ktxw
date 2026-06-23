@@ -1,0 +1,48 @@
+建模背景：
+在水产养殖系统中，溶解氧（Dissolved Oxygen, DO）是影响水生生
+物健康和生长的关键环境因子之一。其浓度受多种因素影响，包括水体自净能力、微生物活
+动、水生生物呼吸作用以及外界环境（如温度、光照、风力等）的周期性变化。为了更好地
+理解和预测DO的动态变化趋势，建立一个能够反映其非线性行为的数学模型具有重要意义
+。该模型可用于模拟封闭或半封闭养殖系统中DO浓度随时间演变的过程，为水质调控和管
+理提供理论支持。
+
+建模公式：
+D{\cal O}{\mit\theta}(t)\,\longrightarrow\,{\cal O}\cdot e^{-b\cdot t}\,\sl+\,{\cal C}\cdot\mathrm{\boldmath~sin}\big({\cal O}\cdot\cal t\big)
+公式解释：
+基于非线性动力学的建模思路，构建如下表达式以描述溶解氧浓度随时间变化的规律：
+该模型融合了指数衰减项和周期性扰动项，分别反映溶解氧的自然消耗过程和环境因素引起
+的波动特性。其中：
+• $ a $ 表示初始溶解氧释放量，反映系统初始状态下的氧含量；
+• $ b $ 为溶解氧的衰减系数，刻画其随时间自然下降的速率；
+• $ c $
+表示环境扰动的振幅，体现外部周期性因素（如昼夜变化）对DO浓度的影响强度；
+• $ d $ 为环境扰动的频率，反映扰动周期的快慢。
+1
+通过该模型，可以对养殖系统中溶解氧的动态变化进行定量模拟与分析，为水质调控策略的
+制定提供依据。
+2
+
+MCP Tool 代码：
+```
+@mcp.tool
+def dissolved_oxygen(
+    a: Annotated[float, "初始溶解氧释放量"],
+    b: Annotated[float, "溶解氧的衰减系数"],
+    c: Annotated[float, "环境扰动的振幅"],
+    d: Annotated[float, "环境扰动的频率"],
+    t: Annotated[float, "时间"]
+):
+    """计算溶解氧浓度随时间的变化"""
+    from sympy import symbols, exp, sin
+
+    # 定义符号变量
+    A, B, C, D, T = symbols('A B C D T')
+
+    # 构建公式
+    DO = A * exp(-B * T) + C * sin(D * T)
+
+    # 代入参数值
+    result = DO.subs({A: a, B: b, C: c, D: d, T: t})
+
+    return result
+```

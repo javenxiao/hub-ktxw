@@ -1,0 +1,3640 @@
+[
+    {
+        "type": "text",
+        "text": "大语言模型在投研投顾中的",
+        "text_level": 1,
+        "bbox": [
+            36,
+            260,
+            851,
+            366
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "应用与难点",
+        "text_level": 1,
+        "bbox": [
+            36,
+            366,
+            376,
+            468
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "张庆 /算法工程师",
+        "bbox": [
+            33,
+            517,
+            359,
+            581
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "text",
+        "text": "DataFunSummit # 2024",
+        "bbox": [
+            36,
+            808,
+            375,
+            855
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            970,
+            855
+        ],
+        "page_idx": 0
+    },
+    {
+        "type": "list",
+        "sub_type": "text",
+        "list_items": [
+            "D 背景介绍",
+            "D 建设情况",
+            "D 应用难点",
+            "D 未来展望"
+        ],
+        "bbox": [
+            105,
+            294,
+            276,
+            690
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            961,
+            198
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 1
+    },
+    {
+        "type": "text",
+        "text": "01",
+        "text_level": 1,
+        "bbox": [
+            122,
+            255,
+            209,
+            351
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "背景介绍",
+        "text_level": 1,
+        "bbox": [
+            121,
+            406,
+            320,
+            478
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 2
+    },
+    {
+        "type": "text",
+        "text": "大语言模型现状",
+        "text_level": 1,
+        "bbox": [
+            67,
+            152,
+            466,
+            236
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "text",
+        "text": "国内外厂商大语言模型百花齐放。大语言模型犹如万事通一般，已然成为我们日常工作中不可或缺的智能助手。",
+        "bbox": [
+            62,
+            275,
+            895,
+            356
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "image",
+        "img_path": "images/4e37501d397eb4d007aa083f8ced392d37a94f0ea131465489a48e680a50f2f0.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            52,
+            356,
+            477,
+            690
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "image",
+        "img_path": "images/ef050aa8b00a63d394e2beb39c4760800c6a773f8f9c684a4dbaafb6c4f37886.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            52,
+            722,
+            931,
+            801
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 3
+    },
+    {
+        "type": "text",
+        "text": "投顾",
+        "text_level": 1,
+        "bbox": [
+            67,
+            154,
+            182,
+            235
+        ],
+        "page_idx": 4
+    },
+    {
+        "type": "text",
+        "text": "智能投顾的运营流程包括客户画像、投资组合配置推荐、交易执行、投资组合再平衡和投资组合分析等步骤，主要是投资和顾问两方面。",
+        "bbox": [
+            62,
+            278,
+            914,
+            359
+        ],
+        "page_idx": 4
+    },
+    {
+        "type": "text",
+        "text": "在智能投顾中“投”（即投资）的方面，通过人工智能和机器学习技术，可以提高市场分析的准确性和投资决策的效率。",
+        "bbox": [
+            62,
+            435,
+            901,
+            541
+        ],
+        "page_idx": 4
+    },
+    {
+        "type": "text",
+        "text": "在智能投顾中“顾”（即顾问）的部分，即个性化服务和客户互动，如个性化咨询服务，提升用户的参与感和满意度。",
+        "bbox": [
+            62,
+            615,
+            901,
+            722
+        ],
+        "page_idx": 4
+    },
+    {
+        "type": "header",
+        "text": "东方证券ORIENT SECURITIES ",
+        "bbox": [
+            821,
+            144,
+            961,
+            201
+        ],
+        "page_idx": 4
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 4
+    },
+    {
+        "type": "text",
+        "text": "投研",
+        "text_level": 1,
+        "bbox": [
+            67,
+            154,
+            182,
+            235
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "text",
+        "text": "投研，全称为投资研究，是指对投资项目进行深入研究和分析的过程，投研工作主要包括对投资项目的基本面、技术面、市场环境等多方面进行全面评估，为投资决策提供依据，投研工作通常在证券公司、基金公司、投资银行等金融机构的投资部门进行。",
+        "bbox": [
+            62,
+            278,
+            914,
+            413
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "text",
+        "text": "信息收集：从各种渠道收集与投资相关的信息，包括宏观经济数据、行业报告、公司公告等。",
+        "bbox": [
+            74,
+            485,
+            844,
+            527
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "text",
+        "text": "信息筛选：对收集到的信息进行筛选，挑选出对投资决策有价值的信息。",
+        "bbox": [
+            74,
+            549,
+            676,
+            591
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "text",
+        "text": "信息分析：对筛选出的信息进行深入分析，包括基本面分析、技术面分析和市场环境分析等。",
+        "bbox": [
+            74,
+            616,
+            844,
+            658
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "text",
+        "text": "投资建议：根据分析结果，为投资决策提供建议，包括买入、卖出或持有等。",
+        "bbox": [
+            74,
+            678,
+            712,
+            719
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "text",
+        "text": "跟踪调整：对已投资的项目进行持续跟踪，根据市场变化及时调整投资策略。",
+        "bbox": [
+            74,
+            742,
+            712,
+            779
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "header",
+        "text": "东方证券ORIENT SECURITIES ",
+        "bbox": [
+            821,
+            144,
+            961,
+            201
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            970,
+            858
+        ],
+        "page_idx": 5
+    },
+    {
+        "type": "text",
+        "text": "投研投顾应用案例",
+        "text_level": 1,
+        "bbox": [
+            67,
+            152,
+            520,
+            238
+        ],
+        "page_idx": 6
+    },
+    {
+        "type": "text",
+        "text": "自2008年至2017年市场上的研报由4.4万份攀升至25.8万份,其中2014年至2017年此4年研报数量均超过20万份,涨幅达4.9倍。",
+        "bbox": [
+            51,
+            307,
+            895,
+            391
+        ],
+        "page_idx": 6
+    },
+    {
+        "type": "text",
+        "text": "每日研报数量约为700多份",
+        "text_level": 1,
+        "bbox": [
+            271,
+            445,
+            650,
+            504
+        ],
+        "page_idx": 6
+    },
+    {
+        "type": "text",
+        "text": "“摩根士丹利财富管理部门（MSWM）正应用GPT4以调动其面向客户的知识库，其内部维护着一个包含数十万页涵盖投资策略、市场研究和评论以及分析师见解的知识库。GPT模型将驱动一个面向内部的聊天机器人，帮助投资顾问实现对财富管理内容的全面搜索，从而高效地解锁MSWM积累的丰富知识。”",
+        "bbox": [
+            62,
+            576,
+            899,
+            757
+        ],
+        "page_idx": 6
+    },
+    {
+        "type": "header",
+        "text": "东方证券ORIENT SECURITIES ",
+        "bbox": [
+            821,
+            144,
+            961,
+            201
+        ],
+        "page_idx": 6
+    },
+    {
+        "type": "footer",
+        "text": "Ref: https://www.sohu.com/a/232667865_114986",
+        "bbox": [
+            53,
+            815,
+            463,
+            845
+        ],
+        "page_idx": 6
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            858
+        ],
+        "page_idx": 6
+    },
+    {
+        "type": "text",
+        "text": "投研投顾应用案例",
+        "text_level": 1,
+        "bbox": [
+            67,
+            152,
+            520,
+            235
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "text",
+        "text": "自2008年至2017年市场上的研报由4.4万份攀升至25.8万份,其中2014年至2017年此4年研报数量均超过20万份,涨幅达4.9倍。",
+        "bbox": [
+            51,
+            278,
+            895,
+            359
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "image",
+        "img_path": "images/15ecdb3a91ca323879266630b0534842a266aead020a662ea299fa879a17387b.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            299,
+            426,
+            381,
+            541
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "text",
+        "text": "+",
+        "bbox": [
+            463,
+            465,
+            486,
+            497
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "image",
+        "img_path": "images/bed32ef5fed147f745ef52abe4a8cfd84e863039713370d81de2fc1e6bdea31b.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            589,
+            415,
+            676,
+            552
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "text",
+        "text": "“摩根士丹利财富管理部门（MSWM）正应用GPT4以调动其面向客户的知识库，其内部维护着一个包含数十万页涵盖投资策略、市场研究和评论以及分析师见解的知识库。GPT模型将驱动一个面向内部的聊天机器人，帮助投资顾问实现对财富管理内容的全面搜索，从而高效地解锁MSWM积累的丰富知识。”",
+        "bbox": [
+            62,
+            616,
+            899,
+            796
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            961,
+            198
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "footer",
+        "text": "Ref: https://www.sohu.com/a/232667865_114986",
+        "bbox": [
+            53,
+            815,
+            463,
+            843
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 7
+    },
+    {
+        "type": "text",
+        "text": "02",
+        "text_level": 1,
+        "bbox": [
+            122,
+            255,
+            224,
+            351
+        ],
+        "page_idx": 8
+    },
+    {
+        "type": "text",
+        "text": "建设情况",
+        "text_level": 1,
+        "bbox": [
+            119,
+            406,
+            323,
+            478
+        ],
+        "page_idx": 8
+    },
+    {
+        "type": "header",
+        "text": "东方证券ORIENT SECURITIES ",
+        "bbox": [
+            821,
+            144,
+            961,
+            201
+        ],
+        "page_idx": 8
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 8
+    },
+    {
+        "type": "text",
+        "text": "RAG项目",
+        "text_level": 1,
+        "bbox": [
+            68,
+            157,
+            300,
+            238
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "text",
+        "text": "fastRAG",
+        "bbox": [
+            93,
+            337,
+            276,
+            394
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "image",
+        "img_path": "images/f559410a59f94f579d42b8deeda86cd63434b8ec3b3aa431d09cee0b03ad9cbb.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            653,
+            322,
+            712,
+            406
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "text",
+        "text": "Verba",
+        "bbox": [
+            722,
+            347,
+            783,
+            379
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "image",
+        "img_path": "images/9bd7602eb8016209b32bf076b145b53c3b16e73fe197d8e3fb8989051763c684.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            200,
+            576,
+            255,
+            673
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "text",
+        "text": "FastGPT",
+        "bbox": [
+            181,
+            731,
+            274,
+            766
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "text",
+        "text": "Anything",
+        "bbox": [
+            366,
+            502,
+            653,
+            586
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "image",
+        "img_path": "images/c7f5bb1a80445f08909fa81812c1f685b29a602337791d69297454bec518b860.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            659,
+            631,
+            718,
+            712
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "text",
+        "text": "RAGFlow",
+        "bbox": [
+            733,
+            653,
+            866,
+            692
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 9
+    },
+    {
+        "type": "image",
+        "img_path": "images/578da48dcd6cc35c311fb5636ea375c8336d74d21da3c5aac1791637543180e6.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            93,
+            176,
+            900,
+            818
+        ],
+        "page_idx": 10
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            179
+        ],
+        "page_idx": 10
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            151,
+            961,
+            181
+        ],
+        "page_idx": 10
+    },
+    {
+        "type": "header",
+        "text": "T SECURITIES",
+        "bbox": [
+            900,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 10
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 10
+    },
+    {
+        "type": "text",
+        "text": "法律法规快速确认合规合法",
+        "text_level": 1,
+        "bbox": [
+            77,
+            332,
+            198,
+            383
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "OA办公辅助提高日常工作效率",
+        "text_level": 1,
+        "bbox": [
+            201,
+            166,
+            353,
+            228
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/a9c8acb45e1e703fb0677554ff975dfea62ad081f4b49bf5c09f528f4064c123.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            233,
+            278,
+            323,
+            317
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "私募尽调制度与材料整合",
+        "text_level": 1,
+        "bbox": [
+            233,
+            371,
+            366,
+            433
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/3fadc2343f3246a8373946b580b3f8280824a00f0cb9f928bb9ef7be20c7671a.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            77,
+            487,
+            382,
+            732
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "券商研报问答了解标的与行业",
+        "text_level": 1,
+        "bbox": [
+            159,
+            751,
+            333,
+            813
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/6b1c8049e02f16d64ef95f15ad42af9b25884fd4c47546e12603762cee7edfbe.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            357,
+            152,
+            657,
+            359
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/bd8b264d31b4cfcd982d91f1d7419dcdd42ae6cd1ce62e689e3760684ed2f37b.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            447,
+            396,
+            553,
+            591
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "固收信评咨询企业信用状况",
+        "text_level": 1,
+        "bbox": [
+            428,
+            631,
+            581,
+            692
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/6bde7d91f5edc634faa36d7b659dab293b3d6aa6f790bfeff522b24d249d29d3.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            390,
+            707,
+            500,
+            754
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "内部纪要整合与分享",
+        "text_level": 1,
+        "bbox": [
+            521,
+            776,
+            597,
+            826
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "风火轮资讯",
+        "text_level": 1,
+        "bbox": [
+            749,
+            250,
+            872,
+            280
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "了解热点企业事件",
+        "text_level": 1,
+        "bbox": [
+            749,
+            282,
+            901,
+            312
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "两融政策快速了解政策",
+        "text_level": 1,
+        "bbox": [
+            790,
+            408,
+            881,
+            458
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/a39d85e4edf86daecdee066e61f4bcf2255d4832b8e0a72d6084cc579855e382.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            686,
+            334,
+            757,
+            386
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "text",
+        "text": "期货研报辅助客户了解期货",
+        "text_level": 1,
+        "bbox": [
+            686,
+            507,
+            839,
+            571
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/9124b171434904c3036adcffa2e736f33cc232badee7222ae1529b51dc0bbf86.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            602,
+            574,
+            885,
+            800
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/b07848c9c30bf342dcff32fcc6567d5ad5b72df71c723e55bc1a198d58122965.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            894,
+            482,
+            967,
+            512
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/eec89917a04513a7c171e21fa9f75c0070a39908fa9925bc70f36436da977660.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            885,
+            685,
+            966,
+            724
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            862,
+            201
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            151,
+            961,
+            181
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            870,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            853
+        ],
+        "page_idx": 11
+    },
+    {
+        "type": "image",
+        "img_path": "images/8ebe2cb283f26056eed13c0345cd1343d05596b3713935574f98277431fb7ce6.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            0,
+            282,
+            606,
+            818
+        ],
+        "page_idx": 12
+    },
+    {
+        "type": "list",
+        "sub_type": "text",
+        "list_items": [
+            "研报撰写辅助",
+            "文档审核",
+            "9 风控舆情日报"
+        ],
+        "bbox": [
+            619,
+            297,
+            836,
+            702
+        ],
+        "page_idx": 12
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 12
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 12
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 12
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 12
+    },
+    {
+        "type": "text",
+        "text": "03",
+        "text_level": 1,
+        "bbox": [
+            122,
+            255,
+            224,
+            351
+        ],
+        "page_idx": 13
+    },
+    {
+        "type": "text",
+        "text": "应用难点",
+        "text_level": 1,
+        "bbox": [
+            121,
+            405,
+            321,
+            478
+        ],
+        "page_idx": 13
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 13
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 13
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 13
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 13
+    },
+    {
+        "type": "text",
+        "text": "大语言模型缺点",
+        "text_level": 1,
+        "bbox": [
+            68,
+            152,
+            463,
+            235
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "image",
+        "img_path": "images/44332f0ce2f9d44542bc87972fa607e23abe8251c9d1ba84fd264dbbecc62a6b.jpg",
+        "image_caption": [
+            "幻觉(Hallucination)"
+        ],
+        "image_footnote": [],
+        "bbox": [
+            60,
+            334,
+            245,
+            739
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "text",
+        "text": "女生多少岁结婚合适",
+        "text_level": 1,
+        "bbox": [
+            374,
+            314,
+            473,
+            334
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "image",
+        "img_path": "images/57575ca686b5e0afe1b2fefa14c503e6164b3c110d98d60708f4e4d96f802f40.jpg",
+        "image_caption": [
+            "输出有害内容"
+        ],
+        "image_footnote": [],
+        "bbox": [
+            292,
+            341,
+            555,
+            739
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "image",
+        "img_path": "images/2eac26dee76f70725ef52c0f83aabb47380726287af2321d7202207c6c99cf71.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            618,
+            280,
+            636,
+            304
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "text",
+        "text": "请告诉我今天的新闻热点事件",
+        "text_level": 1,
+        "bbox": [
+            641,
+            282,
+            736,
+            297
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "image",
+        "img_path": "images/e624f7dcafe2a532a5699781c715d879f8b10afdb99d68068808c41b50f51808.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            612,
+            324,
+            891,
+            413
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "text",
+        "text": "数据时效性",
+        "text_level": 1,
+        "bbox": [
+            705,
+            426,
+            802,
+            458
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "image",
+        "img_path": "images/e834bd8c480569475ba0ed2b8de2be953a257bfb0e1dd705e671c1dcb852c1ef.jpg",
+        "image_caption": [
+            "缺乏控制、逻辑推理弱"
+        ],
+        "image_footnote": [],
+        "bbox": [
+            606,
+            475,
+            891,
+            736
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            151,
+            961,
+            181
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            853
+        ],
+        "page_idx": 14
+    },
+    {
+        "type": "text",
+        "text": "大语言模型缺点",
+        "text_level": 1,
+        "bbox": [
+            67,
+            152,
+            466,
+            236
+        ],
+        "page_idx": 15
+    },
+    {
+        "type": "image",
+        "img_path": "images/8b2b4667c6857b6f04db67cd0c22519198f00bdd94ab4d925fa7384681296cc0.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            181,
+            252,
+            824,
+            808
+        ],
+        "page_idx": 15
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 15
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 15
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 15
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 15
+    },
+    {
+        "type": "text",
+        "text": "应用难点-检索增强",
+        "text_level": 1,
+        "bbox": [
+            67,
+            152,
+            549,
+            236
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "text",
+        "text": "检索结果",
+        "text_level": 1,
+        "bbox": [
+            148,
+            273,
+            252,
+            315
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "text",
+        "text": "贵州茅台向“新商务”要增长点",
+        "bbox": [
+            138,
+            337,
+            407,
+            371
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "text",
+        "text": "北京商报 2024-07-28",
+        "bbox": [
+            138,
+            373,
+            315,
+            400
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "text",
+        "text": "在近日推出多项新政后，飞天茅台终端市场成交价格逐渐趋稳。7月28日，北京商报记者走访北京部分终端市场发现，目前53度500ml飞天茅台终端成交价约2600—2800元/瓶。据今日酒价数据，7月28日飞天茅台散瓶批价约为2375元/瓶。",
+        "bbox": [
+            137,
+            410,
+            861,
+            551
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "text",
+        "text": "用户问题",
+        "text_level": 1,
+        "bbox": [
+            148,
+            625,
+            252,
+            665
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "text",
+        "text": "参考以上材料回答“飞天茅台终端成交价是多少？”",
+        "bbox": [
+            149,
+            685,
+            624,
+            724
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            961,
+            198
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 16
+    },
+    {
+        "type": "text",
+        "text": "应用难点-检索增强在线服务",
+        "text_level": 1,
+        "bbox": [
+            68,
+            151,
+            776,
+            238
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "Google搜索",
+        "bbox": [
+            76,
+            299,
+            165,
+            327
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "Google搜索的工作方式",
+        "bbox": [
+            195,
+            304,
+            307,
+            322
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "我们的使命",
+        "bbox": [
+            328,
+            304,
+            381,
+            322
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "概览",
+        "bbox": [
+            197,
+            357,
+            220,
+            376
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "抓取和编入索引",
+        "bbox": [
+            242,
+            357,
+            315,
+            374
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "搜索算法",
+        "bbox": [
+            338,
+            357,
+            381,
+            374
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "实用回复",
+        "bbox": [
+            403,
+            357,
+            447,
+            374
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "索引生成",
+        "text_level": 1,
+        "bbox": [
+            226,
+            460,
+            299,
+            490
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "倒排索引",
+        "bbox": [
+            106,
+            561,
+            176,
+            591
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "正向索引",
+        "bbox": [
+            231,
+            561,
+            302,
+            591
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "向量索引",
+        "bbox": [
+            355,
+            561,
+            425,
+            591
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "image",
+        "img_path": "images/5a09da74ce7bee5f50e26186a65da60da5dc91a0dcd82f4499d9bfbb163e1052.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            252,
+            712,
+            290,
+            769
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "elasticsearch",
+        "bbox": [
+            206,
+            774,
+            340,
+            805
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "应用服务",
+        "bbox": [
+            542,
+            336,
+            612,
+            364
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "问句改写",
+        "bbox": [
+            688,
+            336,
+            760,
+            364
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "问句理解",
+        "bbox": [
+            818,
+            336,
+            889,
+            364
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "索引服务",
+        "bbox": [
+            688,
+            460,
+            760,
+            490
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "候选项选择 (召回)",
+        "bbox": [
+            555,
+            532,
+            643,
+            591
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "排序",
+        "bbox": [
+            705,
+            547,
+            743,
+            576
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "聚合",
+        "bbox": [
+            831,
+            547,
+            868,
+            576
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "image",
+        "img_path": "images/82543493dff095de0888682366cc94334fbcd1f6f0c58e2ee1580978bc4d6c8b.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            568,
+            724,
+            625,
+            801
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "RocketQA",
+        "bbox": [
+            625,
+            727,
+            883,
+            808
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            824,
+            144,
+            843,
+            174
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            846,
+            147,
+            894,
+            168
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            846,
+            168,
+            894,
+            174
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            821,
+            969,
+            855
+        ],
+        "page_idx": 17
+    },
+    {
+        "type": "text",
+        "text": "应用难点-检索增强在线服务",
+        "text_level": 1,
+        "bbox": [
+            67,
+            151,
+            776,
+            238
+        ],
+        "page_idx": 18
+    },
+    {
+        "type": "image",
+        "img_path": "images/e6e23b42f02e073164365cc6bfb94e17f0039d4c8a0f5962fd978af313312214.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            26,
+            278,
+            976,
+            712
+        ],
+        "page_idx": 18
+    },
+    {
+        "type": "text",
+        "text": "出于检索效率的考量，采用向量数据库。要平衡检索效率和整体搜索流程的复杂程度。",
+        "bbox": [
+            137,
+            763,
+            850,
+            796
+        ],
+        "page_idx": 18
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 18
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 18
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 18
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 18
+    },
+    {
+        "type": "text",
+        "text": "应用难点-检索增强在线服务",
+        "text_level": 1,
+        "bbox": [
+            68,
+            189,
+            776,
+            275
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Hosted inference API ③",
+        "bbox": [
+            72,
+            302,
+            205,
+            322
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Sentence Similarity",
+        "bbox": [
+            72,
+            339,
+            162,
+            357
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Examples",
+        "bbox": [
+            389,
+            341,
+            428,
+            357
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "image",
+        "img_path": "images/5e59a69c4d9a10b6d2307c39a789c1c47d0d6b4c49c99e1ea4a62343923ff10f.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            446,
+            341,
+            454,
+            354
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Source Sentence",
+        "bbox": [
+            71,
+            374,
+            138,
+            389
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "茅台在南京地区的销售情况",
+        "bbox": [
+            80,
+            406,
+            211,
+            426
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Sentences to compare to",
+        "bbox": [
+            71,
+            448,
+            169,
+            463
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "茅台在江浙沪地区的销售状况良好，同比有所上涨",
+        "bbox": [
+            79,
+            480,
+            317,
+            500
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "在南京茅台卖的很好，相比年初有较大提升",
+        "bbox": [
+            80,
+            524,
+            283,
+            544
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "五粮液在南京地区的销售情况非常理想",
+        "bbox": [
+            80,
+            571,
+            263,
+            589
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Add Sentence",
+        "bbox": [
+            236,
+            618,
+            300,
+            633
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Compute",
+        "bbox": [
+            83,
+            663,
+            125,
+            680
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "Computation time on Intel Xeon 3rd Gen Scabble cpu; cached",
+        "bbox": [
+            71,
+            697,
+            279,
+            712
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "茅台在江浙沪地区的销售状况良好，同比有所上涨",
+        "bbox": [
+            72,
+            734,
+            249,
+            749
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "0.639",
+        "bbox": [
+            439,
+            727,
+            465,
+            739
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "在南京茅台卖的很好，相比年初有较大提升",
+        "bbox": [
+            72,
+            771,
+            225,
+            786
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "0.680",
+        "bbox": [
+            439,
+            764,
+            465,
+            774
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "五粮液在南京地区的销售情况非常理想",
+        "bbox": [
+            72,
+            806,
+            209,
+            821
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "0.644",
+        "bbox": [
+            439,
+            800,
+            465,
+            811
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "语义向量计算的结果存在相似度较高，当候选片段量变大时通过上述逻辑的检索效果会明显下降。",
+        "bbox": [
+            526,
+            307,
+            931,
+            379
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "此外，候选片段的内容也对搜索结果会有极大的影响。",
+        "bbox": [
+            526,
+            436,
+            923,
+            463
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "候选片段:",
+        "bbox": [
+            526,
+            522,
+            604,
+            549
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "从今年年初，五粮液和茅台在南京地区销售情况良好，均有所上涨，随着疫情的改善认为两者的销售情况会进一步的增长。",
+        "bbox": [
+            526,
+            564,
+            931,
+            677
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "问1：五粮液的销售情况如何？",
+        "bbox": [
+            526,
+            734,
+            751,
+            761
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "问2：茅台的销售情况如何？",
+        "bbox": [
+            526,
+            776,
+            739,
+            803
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "问3：五粮液和茅台的销售情况如何？",
+        "bbox": [
+            526,
+            818,
+            802,
+            847
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            151,
+            961,
+            181
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "footer",
+        "text": "#",
+        "bbox": [
+            868,
+            818,
+            899,
+            853
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "footer",
+        "text": "ataFun.",
+        "bbox": [
+            899,
+            828,
+            967,
+            853
+        ],
+        "page_idx": 19
+    },
+    {
+        "type": "text",
+        "text": "应用难点-检索增强离线服务",
+        "text_level": 1,
+        "bbox": [
+            68,
+            151,
+            776,
+            236
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "image",
+        "img_path": "images/1f47a9d05cdc674b3f1c3b70bd8eae85a33144caf6f690348e712cb53a85fe67.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            128,
+            280,
+            153,
+            315
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "蜗牛队长",
+        "bbox": [
+            157,
+            287,
+            185,
+            297
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "发布于2020-04-0123:21来自雪球",
+        "bbox": [
+            156,
+            302,
+            260,
+            314
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "pdf解析果然是个坑，pdfplumber基本上用不了。它的解析条件太苛刻了。除了线条完美包裹的表格，其他的都不行。自己写了一个，遇到太多问题了。1. 字体兼容问题，2. 一个页面多个表格问题。3，页面左右分割，然后文本和表格混排，左右页面居然都有表格。4. 竖排文字5. 文字折叠……这玩意儿没法写得好看了，感觉写了一坨屎。。。",
+        "bbox": [
+            125,
+            336,
+            431,
+            408
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "以固定文本大小的解析，容易出现如下情况：",
+        "bbox": [
+            65,
+            458,
+            393,
+            485
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "Chunk 1:",
+        "bbox": [
+            65,
+            544,
+            143,
+            569
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "……从今年年初，五粮液和茅台在南京地区销售情况良好，均有",
+        "bbox": [
+            65,
+            584,
+            485,
+            655
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "Chunk 2:",
+        "bbox": [
+            65,
+            714,
+            140,
+            739
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "所上涨，随着疫情的改善认为两者的销售情况会进一步的增长。……",
+        "bbox": [
+            65,
+            754,
+            485,
+            825
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "+关注",
+        "bbox": [
+            402,
+            287,
+            428,
+            302
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "image",
+        "img_path": "images/9486c3c4a435e3a1b81eead1b939e73cf0c3102ee10410bb9dafa740b5a84a29.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            540,
+            292,
+            885,
+            507
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "image",
+        "img_path": "images/d4b16fa3e5aaf378c45a9f189b4a9b69ddfa8ffa2b4d23642db2aaf04a6c27ce.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            540,
+            515,
+            874,
+            810
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            151,
+            961,
+            181
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "footer",
+        "text": "Paper with Complex Layouts",
+        "bbox": [
+            629,
+            828,
+            801,
+            853
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            868,
+            818,
+            969,
+            853
+        ],
+        "page_idx": 20
+    },
+    {
+        "type": "text",
+        "text": "应用难点-数据质量保障",
+        "text_level": 1,
+        "bbox": [
+            67,
+            152,
+            665,
+            240
+        ],
+        "page_idx": 21
+    },
+    {
+        "type": "text",
+        "text": "为贯彻实施新修订的《中华人民共和国行政处罚法》，推进严格规范公正文明执法，优化法治化营商环境，并落实修改后的《中华人民共和国人口与计划生育法》等法律，国务院对涉及的行政法规进行了清理。经过清理，国务院决定：",
+        "bbox": [
+            130,
+            260,
+            840,
+            383
+        ],
+        "page_idx": 21
+    },
+    {
+        "type": "list",
+        "sub_type": "text",
+        "list_items": [
+            "一、对14部行政法规的部分条款予以修改。",
+            "二、废止《产品质量监督试行办法》(1985年3月7日国务院批准 1985年3月15日国家标准局发布 根据2011年1月8日《国务院关于废止和修改部分行政法规的决定》修订)。"
+        ],
+        "bbox": [
+            130,
+            415,
+            840,
+            603
+        ],
+        "page_idx": 21
+    },
+    {
+        "type": "text",
+        "text": "本决定自公布之日起施行。",
+        "bbox": [
+            131,
+            638,
+            362,
+            670
+        ],
+        "page_idx": 21
+    },
+    {
+        "type": "text",
+        "text": "一般而言，当法律法规被修改后，新的规定会取代旧的规定，成为有效的法律依据。在修改后的法律法规实施之前，原有的法律法规仍然是有效的，并且对于已经依据原法律法规进行的行为，其法律效力通常不会受到后续修改的影响。",
+        "bbox": [
+            80,
+            704,
+            899,
+            801
+        ],
+        "page_idx": 21
+    },
+    {
+        "type": "header",
+        "text": "东方证券ORIENT SECURITIES ",
+        "bbox": [
+            821,
+            144,
+            963,
+            201
+        ],
+        "page_idx": 21
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 21
+    },
+    {
+        "type": "text",
+        "text": "离线解析",
+        "bbox": [
+            176,
+            354,
+            245,
+            383
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "语义提取",
+        "bbox": [
+            178,
+            416,
+            245,
+            445
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "检索方式",
+        "bbox": [
+            178,
+            478,
+            245,
+            507
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "金融标签",
+        "bbox": [
+            178,
+            541,
+            245,
+            568
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "资源耗费",
+        "bbox": [
+            178,
+            603,
+            245,
+            631
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "灵活性",
+        "bbox": [
+            178,
+            665,
+            230,
+            692
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "image",
+        "img_path": "images/8049d4964e3bb095305657cdbb0eb63ae313adb72691043caf7ef67c7d3ec4eb.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            403,
+            290,
+            429,
+            327
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "自研问答",
+        "text_level": 1,
+        "bbox": [
+            435,
+            292,
+            503,
+            319
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "通过版面分析模型，按文章语义自然段落分割",
+        "bbox": [
+            376,
+            341,
+            561,
+            398
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "更贴合实际的非对称语义",
+        "bbox": [
+            377,
+            416,
+            561,
+            445
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "结合语义、关键词与时间",
+        "bbox": [
+            377,
+            478,
+            561,
+            507
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "检索时，按金融实体、标的进行检索筛选，杜绝无关信息",
+        "bbox": [
+            359,
+            527,
+            577,
+            583
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "轻量化实现资源消耗小",
+        "bbox": [
+            426,
+            589,
+            511,
+            643
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "相关设置可通过配置更改",
+        "bbox": [
+            376,
+            665,
+            561,
+            692
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "image",
+        "img_path": "images/9ddff0d594473276a75ae2d2202f12679fc2994f7e988f43365fd0e7152348f3.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            665,
+            289,
+            692,
+            327
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "开源实现",
+        "text_level": 1,
+        "bbox": [
+            705,
+            292,
+            774,
+            319
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "提取文本，按字数进行切分",
+        "bbox": [
+            669,
+            341,
+            788,
+            396
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "用户问题与文本片段处理相同",
+        "bbox": [
+            621,
+            416,
+            837,
+            445
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "只通过语义搜索",
+        "bbox": [
+            669,
+            478,
+            789,
+            507
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "未对金融场景优化",
+        "bbox": [
+            662,
+            541,
+            796,
+            569
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "对资源的消耗大，需要较高的配置",
+        "bbox": [
+            605,
+            603,
+            853,
+            631
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "配置难以修改",
+        "bbox": [
+            678,
+            665,
+            781,
+            692
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            870,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            868,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 22
+    },
+    {
+        "type": "text",
+        "text": "04",
+        "text_level": 1,
+        "bbox": [
+            122,
+            255,
+            224,
+            351
+        ],
+        "page_idx": 23
+    },
+    {
+        "type": "text",
+        "text": "未来展望",
+        "text_level": 1,
+        "bbox": [
+            121,
+            406,
+            321,
+            478
+        ],
+        "page_idx": 23
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 23
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            869,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 23
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 23
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 23
+    },
+    {
+        "type": "text",
+        "text": "GraphRAG",
+        "text_level": 1,
+        "bbox": [
+            68,
+            157,
+            359,
+            245
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "text",
+        "text": "GraphRAG vs Baseline RAG",
+        "text_level": 1,
+        "bbox": [
+            111,
+            300,
+            440,
+            339
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "text",
+        "text": "Retrieval-Augmented Generation (RAG) is a technique to improve LLM outputs using real-world information. This technique is an important part of most LLM-based tools and the majority of RAG approaches use vector similarity as the search technique, which we call Baseline RAG. GraphRAG uses knowledge graphs to provide substantial improvements in question-and-answer performance when reasoning about complex information. RAG techniques have shown promise in helping LLMs to reason about private datasets - data that the LLM is not trained on and has never seen before, such as an enterprise's proprietary research, business documents, or communications. Baseline RAG was created to help solve this problem, but we observe situations where baseline RAG performs very poorly. For example:",
+        "bbox": [
+            110,
+            357,
+            887,
+            610
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "list",
+        "sub_type": "text",
+        "list_items": [
+            "- Baseline RAG struggles to connect the dots. This happens when answering a question requires traversing disparate pieces of information through their shared attributes in order to provide new synthesized insights.",
+            "- Baseline RAG performs poorly when being asked to holistically understand summarized semantic concepts over large data collections or even singular large documents."
+        ],
+        "bbox": [
+            123,
+            626,
+            887,
+            747
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            961,
+            198
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 24
+    },
+    {
+        "type": "text",
+        "text": "GraphRAG",
+        "text_level": 1,
+        "bbox": [
+            68,
+            157,
+            359,
+            245
+        ],
+        "page_idx": 25
+    },
+    {
+        "type": "text",
+        "text": "Query: \"What is Novorossiya?\"",
+        "bbox": [
+            200,
+            265,
+            371,
+            292
+        ],
+        "page_idx": 25
+    },
+    {
+        "type": "table",
+        "img_path": "images/4b4df8541ed3ff0a028f20b0d98988983aea2ddebcc2e0c88fea3d393341bdc7.jpg",
+        "table_caption": [],
+        "table_footnote": [],
+        "table_body": "<table><tr><td>Baseline RAG</td><td>GraphRAG</td></tr><tr><td>The term “Novorossiya” is not mentioned in the provided context. However, to provide some information, Novorossiya, or New Russia, is a historical term referring to a region in the south of Ukraine that was conquered by the Russian Empire in the 18th century. In recent years, the term has been revived by Russian-backed separatists in Eastern Ukraine to refer to the territories they claim, but it is not officially recognized as a separate entity by international bodies.</td><td>Novorossiya, also known as New Russia, is a term with historical and contemporary significance. Historically, it referred to a region in the southern part of the Russian Empire that is now part of Ukraine. In the contemporary context, it has been used by pro-Russian separatists to refer to certain areas of Ukraine [Data: Entities (6494, 912, 6493)]. \nThe term Novorossiya has been used in the context of a political movement in Ukraine, particularly by Russian nationalists. This movement has been associated with efforts to destabilize Ukraine and create a so-called “Novorossiya” [Data: Entities (912); Relationships (15211, 15206)]. The term has also been used to denote a separatist state in Ukraine, known as the Federal Republic of Novorossiya (FRN) [Data: Entities (7690)].</td></tr></table>",
+        "bbox": [
+            200,
+            329,
+            796,
+            764
+        ],
+        "page_idx": 25
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 25
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 25
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            198
+        ],
+        "page_idx": 25
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            970,
+            858
+        ],
+        "page_idx": 25
+    },
+    {
+        "type": "text",
+        "text": "MindSearch - 思·索",
+        "text_level": 1,
+        "bbox": [
+            68,
+            152,
+            629,
+            235
+        ],
+        "page_idx": 26
+    },
+    {
+        "type": "image",
+        "img_path": "images/4c732284cdb8796e7ab20d6d20dd8609d19b68e1d531bb476ffde96f1999e240.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            178,
+            268,
+            824,
+            818
+        ],
+        "page_idx": 26
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 26
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 26
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 26
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            970,
+            855
+        ],
+        "page_idx": 26
+    },
+    {
+        "type": "text",
+        "text": "Memo No. 10",
+        "text_level": 1,
+        "bbox": [
+            68,
+            159,
+            245,
+            231
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "text",
+        "text": "The Memory Layer for Personalized AI",
+        "text_level": 1,
+        "bbox": [
+            300,
+            383,
+            699,
+            534
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "image",
+        "img_path": "images/f2795fb2c54f76cfac2e69e2df845bd01cde7d791c9713a71c86325ddd5a594f.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            833,
+            521,
+            881,
+            586
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "text",
+        "text": "Personalized Learning Assistants",
+        "bbox": [
+            80,
+            741,
+            383,
+            774
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "text",
+        "text": "Virtual Companions",
+        "bbox": [
+            437,
+            741,
+            618,
+            774
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "text",
+        "text": "Customer Support AI Agents",
+        "bbox": [
+            667,
+            741,
+            929,
+            774
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            961,
+            198
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 27
+    },
+    {
+        "type": "text",
+        "text": "HippoRAG",
+        "text_level": 1,
+        "bbox": [
+            68,
+            157,
+            350,
+            245
+        ],
+        "page_idx": 28
+    },
+    {
+        "type": "image",
+        "img_path": "images/183d895396b3d58084fa2e77e167ff55667a84753301d723b4ae16f011559ec5.jpg",
+        "image_caption": [],
+        "image_footnote": [],
+        "bbox": [
+            122,
+            278,
+            861,
+            801
+        ],
+        "page_idx": 28
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 28
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 28
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 28
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 28
+    },
+    {
+        "type": "text",
+        "text": "THANKS",
+        "text_level": 1,
+        "bbox": [
+            197,
+            376,
+            796,
+            549
+        ],
+        "page_idx": 29
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 29
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 29
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 29
+    },
+    {
+        "type": "footer",
+        "text": "DataFunSummit # 2024",
+        "bbox": [
+            36,
+            808,
+            375,
+            855
+        ],
+        "page_idx": 29
+    },
+    {
+        "type": "footer",
+        "text": "DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 29
+    },
+    {
+        "type": "header",
+        "text": "#",
+        "bbox": [
+            821,
+            144,
+            863,
+            201
+        ],
+        "page_idx": 30
+    },
+    {
+        "type": "header",
+        "text": "东方证券",
+        "bbox": [
+            868,
+            149,
+            961,
+            181
+        ],
+        "page_idx": 30
+    },
+    {
+        "type": "header",
+        "text": "ORIENT SECURITIES",
+        "bbox": [
+            869,
+            184,
+            960,
+            196
+        ],
+        "page_idx": 30
+    },
+    {
+        "type": "footer",
+        "text": ":DataFun.",
+        "bbox": [
+            866,
+            818,
+            969,
+            855
+        ],
+        "page_idx": 30
+    }
+]

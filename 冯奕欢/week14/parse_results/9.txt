@@ -1,0 +1,50 @@
+建模背景：
+在水产养殖中，鱼类的平均日增重（ADG, Average Daily Gain）
+是衡量养殖效益和生长性能的重要指标。为了科学地预测和优化鱼类生长情况，建立一个基
+于关键环境与管理因子的预测模型具有重要意义。该模型综合考虑了水温、溶解氧、pH值
+、饲料投喂率以及养殖密度五个对鱼类生长具有显著影响的因素，旨在为养殖决策提供数据
+支持与理论依据。
+模型构建过程中，假设各因子在合理范围内对鱼类生长存在线性影响关系。其中，水温、溶
+解氧、pH值和投喂率被认为对鱼类生长具有正向促进作用，而养殖密度则因可能引发竞争
+压力和环境恶化而对生长产生抑制作用。
+
+建模公式：
+A D G=0.5\cdot t e m p+0.8\cdot d o+0.3\cdot p h+1.2\cdot f e e d_{-}r a t e-0.4\cdot s t o c k_{-}d e n s i t y
+公式解释：
+基于上述分析，建立如下线性回归形式的预测模型：
+其中：
+• $ ADG $：平均日增重（单位：克/天）
+• $ temp $：水温（单位：℃）
+• $ do $：溶解氧浓度（单位：mg/L）
+• $ ph $：水体pH值
+1
+• $ feed_rate $：饲料投喂率（单位：%鱼体重）
+• $ stock_density $：养殖密度（单位：kg/m³）
+该模型可用于模拟不同养殖条件下鱼类的日增重表现，为进一步优化养殖管理策略提供参考
+依据。
+2
+
+MCP Tool 代码：
+```
+@mcp.tool
+def calculate_adg(
+    temp: Annotated[float, "水温（单位：℃）"],
+    do: Annotated[float, "溶解氧浓度（单位：mg/L）"],
+    ph: Annotated[float, "水体pH值"],
+    feed_rate: Annotated[float, "饲料投喂率（单位：%鱼体重）"],
+    stock_density: Annotated[float, "养殖密度（单位：kg/m³）"]
+):
+    """计算鱼类的平均日增重（ADG, Average Daily Gain）"""
+    import sympy as sp
+
+    # 定义符号变量
+    t, d, p, f, s = sp.symbols('t d p f s')
+
+    # 构建公式
+    adg_formula = 0.5 * t + 0.8 * d + 0.3 * p + 1.2 * f - 0.4 * s
+
+    # 替换参数
+    adg_value = adg_formula.subs({t: temp, d: do, p: ph, f: feed_rate, s: stock_density})
+
+    return float(adg_value)
+```

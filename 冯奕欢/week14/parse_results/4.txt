@@ -1,0 +1,43 @@
+建模背景：
+在畜牧业管理中，理解与预测牛群数量的动态变化具有重要意义。为了反映种群在有限资源
+环境下的增长特性，采用逻辑斯蒂增长模型的思想，构建一个一阶非线性差分方程模型。该
+模型不仅考虑了牛群的自然增长率，还引入了环境承载能力的限制因素，从而更真实地反映
+实际种群增长过程。该模型适用于对中长期牛群数量趋势进行预测，辅助制定合理的养殖策
+略与资源分配方案。
+
+建模公式：
+{\cal M}_{t+1}\stackrel{\leftarrow}{\longrightarrow}\mathcal{N}_{t}\stackrel{\rightarrow}{\rightarrow}\mathcal{N}_{t}\stackrel{\leftarrow}{\rightarrow}\stackrel{\mathcal{N}_{t}}{\rightarrow}\stackrel{\textstyle\rightarrow}{\theta}_{\mu}\stackrel{\rightarrow}{\rightarrow}\frac{\Lambda}{K}\stackrel{\sim}{\rightarrow}\frac{\Lambda}{K}\Big)
+公式解释：
+牛群数量随时间演化的差分方程为：
+其中，$ N_t $ 表示第$ t $ 年的牛群数量，$ r $
+为年增长率，$ K $ 为环境承载能力。该模型通过迭代方式逐年更新种群数量，体现
+了种群在资源约束下的非线性增长行为。
+1
+
+MCP Tool 代码：
+```
+@mcp.tool
+def logistic_growth_model(
+    N_t: Annotated[float, "第t年的牛群数量"],
+    r: Annotated[float, "年增长率"],
+    K: Annotated[float, "环境承载能力"],
+    t: Annotated[int, "预测的年数"]
+):
+    """根据逻辑斯蒂增长模型预测未来t年的牛群数量"""
+    from sympy import symbols, Eq, solve
+
+    # 定义符号变量
+    N, R, K_sym, T = symbols('N R K_sym T')
+
+    # 构建差分方程
+    equation = Eq(N, N_t + r * N_t * (1 - N_t / K))
+
+    # 初始化牛群数量
+    N_t_future = N_t
+
+    # 迭代计算未来t年的牛群数量
+    for _ in range(t):
+        N_t_future = equation.rhs.subs({N_t: N_t_future, r: r, K: K})
+
+    return N_t_future
+```

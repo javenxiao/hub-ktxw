@@ -1,0 +1,55 @@
+# es数据库 -> 存储、检索文档
+elasticsearch:
+  host: "localhost"  # ES 服务运行的主机地址（本地）
+  port: 9200         # ES 默认端口
+  scheme: "http"
+  username: ""
+  password: ""
+
+
+# 定义 RAG 系统中用到的三类模型：文本嵌入模型、重排序模型、大语言模型
+models:
+  # embedding_model与rerank_model都是基于bert结构
+  embedding_model:
+    # 文本特征提取的模型
+    bge-small-zh-v1.5:
+      hf_url: "https://huggingface.co/BAAI/bge-small-zh-v1.5"  # 文本提取特征的模型
+      local_url: "/Users/wangyingyue/materials/大模型学习资料——八斗/models/bge_models/BAAI/bge-small-zh-v1.5"
+      dims: 512  # 生成的向量维度
+
+  rerank_model:
+    # 对检索结果进行重排序的模型
+    bge-reranker-base:
+      hf_url: "https://huggingface.co/BAAI/bge-reranker-base"  # 对检索结果进行重排序的模型
+      local_url: "/Users/wangyingyue/materials/大模型学习资料——八斗/models/bge_models/BAAI/bge-reranker-base"
+
+  llm:
+    # 大语言模型
+    config:
+      temperature: 0.1
+      top_p: 1
+      max_tokens_to_sample: 1024  # 限制最大生成长度
+    base_model:
+      glm:
+        tokens: ""
+      qwen:
+        tokens: ""
+      gpt:
+        tokens: ""
+
+device: "mps"
+
+rag:
+  llm_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  llm_api_key: "sk-b8f16de2371547c397349552ecffce68"
+  llm_model: "qwen-plus"
+  embedding_model: "bge-small-zh-v1.5"
+  rerank_model: "bge-reranker-base"
+  md_path: "/Users/wangyingyue/materials/大模型学习资料——八斗/homework/week15/md/RAG应用开发手册/auto/RAG应用开发手册.md"
+  chunk_size: 256     # 文档分块大小
+  chunk_overlap: 50   # 重叠部分
+  chunk_candidate: 10   # 检索候选文档数量
+  use_embedding: true
+  use_rerank: true
+  use_rrf: true
+  port: 6006

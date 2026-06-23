@@ -1,0 +1,34 @@
+建模背景：
+在复杂系统分析中，常常需要构建能够反映变量间非线性交互作用的数学模型。该模型旨在
+模拟两个输入变量x 和y 对某一目标输出的综合影响，其中包含了周期性
+变化与线性交互的成分。该建模方法适用于描述如环境因素对系统响应的影响、多因子耦合
+作用下的信号响应机制等场景。尽管模型本身为确定性函数，但其结构设计使得输出呈现出
+类随机波动的特性，从而更好地模拟真实世界中的复杂行为。
+
+建模公式：
+\operatorname{tun}(x,y)=2.5\cdot\sin(x)+1.8\cdot\cos(y)+0.3\cdot x\cdot y
+公式解释：
+该公式融合了变量x 和y 的非线性主效应及其乘积项所代表的交互效应，
+能够有效刻画输入变量之间的动态相互作用。
+1
+
+MCP Tool 代码：
+```
+@mcp.tool
+def tun(
+    x: Annotated[float, "第一个输入变量"],
+    y: Annotated[float, "第二个输入变量"]
+):
+    """根据给定的x和y值，计算非线性交互作用模型的结果"""
+    from sympy import symbols, sin, cos
+
+    # 定义符号变量
+    x_sym, y_sym = symbols('x_sym y_sym')
+
+    # 构建公式
+    formula = 2.5 * sin(x_sym) + 1.8 * cos(y_sym) + 0.3 * x_sym * y_sym
+
+    # 替换参数并计算结果
+    result = formula.subs({x_sym: x, y_sym: y})
+    return float(result)
+```

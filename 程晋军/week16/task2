@@ -1,0 +1,26 @@
+<EmbeddingsCache.py>
+ bug1:def get_embedding(text):
+        embedding_text=np.random.rand(10).astype(np.float32)
+        #字符串类型要和call函数中的embedding = np.frombuffer(result, dtype=np.float32)一样
+        print('embedding_text(768):',embedding_text)
+        return embedding_text
+ bug2:store函数中，embedding要考虑单个字符串和多个字符串的情况
+     def store(self, text: Union[List[str], str], embedding: np.ndarray):#bug:
+        ……
+                    if len(embedding.shape) > 1:
+                        value = embedding[i].tobytes()
+                    else:
+                        # 如果是一维数组，假设所有文本共享同一个嵌入
+                        value = embedding.tobytes()# embedding 转换为 bytes
+                    pipe.setex(key, self.ttl, value)
+
+    <SemanticCache.py>
+    bug1:需要处理prompts为空的情况
+    def clear_cache(self):
+        prompts = self.redis.lrange(self.name + "list", 0, -1)
+        if prompts:  # 确保列表不为空
+            self.redis.delete(*prompts)
+            self.redis.delete(self.name + "list")
+            os.unlink(f"{self.name}.index")
+            self.index = None
+        return 0

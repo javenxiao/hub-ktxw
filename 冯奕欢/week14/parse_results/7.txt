@@ -1,0 +1,32 @@
+建模背景：
+在实际系统建模中，许多物理过程或观测数据往往受到不可控因素的影响，例如测量误差、
+环境噪声或其他随机扰动。为了更贴近现实场景，建模过程中通常引入随机性成分，以反映
+系统的不确定性和复杂性。本模型旨在模拟一个带有随机噪声的确定性函数，其输出不仅依
+赖于输入变量的数值关系，还受到随机扰动的影响，从而更真实地反映实际问题中的波动特
+性。
+
+建模公式：
+f(\mathcal{x},y)\underline{{{\longrightarrow}}}\mathcal{x}^{2}+\Omega\mathsf{s g}y\vdash\mathcal{E}
+公式解释：
+该模型的数学表达形式如下：
+其中，𝜀表示一个服从区间[−1, 1] 上均匀分布的随机扰动项。该扰动项模拟了系统中可能存在的不确定性或噪声影响，使得在相同输入条件下，输
+1
+
+MCP Tool 代码：
+```
+import sympy as sp
+from mcp import tool
+from typing import Annotated
+
+@mcp.tool
+def model_with_noise(
+    x: Annotated[float, "输入变量x"],
+    y: Annotated[float, "输入变量y"]
+):
+    """模拟一个带有随机噪声的确定性函数"""
+    x, y = sp.symbols('x y')
+    epsilon = 2 * (sp.rand() - 0.5)  # 生成[-1, 1]区间上的均匀分布随机数
+    formula = x**2 + y + epsilon
+    result = formula.subs({x: x, y: y})
+    return float(result)
+```

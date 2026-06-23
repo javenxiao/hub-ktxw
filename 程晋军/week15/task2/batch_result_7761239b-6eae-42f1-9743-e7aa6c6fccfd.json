@@ -1,0 +1,17 @@
+{
+  "code": 0,
+  "msg": "ok",
+  "trace_id": "75baf14d3970fa1425d6bf0dee09655a",
+  "data": {
+    "batch_id": "7761239b-6eae-42f1-9743-e7aa6c6fccfd",
+    "extract_result": [
+      {
+        "data_id": "东方证券-张庆-大语言模型在投研投顾中的应用与难点",
+        "file_name": "东方证券-张庆-大语言模型在投研投顾中的应用与难点.pdf",
+        "state": "done",
+        "err_msg": "",
+        "full_zip_url": "https://cdn-mineru.openxlab.org.cn/pdf/2025-12-10/a2dd6662-3c64-45fe-a288-2647faee4c1c.zip"
+      }
+    ]
+  }
+}

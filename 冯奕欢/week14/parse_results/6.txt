@@ -1,0 +1,42 @@
+建模背景：
+在建筑工程中，钢筋混凝土梁的抗弯承载力是结构设计和安全性评估的重要指标。为确保结
+构体系在设计使用寿命内的可靠性和稳定性，需要对梁在弯矩作用下的承载能力进行合理估
+算。该建模旨在通过引入混凝土抗压强度、纵向受拉钢筋面积以及梁的有效高度等关键参数
+，构建一个非线性关系来模拟梁的极限弯矩承载能力。该模型可用于初步设计阶段的快速评
+估，也可作为教学和研究中的参考工具。
+
+建模公式：
+M_{u}=0.85\times f_{c}\times A_{s}\times d\times{\left(1-{\frac{0.59\times A_{s}\times f_{y}}{b\times d\times f_{c}}}\right)}
+公式解释：
+建模中采用的非线性方程如下：
+其中，$ f_y $ 和$ b $ 作为常量参数分别取值为钢筋屈服强度400
+MPa 和梁截面宽度300 mm。变量$ f_c $ 表示混凝土抗压强度，$
+A_s $ 表示纵向受拉钢筋面积，$ d $ 表示梁的有效高度。最终输出$
+M_u $ 表示混凝土梁的极限抗弯承载力，单位为kN·m。
+该公式体现了变量之间的非线性交互关系，反映了钢筋与混凝土协同工作时的复杂受力机制
+，适用于钢筋混凝土梁在受弯状态下的承载力估算。
+1
+
+MCP Tool 代码：
+```
+@mcp.tool
+def calculate_limit_bending_moment(
+    fc: Annotated[float, "混凝土抗压强度 (MPa)"],
+    As: Annotated[float, "纵向受拉钢筋面积 (mm^2)"],
+    d: Annotated[float, "梁的有效高度 (mm)"]
+):
+    """计算钢筋混凝土梁的极限抗弯承载力"""
+    import sympy as sp
+
+    # 定义符号变量
+    fc_sym, As_sym, d_sym = sp.symbols('fc As d')
+    fy, b = 400, 300  # 常量参数
+
+    # 构建公式
+    Mu = 0.85 * fc_sym * As_sym * d_sym * (1 - (0.59 * As_sym * fy) / (b * d_sym * fc_sym))
+
+    # 代入参数计算结果
+    Mu_value = Mu.subs({fc_sym: fc, As_sym: As, d_sym: d})
+
+    return Mu_value
+```
